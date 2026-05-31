@@ -134,7 +134,7 @@ function ResultadosContent() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>
       <div className="bg-white rounded-2xl shadow p-8 text-center max-w-md">
         <p className="text-red-600 font-semibold">{error}</p>
-        <Link href="/" className="mt-4 inline-block text-sm underline" style={{ color: "#1a2035" }}>Volver al inicio</Link>
+        <Link href="/" className="mt-4 inline-block text-sm underline" style={{ color: "#1a2035" }}>Volver al portal</Link>
       </div>
     </div>
   );
