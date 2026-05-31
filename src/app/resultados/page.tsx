@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense } from "react";
+import Link from "next/link";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
@@ -133,7 +134,7 @@ function ResultadosContent() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>
       <div className="bg-white rounded-2xl shadow p-8 text-center max-w-md">
         <p className="text-red-600 font-semibold">{error}</p>
-        <a href="/" className="mt-4 inline-block text-sm underline" style={{ color: "#1a2035" }}>Volver al inicio</a>
+        <Link href="/" className="mt-4 inline-block text-sm underline" style={{ color: "#1a2035" }}>Volver al inicio</Link>
       </div>
     </div>
   );
@@ -262,9 +263,9 @@ function ResultadosContent() {
         </div>
 
         <div className="text-center pt-2 pb-8">
-          <a href="/dashboard" className="text-sm underline" style={{ color: "#1a2035" }}>
+          <Link href="/dashboard" className="text-sm underline" style={{ color: "#1a2035" }}>
             Ver dashboard de todos los evaluados →
-          </a>
+          </Link>
         </div>
       </main>
     </div>
