@@ -142,7 +142,7 @@ export default function Cuestionario() {
     setPaso("enviando");
     try {
       const scores = calcularScores(respuestas);
-      const id = await guardarEvaluacion({ ...datos, respuestas, scores });
+      await guardarEvaluacion({ ...datos, respuestas, scores });
       router.push(`/gracias`);
     } catch {
       setError("Error al guardar. Verifica tu conexión y las credenciales de Supabase en .env.local");

@@ -172,7 +172,7 @@ export default function Dashboard() {
                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#1a2035" }} />
                 <PolarRadiusAxis domain={[0, 5]} tickCount={6} tick={{ fontSize: 9 }} />
                 <Radar name="Org." dataKey="value" stroke="#1a2035" fill="#c9a84c" fillOpacity={0.55} />
-                <Tooltip formatter={(v: number) => v.toFixed(2)} />
+                <Tooltip formatter={(v) => (typeof v === "number" ? v.toFixed(2) : v)} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
