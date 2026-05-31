@@ -71,7 +71,7 @@ function ResultadosContent() {
     });
 
     // Puntuación global
-    const afterDatos = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    const afterDatos = (doc as typeof doc & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     doc.setFillColor(26, 32, 53);
     doc.roundedRect(14, afterDatos, W - 28, 18, 3, 3, "F");
     doc.setTextColor(201, 168, 76);
@@ -98,7 +98,7 @@ function ResultadosContent() {
     });
 
     // Tabla de subescalas
-    const afterDims = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    const afterDims = (doc as typeof doc & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("RESULTADOS POR SUBESCALA", 14, afterDims);
@@ -112,7 +112,7 @@ function ResultadosContent() {
     });
 
     // Interpretación
-    const afterSubs = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    const afterSubs = (doc as typeof doc & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(26, 32, 53);
