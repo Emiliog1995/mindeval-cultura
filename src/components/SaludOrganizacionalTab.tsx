@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useMemo } from "react";
@@ -32,7 +33,6 @@ interface BubblePayload {
   y: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function BubbleShape(props: any) {
   const cx = props.cx as number;
   const cy = props.cy as number;
@@ -69,7 +69,6 @@ function BubbleShape(props: any) {
 interface HeatTooltipPayload { area: string; count: number; x: number; y: number }
 interface RotTooltipPayload  { area: string; count: number; x: number; y: number; cuadrante: Cuadrante }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function HeatTooltip(props: any) {
   if (!props.active || !props.payload?.length) return null;
   const d = props.payload[0].payload as HeatTooltipPayload;
@@ -83,7 +82,6 @@ function HeatTooltip(props: any) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function RotTooltip(props: any) {
   if (!props.active || !props.payload?.length) return null;
   const d = props.payload[0].payload as RotTooltipPayload;
@@ -272,7 +270,6 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
               <ReferenceLine x={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <ReferenceLine y={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <Tooltip content={<HeatTooltip />} />
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               <Scatter data={bubbleData} shape={(props: any) => <BubbleShape {...props} />} />
             </ScatterChart>
           </ResponsiveContainer>
@@ -310,7 +307,6 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
               <ReferenceLine x={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <ReferenceLine y={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <Tooltip content={<RotTooltip />} />
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               <Scatter data={rotacionData} shape={(props: any) => <BubbleShape {...props} />} />
             </ScatterChart>
           </ResponsiveContainer>
