@@ -32,7 +32,8 @@ interface BubblePayload {
   y: number;
 }
 
-function BubbleShape(props: Record<string, unknown>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BubbleShape(props: any) {
   const cx = props.cx as number;
   const cy = props.cy as number;
   const payload = props.payload as BubblePayload;
@@ -271,7 +272,8 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
               <ReferenceLine x={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <ReferenceLine y={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <Tooltip content={<HeatTooltip />} />
-              <Scatter data={bubbleData} shape={(props) => <BubbleShape {...(props as Record<string, unknown>)} />} />
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <Scatter data={bubbleData} shape={(props: any) => <BubbleShape {...props} />} />
             </ScatterChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
@@ -308,7 +310,8 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
               <ReferenceLine x={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <ReferenceLine y={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <Tooltip content={<RotTooltip />} />
-              <Scatter data={rotacionData} shape={(props) => <BubbleShape {...(props as Record<string, unknown>)} />} />
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <Scatter data={rotacionData} shape={(props: any) => <BubbleShape {...props} />} />
             </ScatterChart>
           </ResponsiveContainer>
 
