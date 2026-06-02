@@ -7,7 +7,7 @@ import { calcularScores } from "@/lib/scoring";
 import { guardarEvaluacion } from "@/lib/supabase";
 
 type Respuestas = Record<string, number>;
-type Paso = "datos" | "foto" | "items" | "enviando";
+type Paso = "datos" | "foto" | "items" | "enviando" | "completado";
 
 const OPCIONES = [
   { valor: 1, label: "Totalmente en desacuerdo" },
@@ -143,7 +143,8 @@ export default function Cuestionario() {
     try {
       const scores = calcularScores(respuestas);
       await guardarEvaluacion({ ...datos, respuestas, scores });
-      router.push(`/gracias`);
+      setPaso("completado");
+      setTimeout(() => router.push("/clima"), 3000);
     } catch {
       setError("Error al guardar. Verifica tu conexión y las credenciales de Supabase en .env.local");
       setPaso("items");
@@ -196,6 +197,16 @@ export default function Cuestionario() {
                   />
                 </div>
               ))}
+              <div
+                className="rounded-xl px-4 py-3 text-sm leading-relaxed"
+                style={{ background: "#f8f6f0", borderLeft: "3px solid #c9a84c" }}
+              >
+                <p style={{ color: "#1a2035" }}>
+                  Tu nombre se registra solo para validar tu participación. Tus respuestas son
+                  confidenciales y los resultados se reportan únicamente de forma grupal por área.
+                  Tu nombre nunca aparecerá ligado a tus respuestas.
+                </p>
+              </div>
               <button
                 type="submit"
                 className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-90"
@@ -204,6 +215,42 @@ export default function Cuestionario() {
                 Comenzar cuestionario →
               </button>
             </form>
+          </div>
+        )}
+
+          {/* ── PASO: COMPLETADO / TRANSICIÓN ── */}
+        {paso === "completado" && (
+          <div className="bg-white rounded-2xl shadow-md p-10 text-center">
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ background: "#1a2035" }}
+            >
+              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="#c9a84c" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              ¡Sección 1 completada!
+            </h2>
+            <p className="text-gray-600 text-sm mb-1">
+              Diagnóstico de Cultura Organizacional DOCS registrado.
+            </p>
+            <p className="text-gray-500 text-sm mb-6">
+              Ahora continuarás con la <strong>Encuesta de Clima Laboral</strong>.
+            </p>
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-3 overflow-hidden">
+              <div
+                className="h-2 rounded-full"
+                style={{ background: "#c9a84c", animation: "progress3s 3s linear forwards", width: "0%" }}
+              />
+            </div>
+            <style>{`
+              @keyframes progress3s {
+                from { width: 0% }
+                to   { width: 100% }
+              }
+            `}</style>
+            <p className="text-xs text-gray-400">Redirigiendo en unos segundos...</p>
           </div>
         )}
 

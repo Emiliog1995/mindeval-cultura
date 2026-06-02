@@ -70,7 +70,7 @@ export default function ClimaPage() {
           </div>
           <div className="text-right">
             <p className="text-xs font-semibold" style={{ color: "#c9a84c" }}>
-              Sección {step + 1} de 3
+              Parte 2 · Sección {step + 1} de 3
             </p>
             <p className="text-white text-xs opacity-60">{totalRespondidos} de 30 respondidas</p>
           </div>
