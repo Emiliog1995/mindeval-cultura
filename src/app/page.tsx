@@ -25,9 +25,9 @@ export default function Portal() {
       </div>
 
       {/* Tarjetas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
 
-        {/* Participante */}
+        {/* Participante DOCS */}
         <Link href="/evaluacion" className="group block">
           <div
             className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
@@ -42,7 +42,7 @@ export default function Portal() {
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Completar evaluación</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Evaluación de Cultura</h2>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: "1.5" }}>
               Responde el cuestionario de cultura organizacional asignado por tu empresa
             </p>
@@ -51,6 +51,34 @@ export default function Portal() {
               style={{ background: "#c9a84c", color: "#1a2035" }}
             >
               Iniciar evaluación →
+            </div>
+          </div>
+        </Link>
+
+        {/* Clima Laboral */}
+        <Link href="/clima" className="group block">
+          <div
+            className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+            >
+              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                  d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Encuesta de Clima</h2>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: "1.5" }}>
+              Encuesta anónima de clima laboral — tus respuestas son confidenciales
+            </p>
+            <div
+              className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
+              style={{ background: "#c9a84c", color: "#1a2035" }}
+            >
+              Responder encuesta →
             </div>
           </div>
         </Link>
