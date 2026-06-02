@@ -65,17 +65,13 @@ function BubbleShape(props: Record<string, unknown>) {
 }
 
 // ─── Custom tooltips ────────────────────────────────────────────────────────
-interface HeatTooltipPayload {
-  area: string; count: number; x: number; y: number;
-}
-interface RotTooltipPayload {
-  area: string; count: number; x: number; y: number;
-  cuadrante: Cuadrante;
-}
+interface HeatTooltipPayload { area: string; count: number; x: number; y: number }
+interface RotTooltipPayload  { area: string; count: number; x: number; y: number; cuadrante: Cuadrante }
 
-function HeatTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: HeatTooltipPayload }> }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function HeatTooltip(props: any) {
+  if (!props.active || !props.payload?.length) return null;
+  const d = props.payload[0].payload as HeatTooltipPayload;
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs max-w-[200px]">
       <p className="font-bold text-gray-800 mb-1">{d.area}</p>
@@ -86,9 +82,10 @@ function HeatTooltip({ active, payload }: { active?: boolean; payload?: Array<{ 
   );
 }
 
-function RotTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: RotTooltipPayload }> }) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function RotTooltip(props: any) {
+  if (!props.active || !props.payload?.length) return null;
+  const d = props.payload[0].payload as RotTooltipPayload;
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs max-w-[220px]">
       <p className="font-bold text-gray-800 mb-1">{d.area}</p>
@@ -273,7 +270,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
               />
               <ReferenceLine x={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <ReferenceLine y={3} stroke="#94a3b8" strokeDasharray="4 4" />
-              <Tooltip content={(props) => <HeatTooltip active={(props as { active?: boolean }).active} payload={(props as { payload?: Array<{ payload: HeatTooltipPayload }> }).payload} />} />
+              <Tooltip content={<HeatTooltip />} />
               <Scatter data={bubbleData} shape={(props) => <BubbleShape {...(props as Record<string, unknown>)} />} />
             </ScatterChart>
           </ResponsiveContainer>
@@ -310,7 +307,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
               />
               <ReferenceLine x={3} stroke="#94a3b8" strokeDasharray="4 4" />
               <ReferenceLine y={3} stroke="#94a3b8" strokeDasharray="4 4" />
-              <Tooltip content={(props) => <RotTooltip active={(props as { active?: boolean }).active} payload={(props as { payload?: Array<{ payload: RotTooltipPayload }> }).payload} />} />
+              <Tooltip content={<RotTooltip />} />
               <Scatter data={rotacionData} shape={(props) => <BubbleShape {...(props as Record<string, unknown>)} />} />
             </ScatterChart>
           </ResponsiveContainer>
