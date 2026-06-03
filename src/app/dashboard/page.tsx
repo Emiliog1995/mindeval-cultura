@@ -13,8 +13,9 @@ import type { ScoringResult } from "@/lib/scoring";
 import { CLIMA_DIMENSIONS, type ClimaDimension } from "@/lib/clima-items";
 import { getClimaLevelColor, type ClimaResult } from "@/lib/clima-scoring";
 import SaludOrganizacionalTab from "@/components/SaludOrganizacionalTab";
+import RadarRiesgoTab from "@/components/RadarRiesgoTab";
 
-type Tab = "docs" | "clima" | "salud";
+type Tab = "docs" | "clima" | "salud" | "alertas";
 
 const CLIMA_DIM_CODES: ClimaDimension[] = ["A", "B", "C", "D", "E", "F"];
 
@@ -167,9 +168,10 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto flex gap-1 pt-3">
           {(["docs", "clima", "salud"] as Tab[]).map((tab) => {
             const labels: Record<Tab, string> = {
-              docs:  "Cultura DOCS",
-              clima: "Clima Laboral",
-              salud: "Salud Organizacional",
+              docs:    "Cultura DOCS",
+              clima:   "Clima Laboral",
+              salud:   "Salud Organizacional",
+              alertas: "Radar de Riesgo",
             };
             const isActive = activeTab === tab;
             return (
@@ -447,6 +449,11 @@ export default function Dashboard() {
         {/* ══════════════════ TAB: SALUD ORGANIZACIONAL ═══════════════════════ */}
         {activeTab === "salud" && (
           <SaludOrganizacionalTab evaluaciones={evaluaciones} climaData={climaData} />
+        )}
+
+        {/* ══════════════════ TAB: RADAR DE RIESGO ════════════════════════════ */}
+        {activeTab === "alertas" && (
+          <RadarRiesgoTab evaluaciones={evaluaciones} climaData={climaData} />
         )}
 
       </main>
