@@ -69,6 +69,10 @@ export async function listarEvaluaciones(): Promise<Evaluacion[]> {
 export interface ClimaInput {
   respuestas: Record<string, number>;
   scores:     ClimaResult;
+  nombre?:    string;
+  cargo?:     string;
+  area?:      string;
+  empresa?:   string;
 }
 
 export interface ClimaRespuesta {
@@ -88,6 +92,10 @@ export async function guardarClima(data: ClimaInput): Promise<string> {
       scores:       data.scores,
       score_global: data.scores.global,
       nivel:        data.scores.globalLevel,
+      nombre:       data.nombre ?? null,
+      cargo:        data.cargo  ?? null,
+      area:         data.area   ?? null,
+      empresa:      data.empresa ?? null,
     })
     .select("id")
     .single();

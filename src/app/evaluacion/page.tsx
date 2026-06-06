@@ -96,6 +96,12 @@ export default function Cuestionario() {
     try {
       const scores = calcularScores(respuestas);
       await guardarEvaluacion({ ...datos, respuestas, scores });
+      sessionStorage.setItem("clima_datos_heredados", JSON.stringify({
+        nombre:  datos.nombre,
+        cargo:   datos.cargo,
+        area:    datos.area,
+        empresa: datos.empresa,
+      }));
       setPaso("completado");
       setTimeout(() => router.push("/clima"), 3000);
     } catch {
