@@ -6,7 +6,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
 } from "recharts";
-import { listarEvaluaciones, listarClima, type Evaluacion, type ClimaRespuesta } from "@/lib/supabase";
+import { listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, type Evaluacion, type ClimaRespuesta } from "@/lib/supabase";
 import { getLevelColor } from "@/lib/scoring";
 import { isAdmin, logout } from "@/lib/auth";
 import type { ScoringResult } from "@/lib/scoring";
@@ -103,6 +103,29 @@ export default function Dashboard() {
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Evaluaciones");
     writeFile(wb, `DOCS_Dashboard_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  // ─── Eliminar ────────────────────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState<{ tipo: "docs" | "clima"; id: string; nombre: string } | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+
+  async function handleEliminar() {
+    if (!confirmDelete) return;
+    setEliminando(true);
+    try {
+      if (confirmDelete.tipo === "docs") {
+        await eliminarEvaluacion(confirmDelete.id);
+        setEvaluaciones((prev) => prev.filter((e) => e.id !== confirmDelete.id));
+      } else {
+        await eliminarClima(confirmDelete.id);
+        setClimaData((prev) => prev.filter((r) => r.id !== confirmDelete.id));
+      }
+      setConfirmDelete(null);
+    } catch {
+      alert("No se pudo eliminar el registro. Intenta de nuevo.");
+    } finally {
+      setEliminando(false);
+    }
   }
 
   // ─── Clima helpers ───────────────────────────────────────────────────────
@@ -339,13 +362,21 @@ export default function Dashboard() {
                               </td>
                             ))}
                             <td className="px-3 py-2">
-                              <a
-                                href={`/resultados?id=${e.id}`}
-                                className="text-xs underline whitespace-nowrap"
-                                style={{ color: "#1a2035" }}
-                              >
-                                Ver informe
-                              </a>
+                              <div className="flex items-center gap-3">
+                                <a
+                                  href={`/resultados?id=${e.id}`}
+                                  className="text-xs underline whitespace-nowrap"
+                                  style={{ color: "#1a2035" }}
+                                >
+                                  Ver informe
+                                </a>
+                                <button
+                                  onClick={() => setConfirmDelete({ tipo: "docs", id: e.id, nombre: e.nombre })}
+                                  className="text-xs text-red-500 hover:text-red-700 whitespace-nowrap transition-colors"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -460,7 +491,7 @@ export default function Dashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ background: "#1a2035" }}>
-                        {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo"].map((h) => (
+                        {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo", ""].map((h) => (
                           <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
                         ))}
                       </tr>
@@ -487,6 +518,14 @@ export default function Dashboard() {
                                 {d.mean.toFixed(2)}
                               </td>
                             ))}
+                            <td className="px-3 py-2">
+                              <button
+                                onClick={() => setConfirmDelete({ tipo: "clima", id: r.id, nombre: r.nombre ?? "este registro" })}
+                                className="text-xs text-red-500 hover:text-red-700 whitespace-nowrap transition-colors"
+                              >
+                                Eliminar
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
@@ -509,6 +548,39 @@ export default function Dashboard() {
         )}
 
       </main>
+
+      {/* ── Modal de confirmación de eliminación ── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+            <h3 className="text-base font-bold mb-2" style={{ color: "#1a2035" }}>
+              ¿Eliminar registro?
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Vas a eliminar el registro de <span className="font-semibold text-gray-800">{confirmDelete.nombre}</span>.
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={eliminando}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEliminar}
+                disabled={eliminando}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition disabled:opacity-50"
+                style={{ background: "#dc2626" }}
+              >
+                {eliminando ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

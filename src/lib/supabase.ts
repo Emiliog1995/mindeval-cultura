@@ -117,3 +117,13 @@ export async function listarClima(): Promise<ClimaRespuesta[]> {
   if (error) throw new Error(error.message);
   return (data ?? []) as ClimaRespuesta[];
 }
+
+export async function eliminarEvaluacion(id: string): Promise<void> {
+  const { error } = await supabase.from("evaluaciones").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function eliminarClima(id: string): Promise<void> {
+  const { error } = await supabase.from("clima_respuestas").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
