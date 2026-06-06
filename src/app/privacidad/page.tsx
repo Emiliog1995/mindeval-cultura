@@ -1,10 +1,12 @@
+import Link from 'next/link';
+
 export default function Privacidad() {
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       <header style={{ background: "#1a2035" }} className="py-4 px-6 shadow-lg">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
-          <a href="/" className="text-white text-sm opacity-70 hover:opacity-100">← Volver al inicio</a>
+          <Link href="/" className="text-white text-sm opacity-70 hover:opacity-100">← Volver al inicio</Link>
         </div>
       </header>
 
