@@ -103,7 +103,8 @@ export default function Cuestionario() {
         empresa: datos.empresa,
       }));
       setPaso("completado");
-      setTimeout(() => router.push("/clima"), 3000);
+      const sesionId = new URLSearchParams(window.location.search).get("sesion");
+      setTimeout(() => router.push(sesionId ? `/clima?sesion=${sesionId}` : "/clima"), 3000);
     } catch {
       setError("Error al guardar. Verifica tu conexión y las credenciales de Supabase en .env.local");
       setPaso("items");

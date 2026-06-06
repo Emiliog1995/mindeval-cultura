@@ -87,7 +87,8 @@ export default function ClimaPage() {
     try {
       const scores = calcularClimaScores(respuestas);
       await guardarClima({ respuestas, scores, ...datos });
-      router.push("/clima/gracias");
+      const sesionId = new URLSearchParams(window.location.search).get("sesion");
+      router.push(sesionId ? `/clima/gracias?sesion=${sesionId}` : "/clima/gracias");
     } catch {
       setError("No se pudo registrar tu respuesta. Por favor intenta nuevamente.");
       setEnviando(false);
