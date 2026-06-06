@@ -81,6 +81,10 @@ export interface ClimaRespuesta {
   respuestas:   Record<string, number>;
   scores:       ClimaResult;
   score_global: number;
+  nombre?:      string;
+  cargo?:       string;
+  area?:        string;
+  empresa?:     string;
   nivel:        string;
 }
 

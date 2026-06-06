@@ -106,10 +106,22 @@ export default function Dashboard() {
   }
 
   // ─── Clima helpers ───────────────────────────────────────────────────────
+  const [filtroAreaClima,  setFiltroAreaClima]  = useState("");
+  const [filtroCargoClima, setFiltroCargoClima] = useState("");
+
+  const areasClima  = [...new Set(climaData.map((r) => r.area).filter(Boolean))].sort() as string[];
+  const cargosClima = [...new Set(climaData.map((r) => r.cargo).filter(Boolean))].sort() as string[];
+
+  const climaFiltrada = climaData.filter((r) => {
+    if (filtroAreaClima  && r.area  !== filtroAreaClima)  return false;
+    if (filtroCargoClima && r.cargo !== filtroCargoClima) return false;
+    return true;
+  });
+
   function promedioOrgClima() {
-    if (!climaData.length) return null;
+    if (!climaFiltrada.length) return null;
     return CLIMA_DIM_CODES.map((code) => {
-      const valores = climaData.map((r) => {
+      const valores = climaFiltrada.map((r) => {
         const s = r.scores as ClimaResult;
         return s.dimensions.find((d) => d.code === code)?.mean ?? 0;
       });
@@ -118,18 +130,22 @@ export default function Dashboard() {
     });
   }
 
-  const globalClima = climaData.length
-    ? (climaData.reduce((a, r) => a + (r.score_global ?? 0), 0) / climaData.length).toFixed(2)
+  const globalClima = climaFiltrada.length
+    ? (climaFiltrada.reduce((a, r) => a + (r.score_global ?? 0), 0) / climaFiltrada.length).toFixed(2)
     : "-";
 
   async function exportarExcelClima() {
     const { utils, writeFile } = await import("xlsx");
-    const filas = climaData.map((r) => {
+    const filas = climaFiltrada.map((r) => {
       const s = r.scores as ClimaResult;
       const row: Record<string, string | number> = {
-        Fecha: new Date(r.created_at).toLocaleDateString("es-EC"),
+        Fecha:          new Date(r.created_at).toLocaleDateString("es-EC"),
+        Nombre:         r.nombre  ?? "",
+        Cargo:          r.cargo   ?? "",
+        "Área":         r.area    ?? "",
+        Empresa:        r.empresa ?? "",
         "Score Global": r.score_global ?? 0,
-        Nivel: r.nivel ?? "",
+        Nivel:          r.nivel ?? "",
       };
       s.dimensions.forEach((d) => { row[d.label] = d.mean; });
       return row;
@@ -348,9 +364,10 @@ export default function Dashboard() {
             {errorClima && <p className="text-red-600 bg-red-50 rounded-lg px-4 py-3 text-sm">{errorClima}</p>}
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: "Respuestas totales",  value: climaData.length.toString() },
+                { label: "Evaluados (muestra)", value: climaFiltrada.length.toString() },
+                { label: "Total en BD",         value: climaData.length.toString() },
                 { label: "Promedio Global",     value: globalClima },
                 { label: "Último ingreso",      value: climaData[0] ? new Date(climaData[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
@@ -361,23 +378,55 @@ export default function Dashboard() {
               ))}
             </div>
 
-            {/* Exportar */}
-            <div className="flex justify-end">
-              <button
-                onClick={exportarExcelClima}
-                disabled={!climaData.length}
-                className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                style={{ background: "#c9a84c", color: "#1a2035" }}
-              >
-                Exportar Excel
-              </button>
+            {/* Filtros */}
+            <div className="bg-white rounded-2xl shadow p-5 flex flex-wrap gap-4 items-end">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Filtrar por Área</label>
+                <select
+                  value={filtroAreaClima}
+                  onChange={(e) => setFiltroAreaClima(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                >
+                  <option value="">Todas las áreas</option>
+                  {areasClima.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Filtrar por Cargo</label>
+                <select
+                  value={filtroCargoClima}
+                  onChange={(e) => setFiltroCargoClima(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                >
+                  <option value="">Todos los cargos</option>
+                  {cargosClima.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              {(filtroAreaClima || filtroCargoClima) && (
+                <button
+                  onClick={() => { setFiltroAreaClima(""); setFiltroCargoClima(""); }}
+                  className="text-xs underline text-gray-500 self-end pb-2"
+                >
+                  Limpiar filtros
+                </button>
+              )}
+              <div className="ml-auto self-end">
+                <button
+                  onClick={exportarExcelClima}
+                  disabled={!climaFiltrada.length}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                  style={{ background: "#c9a84c", color: "#1a2035" }}
+                >
+                  Exportar Excel
+                </button>
+              </div>
             </div>
 
             {/* Radar clima */}
             {radarDataClima && (
               <div className="bg-white rounded-2xl shadow p-6">
                 <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
-                  Perfil de Clima Laboral — Promedio organizacional ({climaData.length} respuestas)
+                  Perfil de Clima Laboral — Promedio organizacional ({climaFiltrada.length} respuestas)
                 </h2>
                 <ResponsiveContainer width="100%" height={300}>
                   <RadarChart data={radarDataClima}>
@@ -391,10 +440,10 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Tabla clima */}
+            {/* Tabla evaluados clima */}
             <div className="bg-white rounded-2xl shadow p-6">
               <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
-                Respuestas Individuales (anónimas) — {climaData.length} registros
+                Listado de Evaluados{climaFiltrada.length !== climaData.length && ` (${climaFiltrada.length} de ${climaData.length})`}
               </h2>
 
               {cargandoClima ? (
@@ -402,28 +451,31 @@ export default function Dashboard() {
                   <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
                   <p className="text-gray-500 text-sm mt-3">Cargando...</p>
                 </div>
-              ) : climaData.length === 0 ? (
+              ) : climaFiltrada.length === 0 ? (
                 <p className="text-center text-gray-400 py-10 text-sm">
-                  Aún no hay respuestas de clima registradas.
+                  {climaData.length === 0 ? "Aún no hay respuestas de clima registradas." : "Ningún evaluado coincide con los filtros."}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ background: "#1a2035" }}>
-                        {["Fecha", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo"].map((h) => (
+                        {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo"].map((h) => (
                           <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {climaData.map((r, i) => {
+                      {climaFiltrada.map((r, i) => {
                         const s = r.scores as ClimaResult;
                         return (
                           <tr key={r.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
                             <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                               {new Date(r.created_at).toLocaleDateString("es-EC")}
                             </td>
+                            <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{r.nombre ?? "—"}</td>
+                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.cargo ?? "—"}</td>
+                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.area ?? "—"}</td>
                             <td className="px-3 py-2 font-bold" style={{ color: getClimaLevelColor(r.nivel ?? "") }}>
                               {(r.score_global ?? 0).toFixed(2)}
                             </td>
