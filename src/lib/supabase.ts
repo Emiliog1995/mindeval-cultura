@@ -185,3 +185,100 @@ export async function eliminarSesion(id: string): Promise<void> {
   const { error } = await supabase.from("sesiones").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+// ── 360° ──────────────────────────────────────────────────────────────────────
+
+import type { Evaluado360, Evaluacion360, Pdi360 } from './360-types';
+export type { Evaluado360, Evaluacion360, Pdi360 };
+
+export async function listar360Evaluados(): Promise<Evaluado360[]> {
+  const { data, error } = await supabase
+    .from('evaluados_360')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Evaluado360[];
+}
+
+export async function crear360Evaluado(
+  data: Omit<Evaluado360, 'id' | 'created_at'>,
+): Promise<Evaluado360> {
+  const { data: row, error } = await supabase
+    .from('evaluados_360')
+    .insert(data)
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return row as Evaluado360;
+}
+
+export async function obtener360Evaluado(id: string): Promise<Evaluado360> {
+  const { data, error } = await supabase
+    .from('evaluados_360')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Evaluado360;
+}
+
+export async function listar360Evaluaciones(
+  evaluadoId: string,
+  periodo?: string,
+): Promise<Evaluacion360[]> {
+  let q = supabase
+    .from('evaluaciones_360')
+    .select('*')
+    .eq('evaluado_id', evaluadoId);
+  if (periodo) q = q.eq('periodo', periodo);
+  const { data, error } = await q.order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Evaluacion360[];
+}
+
+export async function crear360Evaluacion(
+  data: Omit<Evaluacion360, 'id' | 'created_at'>,
+): Promise<Evaluacion360> {
+  const { data: row, error } = await supabase
+    .from('evaluaciones_360')
+    .insert(data)
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return row as Evaluacion360;
+}
+
+export async function listarTodas360Evaluaciones(): Promise<Evaluacion360[]> {
+  const { data, error } = await supabase
+    .from('evaluaciones_360')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Evaluacion360[];
+}
+
+export async function obtener360Pdi(
+  evaluadoId: string,
+  periodo: string,
+): Promise<Pdi360 | null> {
+  const { data, error } = await supabase
+    .from('pdi_360')
+    .select('*')
+    .eq('evaluado_id', evaluadoId)
+    .eq('periodo', periodo)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as Pdi360 | null;
+}
+
+export async function upsert360Pdi(
+  data: Omit<Pdi360, 'id' | 'created_at'>,
+): Promise<Pdi360> {
+  const { data: row, error } = await supabase
+    .from('pdi_360')
+    .upsert(data, { onConflict: 'evaluado_id,periodo' })
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return row as Pdi360;
+}

@@ -25,7 +25,7 @@ export default function Portal() {
       </div>
 
       {/* Tarjetas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-5xl">
 
         {/* Participante DOCS */}
         <Link href="/evaluacion" className="group block">
@@ -79,6 +79,34 @@ export default function Portal() {
               style={{ background: "#c9a84c", color: "#1a2035" }}
             >
               Responder encuesta →
+            </div>
+          </div>
+        </Link>
+
+        {/* Evaluación 360° */}
+        <Link href="/evaluacion-360" className="group block">
+          <div
+            className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+            >
+              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Evaluación 360°</h2>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: "1.5" }}>
+              Retroalimentación multi-fuente con Nine Box y plan de desarrollo individual
+            </p>
+            <div
+              className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
+              style={{ background: "#c9a84c", color: "#1a2035" }}
+            >
+              Iniciar 360° →
             </div>
           </div>
         </Link>

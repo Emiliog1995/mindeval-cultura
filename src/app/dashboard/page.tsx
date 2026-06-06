@@ -14,8 +14,9 @@ import { CLIMA_DIMENSIONS, type ClimaDimension } from "@/lib/clima-items";
 import { getClimaLevelColor, type ClimaResult } from "@/lib/clima-scoring";
 import SaludOrganizacionalTab from "@/components/SaludOrganizacionalTab";
 import RadarRiesgoTab from "@/components/RadarRiesgoTab";
+import Eval360DashboardPreview from "@/components/360/Eval360DashboardPreview";
 
-type Tab = "docs" | "clima" | "salud" | "alertas" | "sesiones";
+type Tab = "docs" | "clima" | "salud" | "alertas" | "sesiones" | "eval360";
 
 const CLIMA_DIM_CODES: ClimaDimension[] = ["A", "B", "C", "D", "E", "F"];
 
@@ -241,13 +242,14 @@ export default function Dashboard() {
       {/* Tab switcher */}
       <div style={{ background: "#243447" }} className="px-6">
         <div className="max-w-6xl mx-auto flex gap-1 pt-3">
-          {(["docs", "clima", "salud", "sesiones"] as Tab[]).map((tab) => {
+          {(["docs", "clima", "salud", "sesiones", "eval360"] as Tab[]).map((tab) => {
             const labels: Record<Tab, string> = {
               docs:     "Cultura DOCS",
               clima:    "Clima Laboral",
               salud:    "Salud Organizacional",
               alertas:  "Radar de Riesgo",
               sesiones: "Programar evaluaciones",
+              eval360:  "Evaluación 360°",
             };
             const isActive = activeTab === tab;
             return (
@@ -256,7 +258,7 @@ export default function Dashboard() {
                 onClick={() => setActiveTab(tab)}
                 className="px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-all"
                 style={{
-                  background: isActive ? "#f0f4f8" : "transparent",
+                  background: isActive ? (tab === "eval360" ? "#c9a84c" : "#f0f4f8") : "transparent",
                   color:      isActive ? "#1a2035" : "#c9a84c",
                 }}
               >
@@ -592,6 +594,9 @@ export default function Dashboard() {
         {activeTab === "alertas" && (
           <RadarRiesgoTab evaluaciones={evaluaciones} climaData={climaData} />
         )}
+
+        {/* ══════════════════ TAB: EVALUACIÓN 360° ════════════════════════════ */}
+        {activeTab === "eval360" && <Eval360DashboardPreview />}
 
         {/* ══════════════════ TAB: PROGRAMAR EVALUACIONES ═════════════════════ */}
         {activeTab === "sesiones" && (
