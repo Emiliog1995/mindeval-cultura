@@ -296,7 +296,7 @@ export default function Dashboard() {
                 <select
                   value={filtroArea}
                   onChange={(e) => setFiltroArea(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
                 >
                   <option value="">Todas las áreas</option>
                   {areas.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -307,7 +307,7 @@ export default function Dashboard() {
                 <select
                   value={filtroCargo}
                   onChange={(e) => setFiltroCargo(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
                 >
                   <option value="">Todos los cargos</option>
                   {cargos.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -453,7 +453,7 @@ export default function Dashboard() {
                 <select
                   value={filtroAreaClima}
                   onChange={(e) => setFiltroAreaClima(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
                 >
                   <option value="">Todas las áreas</option>
                   {areasClima.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -464,7 +464,7 @@ export default function Dashboard() {
                 <select
                   value={filtroCargoClima}
                   onChange={(e) => setFiltroCargoClima(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
                 >
                   <option value="">Todos los cargos</option>
                   {cargosClima.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -605,7 +605,7 @@ export default function Dashboard() {
                   <select
                     value={nuevaTipo}
                     onChange={(e) => setNuevaTipo(e.target.value as 'cultura' | 'clima')}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
                   >
                     <option value="cultura">Cultura DOCS</option>
                     <option value="clima">Clima Laboral</option>
