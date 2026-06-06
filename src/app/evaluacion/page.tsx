@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ITEMS, DIMENSIONS, SUBSCALES } from "@/lib/items";
 import { calcularScores } from "@/lib/scoring";
 import { guardarEvaluacion } from "@/lib/supabase";
 
 type Respuestas = Record<string, number>;
-type Paso = "datos" | "foto" | "items" | "enviando" | "completado";
+type Paso = "datos" | "items" | "enviando" | "completado";
 
 const OPCIONES = [
   { valor: 1, label: "Totalmente en desacuerdo" },
@@ -21,18 +21,12 @@ const DIMS = ["I", "II", "III", "IV"] as const;
 
 export default function Cuestionario() {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
   const [paso, setPaso] = useState<Paso>("datos");
   const [datos, setDatos] = useState({ nombre: "", cargo: "", area: "", empresa: "MINDTALENT" });
   const [consentimiento, setConsentimiento] = useState(false);
   const [respuestas, setRespuestas] = useState<Respuestas>({});
   const [dimActual, setDimActual] = useState(0);
   const [error, setError] = useState("");
-  const [foto, setFoto] = useState<string | null>(null);
-  const [camaraActiva, setCamaraActiva] = useState(false);
 
   // ── Datos del evaluado ──────────────────────────────────
   function handleDatos(e: React.FormEvent) {
@@ -46,52 +40,6 @@ export default function Cuestionario() {
       return;
     }
     setError("");
-    setPaso("foto");
-    window.scrollTo(0, 0);
-  }
-
-  // ── Cámara ──────────────────────────────────────────────
-  async function activarCamara() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-      setCamaraActiva(true);
-    } catch {
-      setError("No se pudo acceder a la cámara. Verifica los permisos del navegador.");
-    }
-  }
-
-  function tomarFoto() {
-    if (!videoRef.current || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext("2d");
-    if (!ctx) return;
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    ctx.drawImage(videoRef.current, 0, 0);
-    setFoto(canvasRef.current.toDataURL("image/jpeg", 0.8));
-    detenerCamara();
-  }
-
-  function retomar() {
-    setFoto(null);
-    activarCamara();
-  }
-
-  function detenerCamara() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setCamaraActiva(false);
-  }
-
-  function continuarSinFoto() {
-    detenerCamara();
-    setPaso("items");
-    window.scrollTo(0, 0);
-  }
-
-  function continuarConFoto() {
-    detenerCamara();
     setPaso("items");
     window.scrollTo(0, 0);
   }
@@ -165,7 +113,7 @@ export default function Cuestionario() {
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
             <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
-            <p className="text-white text-xs mt-0.5 opacity-70">Assessment Center Digital · Quito, Ecuador</p>
+            <p className="text-white text-xs mt-0.5 opacity-70">Quito, Ecuador</p>
           </div>
           <div className="text-right">
             <p className="text-white text-sm font-semibold">DOCS – Cultura Organizacional</p>
@@ -281,79 +229,7 @@ export default function Cuestionario() {
           </div>
         )}
 
-        {/* ── PASO 2: FOTO ── */}
-        {paso === "foto" && (
-          <div className="bg-white rounded-2xl shadow-md p-8 text-center">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Foto del evaluado</h2>
-            <p className="text-gray-500 text-sm mb-6">
-              Opcional — Activa tu cámara para registrar una foto que quedará en tu informe.
-            </p>
-            {error && <p className="text-red-600 bg-red-50 rounded-lg px-4 py-3 mb-4 text-sm">{error}</p>}
-
-            {!foto && !camaraActiva && (
-              <div className="space-y-3">
-                <button
-                  onClick={activarCamara}
-                  className="w-full py-3 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 text-white"
-                  style={{ background: "#1a2035" }}
-                >
-                  📷 Activar cámara
-                </button>
-                <button
-                  onClick={continuarSinFoto}
-                  className="w-full py-3 rounded-xl font-semibold text-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
-                >
-                  Continuar sin foto
-                </button>
-              </div>
-            )}
-
-            {camaraActiva && !foto && (
-              <div className="space-y-4">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full rounded-xl"
-                  style={{ maxHeight: 320, objectFit: "cover" }}
-                />
-                <button
-                  onClick={tomarFoto}
-                  className="w-full py-3 rounded-xl font-bold text-white transition-opacity hover:opacity-90"
-                  style={{ background: "#c9a84c", color: "#1a2035" }}
-                >
-                  📸 Tomar foto
-                </button>
-                <button onClick={continuarSinFoto} className="w-full py-2 text-sm text-gray-500 underline">
-                  Continuar sin foto
-                </button>
-              </div>
-            )}
-
-            {foto && (
-              <div className="space-y-4">
-                <img src={foto} alt="Foto evaluado" className="w-48 h-48 object-cover rounded-full mx-auto border-4" style={{ borderColor: "#c9a84c" }} />
-                <p className="text-green-600 font-semibold text-sm">Foto capturada correctamente</p>
-                <div className="flex gap-3">
-                  <button onClick={retomar} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50">
-                    Retomar
-                  </button>
-                  <button
-                    onClick={continuarConFoto}
-                    className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90"
-                    style={{ background: "#1a2035" }}
-                  >
-                    Continuar →
-                  </button>
-                </div>
-              </div>
-            )}
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
-        )}
-
-        {/* ── PASO 3: ÍTEMS (una dimensión por vez) ── */}
+        {/* ── PASO 2: ÍTEMS (una dimensión por vez) ── */}
         {(paso === "items" || paso === "enviando") && (
           <>
             {/* Barra de progreso global */}
