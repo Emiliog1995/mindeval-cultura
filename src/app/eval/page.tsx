@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { Sesion } from "@/lib/supabase";
 
-export default function EvalPortal() {
+function EvalContent() {
   const router       = useRouter();
   const params       = useSearchParams();
   const id           = params.get("id");
@@ -67,5 +67,17 @@ export default function EvalPortal() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+export default function EvalPortal() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#1a2035" }}>
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+      </div>
+    }>
+      <EvalContent />
+    </Suspense>
   );
 }
