@@ -6,7 +6,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
 } from "recharts";
-import { listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, type Evaluacion, type ClimaRespuesta } from "@/lib/supabase";
+import { listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion, type Evaluacion, type ClimaRespuesta, type Sesion } from "@/lib/supabase";
 import { getLevelColor } from "@/lib/scoring";
 import { isAdmin, logout } from "@/lib/auth";
 import type { ScoringResult } from "@/lib/scoring";
@@ -15,7 +15,7 @@ import { getClimaLevelColor, type ClimaResult } from "@/lib/clima-scoring";
 import SaludOrganizacionalTab from "@/components/SaludOrganizacionalTab";
 import RadarRiesgoTab from "@/components/RadarRiesgoTab";
 
-type Tab = "docs" | "clima" | "salud" | "alertas";
+type Tab = "docs" | "clima" | "salud" | "alertas" | "sesiones";
 
 const CLIMA_DIM_CODES: ClimaDimension[] = ["A", "B", "C", "D", "E", "F"];
 
@@ -31,6 +31,13 @@ export default function Dashboard() {
   const [filtroCargo, setFiltroCargo]   = useState("");
   const [cargando, setCargando]         = useState(true);
   const [error, setError]               = useState("");
+
+  // ─── Sesiones ────────────────────────────────────────────────────────────
+  const [sesiones, setSesiones]               = useState<Sesion[]>([]);
+  const [nuevaTipo, setNuevaTipo]             = useState<'cultura' | 'clima'>("cultura");
+  const [nuevaEmpresa, setNuevaEmpresa]       = useState("");
+  const [creandoSesion, setCreandoSesion]     = useState(false);
+  const [linkCopiado, setLinkCopiado]         = useState<string | null>(null);
 
   // ─── Clima ───────────────────────────────────────────────────────────────
   const [climaData, setClimaData]         = useState<ClimaRespuesta[]>([]);
@@ -49,7 +56,36 @@ export default function Dashboard() {
       .then(setClimaData)
       .catch(() => setErrorClima("No se pudieron cargar los datos de clima."))
       .finally(() => setCargandoClima(false));
+
+    listarSesiones().then(setSesiones).catch(() => {});
   }, [router]);
+
+  async function handleCrearSesion() {
+    setCreandoSesion(true);
+    try {
+      const s = await crearSesion({ tipo: nuevaTipo, empresa: nuevaEmpresa || undefined });
+      setSesiones((prev) => [s, ...prev]);
+      setNuevaEmpresa("");
+    } finally {
+      setCreandoSesion(false);
+    }
+  }
+
+  async function handleEliminarSesion(id: string) {
+    await eliminarSesion(id);
+    setSesiones((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function getLinkSesion(s: Sesion) {
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    return `${base}/eval?id=${s.id}`;
+  }
+
+  function copiarLink(s: Sesion) {
+    navigator.clipboard.writeText(getLinkSesion(s));
+    setLinkCopiado(s.id);
+    setTimeout(() => setLinkCopiado(null), 2000);
+  }
 
   // ─── DOCS helpers ────────────────────────────────────────────────────────
   const areas  = [...new Set(evaluaciones.map((e) => e.area).filter(Boolean))].sort();
@@ -205,12 +241,13 @@ export default function Dashboard() {
       {/* Tab switcher */}
       <div style={{ background: "#243447" }} className="px-6">
         <div className="max-w-6xl mx-auto flex gap-1 pt-3">
-          {(["docs", "clima", "salud"] as Tab[]).map((tab) => {
+          {(["docs", "clima", "salud", "sesiones"] as Tab[]).map((tab) => {
             const labels: Record<Tab, string> = {
-              docs:    "Cultura DOCS",
-              clima:   "Clima Laboral",
-              salud:   "Salud Organizacional",
-              alertas: "Radar de Riesgo",
+              docs:     "Cultura DOCS",
+              clima:    "Clima Laboral",
+              salud:    "Salud Organizacional",
+              alertas:  "Radar de Riesgo",
+              sesiones: "Programar evaluaciones",
             };
             const isActive = activeTab === tab;
             return (
@@ -554,6 +591,107 @@ export default function Dashboard() {
         {/* ══════════════════ TAB: RADAR DE RIESGO ════════════════════════════ */}
         {activeTab === "alertas" && (
           <RadarRiesgoTab evaluaciones={evaluaciones} climaData={climaData} />
+        )}
+
+        {/* ══════════════════ TAB: PROGRAMAR EVALUACIONES ═════════════════════ */}
+        {activeTab === "sesiones" && (
+          <>
+            {/* Crear nueva sesión */}
+            <div className="bg-white rounded-2xl shadow p-6">
+              <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>Nueva sesión de evaluación</h2>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                  <select
+                    value={nuevaTipo}
+                    onChange={(e) => setNuevaTipo(e.target.value as 'cultura' | 'clima')}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  >
+                    <option value="cultura">Cultura DOCS</option>
+                    <option value="clima">Clima Laboral</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Empresa (opcional)</label>
+                  <input
+                    type="text"
+                    value={nuevaEmpresa}
+                    onChange={(e) => setNuevaEmpresa(e.target.value)}
+                    placeholder="Nombre de la empresa"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-56"
+                  />
+                </div>
+                <button
+                  onClick={handleCrearSesion}
+                  disabled={creandoSesion}
+                  className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                  style={{ background: "#1a2035", color: "#c9a84c" }}
+                >
+                  {creandoSesion ? "Creando..." : "Generar link"}
+                </button>
+              </div>
+            </div>
+
+            {/* Listado de sesiones */}
+            <div className="bg-white rounded-2xl shadow p-6">
+              <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+                Sesiones creadas ({sesiones.length})
+              </h2>
+              {sesiones.length === 0 ? (
+                <p className="text-center text-gray-400 py-8 text-sm">No hay sesiones creadas aún.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ background: "#1a2035" }}>
+                        {["Fecha", "Tipo", "Empresa", "Estado", "Link de participante", ""].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sesiones.map((s, i) => (
+                        <tr key={s.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                            {new Date(s.created_at).toLocaleDateString("es-EC")}
+                          </td>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: "#1a2035" }}>
+                            {s.tipo === "cultura" ? "Cultura DOCS" : s.tipo === "clima" ? "Clima Laboral" : "Salud"}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{s.empresa ?? "—"}</td>
+                          <td className="px-3 py-2">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.estado === "completada" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                              {s.estado === "completada" ? "Completada" : "Pendiente"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 max-w-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 truncate">{getLinkSesion(s)}</span>
+                              <button
+                                onClick={() => copiarLink(s)}
+                                className="text-xs font-semibold whitespace-nowrap px-2 py-1 rounded transition-colors"
+                                style={{ background: linkCopiado === s.id ? "#c9a84c" : "#f0f4f8", color: "#1a2035" }}
+                              >
+                                {linkCopiado === s.id ? "Copiado" : "Copiar"}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <button
+                              onClick={() => handleEliminarSesion(s.id)}
+                              className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
       </main>

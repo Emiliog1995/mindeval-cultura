@@ -138,3 +138,50 @@ export async function eliminarClima(id: string): Promise<void> {
   const { error } = await supabase.from("clima_respuestas").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+// ─── Sesiones ─────────────────────────────────────────────────────────────────
+
+export interface Sesion {
+  id:         string;
+  tipo:       'cultura' | 'clima' | 'salud';
+  empresa:    string | null;
+  estado:     'pendiente' | 'completada';
+  created_at: string;
+}
+
+export interface SesionInput {
+  tipo:     'cultura' | 'clima' | 'salud';
+  empresa?: string;
+}
+
+export async function crearSesion(data: SesionInput): Promise<Sesion> {
+  const { data: row, error } = await supabase
+    .from("sesiones")
+    .insert({ tipo: data.tipo, empresa: data.empresa ?? null })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return row as Sesion;
+}
+
+export async function listarSesiones(): Promise<Sesion[]> {
+  const { data, error } = await supabase
+    .from("sesiones")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Sesion[];
+}
+
+export async function completarSesion(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("sesiones")
+    .update({ estado: 'completada' })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function eliminarSesion(id: string): Promise<void> {
+  const { error } = await supabase.from("sesiones").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
