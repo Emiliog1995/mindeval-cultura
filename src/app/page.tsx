@@ -113,9 +113,13 @@ export default function Portal() {
       </div>
 
       {/* Footer */}
-      <p className="mt-12 text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
-        © {new Date().getFullYear()} MINDTALENT · gerencia@mindtalentrh.com
-      </p>
+      <div className="mt-12 flex items-center gap-4 text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>
+        <span>© {new Date().getFullYear()} MINDTALENT · gerencia@mindtalentrh.com</span>
+        <span>·</span>
+        <a href="/privacidad" className="underline hover:opacity-80 transition-opacity">
+          Aviso de Privacidad
+        </a>
+      </div>
     </div>
   );
 }

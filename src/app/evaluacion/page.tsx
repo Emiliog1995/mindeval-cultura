@@ -27,6 +27,7 @@ export default function Cuestionario() {
 
   const [paso, setPaso] = useState<Paso>("datos");
   const [datos, setDatos] = useState({ nombre: "", cargo: "", area: "", empresa: "MINDTALENT" });
+  const [consentimiento, setConsentimiento] = useState(false);
   const [respuestas, setRespuestas] = useState<Respuestas>({});
   const [dimActual, setDimActual] = useState(0);
   const [error, setError] = useState("");
@@ -38,6 +39,10 @@ export default function Cuestionario() {
     e.preventDefault();
     if (!datos.nombre.trim() || !datos.cargo.trim() || !datos.area.trim()) {
       setError("Por favor completa todos los campos.");
+      return;
+    }
+    if (!consentimiento) {
+      setError("Debes aceptar el aviso de privacidad para continuar.");
       return;
     }
     setError("");
@@ -207,10 +212,32 @@ export default function Cuestionario() {
                   Tu nombre nunca aparecerá ligado a tus respuestas.
                 </p>
               </div>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentimiento}
+                  onChange={(e) => setConsentimiento(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-yellow-600 flex-shrink-0"
+                />
+                <span className="text-xs text-gray-600 leading-relaxed">
+                  He leído y acepto el{" "}
+                  <a
+                    href="/privacidad"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-semibold"
+                    style={{ color: "#1a2035" }}
+                  >
+                    Aviso de Privacidad
+                  </a>{" "}
+                  y autorizo el tratamiento de mis datos personales conforme a la Ley Orgánica de Protección de Datos Personales del Ecuador (LOPDP).
+                </span>
+              </label>
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-90"
+                className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-40"
                 style={{ background: "#1a2035" }}
+                disabled={!consentimiento}
               >
                 Comenzar cuestionario →
               </button>
