@@ -519,12 +519,21 @@ export default function Dashboard() {
                               </td>
                             ))}
                             <td className="px-3 py-2">
-                              <button
-                                onClick={() => setConfirmDelete({ tipo: "clima", id: r.id, nombre: r.nombre ?? "este registro" })}
-                                className="text-xs text-red-500 hover:text-red-700 whitespace-nowrap transition-colors"
-                              >
-                                Eliminar
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <a
+                                  href={`/resultados-clima?id=${r.id}`}
+                                  className="text-xs underline whitespace-nowrap"
+                                  style={{ color: "#1a2035" }}
+                                >
+                                  Ver informe
+                                </a>
+                                <button
+                                  onClick={() => setConfirmDelete({ tipo: "clima", id: r.id, nombre: r.nombre ?? "este registro" })}
+                                  className="text-xs text-red-500 hover:text-red-700 whitespace-nowrap transition-colors"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );

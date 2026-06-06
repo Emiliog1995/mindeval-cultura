@@ -108,6 +108,17 @@ export async function guardarClima(data: ClimaInput): Promise<string> {
   return row.id as string;
 }
 
+export async function obtenerClima(id: string): Promise<ClimaRespuesta> {
+  const { data, error } = await supabase
+    .from("clima_respuestas")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as ClimaRespuesta;
+}
+
 export async function listarClima(): Promise<ClimaRespuesta[]> {
   const { data, error } = await supabase
     .from("clima_respuestas")
