@@ -21,6 +21,18 @@ export default function Portal() {
       className="min-h-screen flex flex-col items-center justify-center px-4"
       style={{ background: "linear-gradient(135deg, #1a2035 0%, #243447 100%)" }}
     >
+      {/* Botón cerrar sesión */}
+      <button
+        onClick={() => { localStorage.removeItem("mindeval_portal_v1"); window.location.href = "/"; }}
+        className="fixed top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all hover:opacity-80"
+        style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}
+      >
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        Cerrar sesión
+      </button>
+
       {/* Logo / Marca */}
       <div className="text-center mb-12">
         <div
@@ -188,13 +200,6 @@ export default function Portal() {
         <a href="/privacidad" className="underline hover:opacity-80 transition-opacity">
           Aviso de Privacidad
         </a>
-        <span>·</span>
-        <button
-          onClick={() => { localStorage.removeItem("mindeval_portal_v1"); window.location.href = "/"; }}
-          className="underline hover:opacity-80 transition-opacity"
-        >
-          Cerrar sesión
-        </button>
       </div>
     </div>
   );
