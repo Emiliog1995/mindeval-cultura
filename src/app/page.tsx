@@ -17,10 +17,10 @@ export default function Portal() {
           MINDTALENT
         </div>
         <h1 className="text-4xl font-bold text-white mb-3">
-          Diagnóstico de Cultura Organizacional
+          Ecosistema de Talento Humano
         </h1>
-        <p className="text-lg" style={{ color: "rgba(255,255,255,0.55)" }}>
-          Modelo Denison
+        <p className="text-lg font-semibold" style={{ color: "#c9a84c" }}>
+          MINDHEART · MINDTALENT
         </p>
       </div>
 
