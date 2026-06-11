@@ -4,7 +4,6 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 const DARK = '#1a2035'
-const NAVY = '#243447'
 const GOLD = '#c9a84c'
 
 type Actividad = {
@@ -18,7 +17,7 @@ type Puesto = {
   id: string
   nombre_puesto: string
   area: string
-  empresas_mdt?: { nombre: string }
+  empresas_mdt?: { nombre: string }[]
   estado_ocupante?: string
 }
 
@@ -152,7 +151,7 @@ export default function FormularioOcupante() {
               MIND<span style={{ color: GOLD }}>TALENT</span>
             </div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-              {puesto.empresas_mdt?.nombre ?? 'Diagnóstico de Puesto'}
+              {puesto.empresas_mdt?.[0]?.nombre ?? 'Diagnóstico de Puesto'}
             </div>
           </div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Paso {paso} de {totalPasos}</div>
@@ -220,7 +219,7 @@ export default function FormularioOcupante() {
             <h2 style={{ color: DARK, marginTop: 0, marginBottom: 4, fontSize: 17 }}>¿Qué haces en tu trabajo?</h2>
             <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
               Describe tus actividades principales. Necesitas al menos 3 completas para continuar.
-              <br />Sé específico: en vez de "atender clientes", escribe "responder consultas de clientes por teléfono y correo".
+              <br />Sé específico: en vez de &quot;atender clientes&quot;, escribe &quot;responder consultas de clientes por teléfono y correo&quot;.
             </p>
 
             {actividades.map((act, i) => (

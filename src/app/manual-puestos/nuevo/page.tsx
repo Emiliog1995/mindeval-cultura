@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { calcularTotal, identificarEsenciales, ESCALA_F, ESCALA_CE, ESCALA_CM, type Actividad } from '@/lib/mdt-formula'
+import { calcularTotal, identificarEsenciales, type Actividad } from '@/lib/mdt-formula'
 
 const DARK = '#1a2035'
 const GOLD = '#c9a84c'

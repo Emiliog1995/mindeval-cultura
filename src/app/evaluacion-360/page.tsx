@@ -4,12 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { listar360Evaluados, listarTodas360Evaluaciones } from "@/lib/supabase";
-import type { Evaluado360, Evaluacion360 } from "@/lib/supabase";
 import {
   calcularPuntaje360, calcularPotencial, determinarCuadrante,
   clasificarNivelDesempeno, calcularBrechas,
 } from "@/lib/360-scoring";
-import type { ResultadoConsolidado360, NivelDesempeno } from "@/lib/360-types";
+import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import NineBoxMatrix from "@/components/360/NineBoxMatrix";
 
 export default function Evaluacion360Page() {
