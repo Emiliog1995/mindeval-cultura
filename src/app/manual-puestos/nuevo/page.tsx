@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { calcularTotal, identificarEsenciales, type Actividad } from '@/lib/mdt-formula'
@@ -20,6 +20,14 @@ interface Instruccion {
 const actividadVacia = (orden: number): Actividad => ({ orden, descripcion: '', frecuencia: 0, consecuencia: 0, complejidad: 0 })
 
 export default function NuevoPuesto() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: '#c9a84c' }}>Cargando...</div></div>}>
+      <NuevoPuestoInner />
+    </Suspense>
+  )
+}
+
+function NuevoPuestoInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const desdeRespuestaId = searchParams.get('desde')
@@ -37,7 +45,6 @@ export default function NuevoPuesto() {
   const [actividades, setActividades] = useState<Actividad[]>(
     Array.from({ length: 10 }, (_, i) => actividadVacia(i + 1))
   )
-  const [_esenciales, setEsenciales] = useState<Actividad[]>([])
   const [esencialesManual, setEsencialesManual] = useState<Set<number>>()
 
   const [competencias, setCompetencias] = useState<Competencia[]>([])
@@ -176,7 +183,6 @@ export default function NuevoPuesto() {
   // Recalcular esenciales cuando cambian actividades
   useEffect(() => {
     const e = identificarEsenciales(actividades)
-    setEsenciales(e)
     setEsencialesManual(new Set(e.map(a => a.orden)))
   }, [actividades])
 
