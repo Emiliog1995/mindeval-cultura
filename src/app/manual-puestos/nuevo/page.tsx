@@ -37,7 +37,7 @@ export default function NuevoPuesto() {
   const [actividades, setActividades] = useState<Actividad[]>(
     Array.from({ length: 10 }, (_, i) => actividadVacia(i + 1))
   )
-  const [esenciales, setEsenciales] = useState<Actividad[]>([])
+  const [_esenciales, setEsenciales] = useState<Actividad[]>([])
   const [esencialesManual, setEsencialesManual] = useState<Set<number>>()
 
   const [competencias, setCompetencias] = useState<Competencia[]>([])

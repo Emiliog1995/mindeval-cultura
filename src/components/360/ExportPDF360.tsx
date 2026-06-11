@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 
 interface Props {
@@ -21,7 +21,7 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const { evaluado, periodo, puntaje360, nivelDesempeno, puntajePotencial,
               nivelPotencial, nombreCuadrante, accionCuadrante,
-              puntajesPorCompetencia, brechas, pdi } = resultado;
+              brechas, pdi } = resultado;
 
       const PRIMARY = [26, 32, 53] as [number, number, number];
       const GOLD    = [201, 168, 76] as [number, number, number];
@@ -120,7 +120,6 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
 
       // PDI
       if (pdi) {
-        const pdiY = (doc as typeof doc & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 200;
         doc.addPage();
         doc.setFillColor(...PRIMARY);
         doc.rect(0, 0, 210, 18, "F");

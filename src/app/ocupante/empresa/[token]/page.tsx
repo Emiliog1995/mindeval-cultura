@@ -216,7 +216,7 @@ export default function FormularioEmpresa() {
           <div style={{ background: 'white', borderRadius: 10, padding: '1.75rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
             <h2 style={{ color: DARK, marginTop: 0, marginBottom: 4, fontSize: 18 }}>¿Qué haces en tu trabajo?</h2>
             <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
-              Describe tus actividades del día a día. Sé específico — en vez de "atender clientes", escribe "responder consultas por teléfono y correo".
+              Describe tus actividades del día a día. Sé específico — en vez de &quot;atender clientes&quot;, escribe &quot;responder consultas por teléfono y correo&quot;.
               <br /><strong style={{ color: DARK }}>Necesitas al menos 3 completas para continuar.</strong>
             </p>
 
