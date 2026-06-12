@@ -301,6 +301,12 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
     })
   }, [empresaId])
 
+  const handleEliminar = async (id: string, nombre: string) => {
+    if (!confirm(`¿Eliminar la respuesta de ${nombre}? Esta acción no se puede deshacer.`)) return
+    await supabase.from('respuestas_ocupante').delete().eq('id', id)
+    setRespuestas(prev => prev.filter(r => r.id !== id))
+  }
+
   if (cargando || respuestas.length === 0) return null
 
   return (
@@ -328,6 +334,11 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
                   onClick={e => { e.stopPropagation(); router.push(`/manual-puestos/nuevo?desde=${r.id}`) }}
                   style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #c9a84c', background: 'rgba(201,168,76,0.08)', color: '#7a6020', cursor: 'pointer', fontWeight: 600 }}>
                   Editar → Ficha MDT
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); handleEliminar(r.id, r.nombre) }}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(220,38,38,0.3)', background: 'rgba(220,38,38,0.07)', color: '#b91c1c', cursor: 'pointer', fontWeight: 600 }}>
+                  Eliminar
                 </button>
                 <span style={{ fontSize: 12, color: '#9ca3af' }}>{expandido === r.id ? '▲' : '▼'}</span>
               </div>
