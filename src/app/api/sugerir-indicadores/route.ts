@@ -1,12 +1,31 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { INDICADORES } from '@/lib/diccionario-indicadores'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export async function POST(req: Request) {
-  const { actividades_esenciales, nombre_puesto, area } = await req.json()
+  const { actividades_esenciales, nombre_puesto, area, empresa_id } = await req.json()
   const client = new Anthropic()
 
-  const prompt = `Eres un experto en gestión por resultados e indicadores de desempeño (MDT Ecuador).
+  let contextoEmpresa = ''
+  if (empresa_id) {
+    const { data: emp } = await supabase
+      .from('empresas_mdt')
+      .select('nombre, giro_negocio, mision_empresa, objetivos, valores')
+      .eq('id', empresa_id)
+      .single()
+    if (emp) {
+      contextoEmpresa = `\nContexto organizacional:
+Empresa: ${emp.nombre}${emp.giro_negocio ? `\nGiro / sector: ${emp.giro_negocio}` : ''}${emp.mision_empresa ? `\nMisión de la empresa: ${emp.mision_empresa}` : ''}${emp.objetivos ? `\nObjetivos estratégicos: ${emp.objetivos}` : ''}${emp.valores ? `\nValores organizacionales: ${emp.valores}` : ''}\n`
+    }
+  }
 
+  const prompt = `Eres un experto en gestión por resultados e indicadores de desempeño (MDT Ecuador).
+${contextoEmpresa}
 Puesto: ${nombre_puesto} / Área: ${area}
 
 Actividades esenciales del puesto:

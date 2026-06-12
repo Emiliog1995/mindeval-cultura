@@ -255,7 +255,7 @@ export default function FormularioEmpresa() {
                       ))}
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Si fallo...</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Si fallo, las consecuencias serían...</div>
                       {OPCIONES_CONSECUENCIA.map(op => (
                         <label key={op.valor} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 12, color: '#374151', marginBottom: 4 }}>
                           <input type="radio" name={`cons-${i}`} value={op.valor} checked={act.consecuencia === op.valor}

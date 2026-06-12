@@ -173,6 +173,7 @@ function NuevoPuestoInner() {
         nombre_puesto: datos.nombre_puesto,
         area: datos.area,
         actividades: esencialesDefinitivas.map(a => a.descripcion),
+        empresa_id: datos.empresa_id || undefined,
       }),
     })
       .then(r => r.json())
@@ -223,6 +224,7 @@ function NuevoPuestoInner() {
           actividades_esenciales: esencialesDefinitivas.map(a => ({ descripcion: a.descripcion, total: calcularTotal(a.frecuencia, a.consecuencia, a.complejidad) })),
           nombre_puesto: datos.nombre_puesto,
           area: datos.area,
+          empresa_id: datos.empresa_id || undefined,
         }),
       })
       const data = await res.json()
@@ -246,6 +248,7 @@ function NuevoPuestoInner() {
           actividades_esenciales: esencialesDefinitivas.map(a => ({ descripcion: a.descripcion })),
           nombre_puesto: datos.nombre_puesto,
           area: datos.area,
+          empresa_id: datos.empresa_id || undefined,
         }),
       })
       const data = await res.json()
