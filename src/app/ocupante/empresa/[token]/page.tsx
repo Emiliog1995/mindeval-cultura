@@ -44,6 +44,7 @@ export default function FormularioEmpresa() {
   const [enviado, setEnviado] = useState(false)
   const [paso, setPaso] = useState(1)
   const [guardando, setGuardando] = useState(false)
+  const [consentimiento, setConsentimiento] = useState(false)
   const submittedRef = useRef(false)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -212,12 +213,35 @@ export default function FormularioEmpresa() {
               </label>
             </div>
 
-            <button onClick={() => setPaso(2)} disabled={!nombre.trim() || !cargoActual.trim() || !area.trim()}
+            {/* Consentimiento LOPDP */}
+            <div style={{ background: '#f8f6f0', borderLeft: '3px solid #c9a84c', borderRadius: 6, padding: '12px 14px', marginBottom: 20 }}>
+              <p style={{ fontSize: 12, color: '#1a2035', margin: 0, lineHeight: 1.6 }}>
+                Tu información se usa <strong>exclusivamente</strong> para elaborar el descriptor de tu puesto. Solo el área de Talento Humano y el consultor de MINDTALENT tendrán acceso a tus datos.
+              </p>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 20 }}>
+              <input
+                type="checkbox"
+                checked={consentimiento}
+                onChange={e => setConsentimiento(e.target.checked)}
+                style={{ marginTop: 3, width: 16, height: 16, accentColor: GOLD, flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+                He leído y acepto el{' '}
+                <a href="/privacidad" target="_blank" rel="noopener noreferrer"
+                  style={{ color: DARK, fontWeight: 700, textDecoration: 'underline' }}>
+                  Aviso de Privacidad
+                </a>{' '}
+                y autorizo el tratamiento de mis datos personales conforme a la Ley Orgánica de Protección de Datos Personales del Ecuador (LOPDP).
+              </span>
+            </label>
+
+            <button onClick={() => setPaso(2)} disabled={!nombre.trim() || !cargoActual.trim() || !area.trim() || !consentimiento}
               style={{
                 width: '100%', padding: '.7rem', borderRadius: 6, border: 'none', fontWeight: 700, fontSize: 14,
-                background: nombre && cargoActual && area ? GOLD : '#e5e7eb',
-                color: nombre && cargoActual && area ? DARK : '#9ca3af',
-                cursor: nombre && cargoActual && area ? 'pointer' : 'not-allowed',
+                background: nombre && cargoActual && area && consentimiento ? GOLD : '#e5e7eb',
+                color: nombre && cargoActual && area && consentimiento ? DARK : '#9ca3af',
+                cursor: nombre && cargoActual && area && consentimiento ? 'pointer' : 'not-allowed',
               }}>
               Continuar →
             </button>

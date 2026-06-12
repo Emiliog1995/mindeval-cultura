@@ -30,6 +30,7 @@ export default function Privacidad() {
             <ul className="list-disc pl-5 space-y-1">
               <li><strong>Cuestionario de Cultura Organizacional (DOCS):</strong> nombre completo, cargo, área y empresa. Estos datos son necesarios para identificar su participación y generar el informe individual.</li>
               <li><strong>Encuesta de Clima Laboral:</strong> únicamente sus respuestas al cuestionario. No se recopila ningún dato de identificación personal. La encuesta es completamente anónima.</li>
+              <li><strong>Levantamiento de información de puestos (Manual MDT):</strong> nombre completo, cargo, área, estructura jerárquica, descripción de actividades, herramientas, conocimientos, nivel educativo y años de experiencia. Estos datos se usan exclusivamente para elaborar el descriptor del puesto de trabajo.</li>
             </ul>
           </section>
 
@@ -38,9 +39,10 @@ export default function Privacidad() {
             <ul className="list-disc pl-5 space-y-1">
               <li>Generar diagnósticos individuales y organizacionales de cultura y clima laboral.</li>
               <li>Elaborar informes de consultoría para la empresa contratante del servicio.</li>
+              <li>Construir descriptores de puestos de trabajo (Manual MDT) basados en la información proporcionada por el ocupante del cargo.</li>
               <li>Mejorar los instrumentos y metodologías de diagnóstico organizacional.</li>
             </ul>
-            <p>Sus respuestas se reportan <strong>únicamente de forma grupal por área</strong>. Su nombre nunca aparecerá vinculado a sus respuestas individuales en los informes organizacionales.</p>
+            <p>Sus respuestas de cultura y clima se reportan <strong>únicamente de forma grupal por área</strong>. Su nombre nunca aparecerá vinculado a sus respuestas individuales en los informes organizacionales. La información de puestos es accesible solo para el área de Talento Humano y el consultor asignado.</p>
           </section>
 
           <section className="space-y-2">
