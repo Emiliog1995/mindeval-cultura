@@ -271,8 +271,16 @@ export default function FormularioEmpresa() {
               </div>
             ))}
 
-            <div style={{ fontSize: 12, color: actividadesValidas.length >= 3 ? '#2d6a4f' : '#9ca3af', marginBottom: 12, textAlign: 'right', fontWeight: 600 }}>
-              {actividadesValidas.length} actividad{actividadesValidas.length !== 1 ? 'es' : ''} completa{actividadesValidas.length !== 1 ? 's' : ''}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <button
+                onClick={() => setActividades(prev => [...prev, { descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' }])}
+                disabled={actividades.length >= 20}
+                style={{ background: 'none', border: `1px dashed ${GOLD}`, color: GOLD, padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                + Agregar actividad
+              </button>
+              <div style={{ fontSize: 12, color: actividadesValidas.length >= 3 ? '#2d6a4f' : '#9ca3af', fontWeight: 600 }}>
+                {actividadesValidas.length} actividad{actividadesValidas.length !== 1 ? 'es' : ''} completa{actividadesValidas.length !== 1 ? 's' : ''}
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
