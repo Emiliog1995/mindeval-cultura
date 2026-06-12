@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -44,6 +44,15 @@ export default function FormularioEmpresa() {
   const [enviado, setEnviado] = useState(false)
   const [paso, setPaso] = useState(1)
   const [guardando, setGuardando] = useState(false)
+  const submittedRef = useRef(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 600)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   const [nombre, setNombre] = useState('')
   const [cargoActual, setCargoActual] = useState('')
@@ -79,6 +88,8 @@ export default function FormularioEmpresa() {
 
   const handleEnviar = async () => {
     if (!empresa || actividadesValidas.length < 3) return
+    if (submittedRef.current) return
+    submittedRef.current = true
     setGuardando(true)
 
     const { error } = await supabase.from('respuestas_ocupante').insert({
@@ -99,6 +110,7 @@ export default function FormularioEmpresa() {
 
     setGuardando(false)
     if (error) {
+      submittedRef.current = false
       console.error('Error al guardar respuesta:', error)
       alert('Hubo un error al guardar tu respuesta. Por favor intenta de nuevo.')
       return
@@ -171,19 +183,19 @@ export default function FormularioEmpresa() {
             <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Tu nombre completo *</div>
               <input value={nombre} onChange={e => setNombre(e.target.value)}
-                placeholder="Ej: María González" style={inputStyle} />
+                placeholder="Ej: María González" style={inputStyle} maxLength={120} autoComplete="name" />
             </label>
 
             <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Tu cargo o título del puesto *</div>
               <input value={cargoActual} onChange={e => setCargoActual(e.target.value)}
-                placeholder="Ej: Analista de Talento Humano" style={inputStyle} />
+                placeholder="Ej: Analista de Talento Humano" style={inputStyle} maxLength={120} autoComplete="organization-title" />
             </label>
 
             <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Área o departamento *</div>
               <input value={area} onChange={e => setArea(e.target.value)}
-                placeholder="Ej: Talento Humano, Finanzas, Operaciones..." style={inputStyle} />
+                placeholder="Ej: Talento Humano, Finanzas, Operaciones..." style={inputStyle} maxLength={120} autoComplete="off" />
             </label>
 
             <div style={{ background: '#f9fafb', borderRadius: 8, padding: '14px 16px', marginBottom: 28, border: '1px solid #e5e7eb' }}>
@@ -229,10 +241,11 @@ export default function FormularioEmpresa() {
                   onChange={e => setActividades(prev => prev.map((a, j) => j === i ? { ...a, descripcion: e.target.value } : a))}
                   placeholder="¿Qué haces exactamente en esta actividad?"
                   rows={2}
+                  maxLength={500}
                   style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: act.descripcion.trim() ? 12 : 0 }}
                 />
                 {act.descripcion.trim() && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Frecuencia</div>
                       {OPCIONES_FRECUENCIA.map(op => (
@@ -307,6 +320,7 @@ export default function FormularioEmpresa() {
               <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Excel, SAP, Teams, cámara, vehículo...</div>
               <textarea value={herramientas} onChange={e => setHerramientas(e.target.value)} rows={4}
                 placeholder={"Excel\nSistema de nómina\nTeléfono IP"}
+                maxLength={1000}
                 style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
             </label>
 
@@ -315,6 +329,7 @@ export default function FormularioEmpresa() {
               <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Manual de correspondencia, Manual de la fundación, normas internas...</div>
               <textarea value={conocimientos} onChange={e => setConocimientos(e.target.value)} rows={4}
                 placeholder={"Legislación laboral\nGestión documental\nAtención al cliente"}
+                maxLength={1000}
                 style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
             </label>
 

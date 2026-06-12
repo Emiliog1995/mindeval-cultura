@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ITEMS, DIMENSIONS, SUBSCALES } from "@/lib/items";
 import { calcularScores } from "@/lib/scoring";
@@ -27,6 +27,7 @@ export default function Cuestionario() {
   const [respuestas, setRespuestas] = useState<Respuestas>({});
   const [dimActual, setDimActual] = useState(0);
   const [error, setError] = useState("");
+  const submittedRef = useRef(false);
 
   // ── Datos del evaluado ──────────────────────────────────
   function handleDatos(e: React.FormEvent) {
@@ -92,6 +93,8 @@ export default function Cuestionario() {
       window.scrollTo(0, 0);
       return;
     }
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setPaso("enviando");
     try {
       const scores = calcularScores(respuestas);
@@ -106,6 +109,7 @@ export default function Cuestionario() {
       const sesionId = new URLSearchParams(window.location.search).get("sesion");
       setTimeout(() => router.push(sesionId ? `/clima?sesion=${sesionId}` : "/clima"), 3000);
     } catch {
+      submittedRef.current = false;
       setError("Error al guardar. Verifica tu conexión y las credenciales de Supabase en .env.local");
       setPaso("items");
       window.scrollTo(0, 0);
@@ -153,6 +157,7 @@ export default function Cuestionario() {
                     placeholder={placeholder}
                     value={datos[field as keyof typeof datos]}
                     onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
+                    maxLength={120}
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                   />
                 </div>
@@ -251,7 +256,7 @@ export default function Cuestionario() {
             </div>
 
             {/* Indicador de dimensión actual */}
-            <div className="flex gap-2 mb-5 justify-center">
+            <div className="flex flex-wrap gap-2 mb-5 justify-center">
               {DIMS.map((d, i) => (
                 <div
                   key={d}
