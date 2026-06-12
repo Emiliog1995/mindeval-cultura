@@ -336,7 +336,7 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
                   Editar → Ficha MDT
                 </button>
                 <button
-                  onClick={e => { e.stopPropagation(); handleEliminar(r.id, r.nombre) }}
+                  onClick={e => { e.stopPropagation(); handleEliminar(r.id, r.nombre ?? '') }}
                   style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(220,38,38,0.3)', background: 'rgba(220,38,38,0.07)', color: '#b91c1c', cursor: 'pointer', fontWeight: 600 }}>
                   Eliminar
                 </button>
