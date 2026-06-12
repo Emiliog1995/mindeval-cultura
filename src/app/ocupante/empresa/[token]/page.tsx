@@ -303,7 +303,7 @@ export default function FormularioEmpresa() {
 
             <label style={{ display: 'block', marginBottom: 28 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 4 }}>¿Qué conocimientos necesitas para hacer tu trabajo?</div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Legislación laboral, contabilidad, atención al cliente...</div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Manual de correspondencia, Manual de la fundación, normas internas...</div>
               <textarea value={conocimientos} onChange={e => setConocimientos(e.target.value)} rows={4}
                 placeholder={"Legislación laboral\nGestión documental\nAtención al cliente"}
                 style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
