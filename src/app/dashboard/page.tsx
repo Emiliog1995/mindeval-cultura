@@ -46,10 +46,13 @@ export default function Dashboard() {
   const [linkCopiado, setLinkCopiado]         = useState<string | null>(null);
 
   // ─── 360° (generación de links desde el dashboard) ─────────────────────
+  const [modo360, setModo360] = useState<'individual' | 'masivo'>("individual");
   const [datos360, setDatos360] = useState({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+  const [textoMasivo360, setTextoMasivo360] = useState("");
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
   const [error360, setError360] = useState("");
+  const [progresoMasivo360, setProgresoMasivo360] = useState<{ total: number; hecho: number } | null>(null);
 
   // ─── Clima ───────────────────────────────────────────────────────────────
   const [climaData, setClimaData]         = useState<ClimaRespuesta[]>([]);
@@ -118,6 +121,70 @@ export default function Dashboard() {
     navigator.clipboard.writeText(url);
     setLinkCopiado(url);
     setTimeout(() => setLinkCopiado(null), 2000);
+  }
+
+  async function handleGenerarMasivo360() {
+    if (!datos360.periodo.trim()) {
+      setError360("Indica el período antes de cargar la lista.");
+      return;
+    }
+    const filas = textoMasivo360
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => l.split(",").map((c) => c.trim()));
+
+    const invalidas = filas.filter((f) => f.length < 3 || !f[0] || !f[1] || !f[2]);
+    if (filas.length === 0) {
+      setError360("Pega al menos una línea con: Nombre, Cargo, Departamento.");
+      return;
+    }
+    if (invalidas.length > 0) {
+      setError360(`Hay ${invalidas.length} línea(s) sin nombre, cargo o departamento. Revisa el formato.`);
+      return;
+    }
+
+    setError360("");
+    setCreandoSesion(true);
+    setProgresoMasivo360({ total: filas.length, hecho: 0 });
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    const nuevos: typeof evaluados360 = [];
+    const fuentes: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
+
+    try {
+      for (const [nombre, cargo, departamento, jefe] of filas) {
+        const evaluado = await crear360Evaluado({ nombre, cargo, departamento, jefe: jefe || undefined });
+        const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
+        const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
+        nuevos.push({ evaluado, empresa: nuevaEmpresa || undefined, links });
+        setProgresoMasivo360((p) => p ? { ...p, hecho: p.hecho + 1 } : p);
+      }
+      setEvaluados360((prev) => [...nuevos, ...prev]);
+      setTextoMasivo360("");
+    } catch (e) {
+      setError360(e instanceof Error ? e.message : "Error durante la carga masiva. Algunos registros pueden haberse creado.");
+    } finally {
+      setCreandoSesion(false);
+      setProgresoMasivo360(null);
+    }
+  }
+
+  async function exportarLinks360Excel() {
+    const { utils, writeFile } = await import("xlsx");
+    const filas = evaluados360.flatMap(({ evaluado, empresa, links }) =>
+      links.map((l) => ({
+        Empresa: empresa ?? "",
+        Nombre: evaluado.nombre,
+        Cargo: evaluado.cargo,
+        Departamento: evaluado.departamento,
+        Fuente: FUENTE_LABELS[l.fuente],
+        Link: l.url,
+      }))
+    );
+    const ws = utils.json_to_sheet(filas);
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "Links 360");
+    writeFile(wb, `Links_360_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function handleEliminarSesion(id: string) {
@@ -677,6 +744,24 @@ export default function Dashboard() {
                 </div>
 
                 {nuevaTipo === "360" && (
+                  <div className="flex items-center gap-2">
+                    {(["individual", "masivo"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setModo360(m)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                        style={{
+                          background: modo360 === m ? "#1a2035" : "#f0f4f8",
+                          color: modo360 === m ? "#c9a84c" : "#6b7280",
+                        }}
+                      >
+                        {m === "individual" ? "Uno por uno" : "Carga masiva"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {nuevaTipo === "360" && modo360 === "individual" && (
                   <>
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del evaluado *</label>
@@ -731,21 +816,67 @@ export default function Dashboard() {
                   </>
                 )}
 
-                <button
-                  onClick={handleCrearSesion}
-                  disabled={creandoSesion}
-                  className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                  style={{ background: "#1a2035", color: "#c9a84c" }}
-                >
-                  {creandoSesion ? "Creando..." : "Generar link"}
-                </button>
+                {nuevaTipo === "360" && modo360 === "masivo" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Período *</label>
+                    <input
+                      type="text"
+                      value={datos360.periodo}
+                      onChange={(e) => setDatos360((p) => ({ ...p, periodo: e.target.value }))}
+                      placeholder="ej: 2026-S1"
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-32 text-gray-900"
+                    />
+                  </div>
+                )}
+
+                {nuevaTipo !== "360" || modo360 === "individual" ? (
+                  <button
+                    onClick={handleCrearSesion}
+                    disabled={creandoSesion}
+                    className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                    style={{ background: "#1a2035", color: "#c9a84c" }}
+                  >
+                    {creandoSesion ? "Creando..." : "Generar link"}
+                  </button>
+                ) : null}
               </div>
+
+              {nuevaTipo === "360" && modo360 === "masivo" && (
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Pega la lista — una persona por línea: Nombre, Cargo, Departamento, Jefe (opcional)
+                  </label>
+                  <textarea
+                    value={textoMasivo360}
+                    onChange={(e) => setTextoMasivo360(e.target.value)}
+                    rows={6}
+                    placeholder={"Juan Pérez, Supervisor, Ventas, María López\nAna Torres, Analista, Finanzas, Carlos Ruiz"}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900 font-mono"
+                  />
+                  <div className="flex items-center gap-3 mt-3">
+                    <button
+                      onClick={handleGenerarMasivo360}
+                      disabled={creandoSesion}
+                      className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                      style={{ background: "#1a2035", color: "#c9a84c" }}
+                    >
+                      {progresoMasivo360 ? `Generando ${progresoMasivo360.hecho}/${progresoMasivo360.total}…` : "Generar todos los links"}
+                    </button>
+                    {textoMasivo360.trim() && (
+                      <span className="text-xs text-gray-400">
+                        {textoMasivo360.split("\n").filter((l) => l.trim()).length} persona(s) detectadas
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {nuevaTipo === "360" && error360 && (
                 <p className="text-xs text-red-600 mt-3">{error360}</p>
               )}
               {nuevaTipo === "360" && (
                 <p className="text-xs text-gray-400 mt-3">
-                  Se generarán 5 links independientes (autoevaluación, jefe, par, colaborador, cliente interno) para que cada evaluador responda sin ver las respuestas de los demás.
+                  Se generarán 5 links independientes por persona (autoevaluación, jefe, par, colaborador, cliente interno) para que cada evaluador responda sin ver las respuestas de los demás.
                 </p>
               )}
             </div>
@@ -753,9 +884,18 @@ export default function Dashboard() {
             {/* Evaluaciones 360° generadas */}
             {evaluados360.length > 0 && (
               <div className="bg-white rounded-2xl shadow p-6">
-                <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
-                  Evaluaciones 360° generadas ({evaluados360.length})
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-bold" style={{ color: "#1a2035" }}>
+                    Evaluaciones 360° generadas ({evaluados360.length})
+                  </h2>
+                  <button
+                    onClick={exportarLinks360Excel}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                    style={{ background: "#f0f4f8", color: "#1a2035" }}
+                  >
+                    Exportar todos los links a Excel
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {evaluados360.map(({ evaluado, empresa, links }) => (
                     <div key={evaluado.id} className="border border-gray-200 rounded-xl overflow-hidden">
