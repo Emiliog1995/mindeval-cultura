@@ -328,40 +328,5 @@ export async function listarTokens360(
   return (data ?? []) as Token360[];
 }
 
-export async function obtenerToken360(token: string): Promise<{ token: Token360; evaluado: Evaluado360 } | null> {
-  const { data, error } = await supabase
-    .from('tokens_360')
-    .select('*, evaluados_360(*)')
-    .eq('token', token)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) return null;
-  const { evaluados_360, ...token360 } = data as Token360 & { evaluados_360: Evaluado360 };
-  return { token: token360, evaluado: evaluados_360 };
-}
-
-export async function completarToken360(
-  token: string,
-  competencias: Record<string, number>,
-  potencial?: Record<string, number>,
-): Promise<void> {
-  const tokenRow = await obtenerToken360(token);
-  if (!tokenRow) throw new Error('Link no válido o expirado');
-  if (tokenRow.token.completado) throw new Error('Esta evaluación ya fue enviada');
-
-  await crear360Evaluacion({
-    evaluado_id: tokenRow.token.evaluado_id,
-    periodo: tokenRow.token.periodo,
-    fuente: tokenRow.token.fuente,
-    competencias: competencias as Evaluacion360['competencias'],
-    potencial: potencial as Evaluacion360['potencial'],
-    puntaje_total: undefined,
-    nivel: undefined,
-  });
-
-  const { error } = await supabase
-    .from('tokens_360')
-    .update({ completado: true })
-    .eq('token', token);
-  if (error) throw new Error(error.message);
-}
+// El flujo público de completar un token 360° vive en /api/token/360/[token]
+// (server-side, con service_role) — ver src/app/api/token/360/[token]/route.ts

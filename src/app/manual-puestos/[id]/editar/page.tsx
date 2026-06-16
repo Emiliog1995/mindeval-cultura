@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useAuthGuard } from '@/lib/useAuthGuard'
+import { authHeaders } from '@/lib/auth-headers'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -18,6 +20,7 @@ const labelStyle: React.CSSProperties = {
 export default function EditarPuesto() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const { verificando } = useAuthGuard()
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [paso, setPaso] = useState(1)
@@ -93,7 +96,7 @@ export default function EditarPuesto() {
       const actDesc = actividades.map(a => a.descripcion).filter(Boolean)
       const res = await fetch('/api/sugerir-mision', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({ nombre_puesto: datos.nombre_puesto, area: datos.area, actividades: actDesc }),
       })
       const data = await res.json()
@@ -117,7 +120,7 @@ export default function EditarPuesto() {
       const fuente = esenciales.length > 0 ? esenciales : actividades
       const res = await fetch('/api/sugerir-competencias', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           nombre_puesto: datos.nombre_puesto,
           area: datos.area,
@@ -193,6 +196,8 @@ export default function EditarPuesto() {
     setGuardando(false)
     router.push(`/manual-puestos/${id}`)
   }
+
+  if (verificando) return null
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

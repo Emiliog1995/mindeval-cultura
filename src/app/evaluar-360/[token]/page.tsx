@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { obtenerToken360, completarToken360 } from "@/lib/supabase";
 import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, FUENTE_LABELS, type CompetenciaKey, type PotencialKey } from "@/lib/360-types";
 import type { Evaluado360, Token360 } from "@/lib/supabase";
 
@@ -28,11 +27,16 @@ export default function EvaluarToken360() {
   const [potencial, setPotencial] = useState<PotencialMap>(emptyPotencial());
 
   useEffect(() => {
-    obtenerToken360(token)
+    fetch(`/api/token/360/${token}`)
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error ?? "Este link no es válido o ya no está disponible.");
+        }
+        return r.json() as Promise<{ token: Token360; evaluado: Evaluado360 }>;
+      })
       .then((res) => {
-        if (!res) {
-          setError("Este link no es válido o ya no está disponible.");
-        } else if (res.token.completado) {
+        if (res.token.completado) {
           setEnviado(true);
         } else {
           setData(res);
@@ -55,7 +59,15 @@ export default function EvaluarToken360() {
     setError("");
     try {
       const esJefe = data.token.fuente === "jefe";
-      await completarToken360(token, competencias, esJefe ? potencial : undefined);
+      const res = await fetch(`/api/token/360/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ competencias, potencial: esJefe ? potencial : undefined }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Error al enviar");
+      }
       setEnviado(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al enviar");

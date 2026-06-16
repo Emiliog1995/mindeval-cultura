@@ -347,7 +347,7 @@ export default function Dashboard() {
             <p className="text-white text-xs mt-0.5 opacity-70">Dashboard de Consultor</p>
           </div>
           <button
-            onClick={() => { logout(); router.push("/admin"); }}
+            onClick={async () => { await logout(); router.push("/admin"); }}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white border border-white border-opacity-30 hover:border-opacity-60 transition"
           >
             Cerrar sesión

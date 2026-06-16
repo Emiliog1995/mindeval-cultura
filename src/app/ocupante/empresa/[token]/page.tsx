@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -72,12 +71,13 @@ export default function FormularioEmpresa() {
   const [experienciaAnios, setExperienciaAnios] = useState('')
 
   useEffect(() => {
-    supabase
-      .from('empresas_mdt')
-      .select('id, nombre, logo_url')
-      .eq('token', token)
-      .single()
-      .then(({ data }) => {
+    fetch(`/api/token/ocupante-empresa/${token}`)
+      .then(async (r) => {
+        if (!r.ok) return null
+        const body = await r.json()
+        return body.empresa as { id: string; nombre: string; logo_url?: string }
+      })
+      .then((data) => {
         setEmpresa(data)
         setCargando(false)
       })
@@ -93,26 +93,28 @@ export default function FormularioEmpresa() {
     submittedRef.current = true
     setGuardando(true)
 
-    const { error } = await supabase.from('respuestas_ocupante').insert({
-      empresa_id: empresa.id,
-      puesto_id: null,
-      nombre,
-      cargo_actual: cargoActual,
-      area,
-      supervisado_por: supervisadoPor || null,
-      supervisa_a: supervisaA || null,
-      actividades: actividadesValidas,
-      herramientas: herramientas.split('\n').map(h => h.trim()).filter(Boolean),
-      conocimientos: conocimientos.split('\n').map(c => c.trim()).filter(Boolean),
-      nivel_educativo: nivelEducativo,
-      carrera,
-      experiencia_anios: parseInt(experienciaAnios) || 0,
+    const res = await fetch(`/api/token/ocupante-empresa/${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre,
+        cargoActual,
+        area,
+        supervisadoPor,
+        supervisaA,
+        actividades: actividadesValidas,
+        herramientas: herramientas.split('\n').map(h => h.trim()).filter(Boolean),
+        conocimientos: conocimientos.split('\n').map(c => c.trim()).filter(Boolean),
+        nivelEducativo,
+        carrera,
+        experienciaAnios,
+      }),
     })
 
     setGuardando(false)
-    if (error) {
+    if (!res.ok) {
       submittedRef.current = false
-      console.error('Error al guardar respuesta:', error)
+      console.error('Error al guardar respuesta')
       alert('Hubo un error al guardar tu respuesta. Por favor intenta de nuevo.')
       return
     }

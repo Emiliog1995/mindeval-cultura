@@ -1,8 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import mammoth from 'mammoth'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
+import { requireAuth } from '@/lib/require-auth'
 
 export async function POST(req: Request) {
+  const authError = await requireAuth(req)
+  if (authError) return authError
+
   const { permitido } = checkRateLimit(req, 'importar-manual')
   if (!permitido) return rateLimitResponse()
 

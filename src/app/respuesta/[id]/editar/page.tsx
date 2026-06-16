@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -42,6 +43,7 @@ const ACTIVIDAD_VACIA: Actividad = { descripcion: '', frecuencia: '', dificultad
 export default function EditarRespuesta() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const { verificando } = useAuthGuard()
   const [cargando, setCargando] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [guardado, setGuardado] = useState(false)
@@ -110,6 +112,8 @@ export default function EditarRespuesta() {
     width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db',
     borderRadius: 6, fontSize: 14, color: '#111', outline: 'none', boxSizing: 'border-box',
   }
+
+  if (verificando) return null
 
   if (cargando) return (
     <div style={{ minHeight: '100vh', background: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

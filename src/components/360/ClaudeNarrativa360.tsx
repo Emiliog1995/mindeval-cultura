@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
+import { authHeaders } from "@/lib/auth-headers";
 
 interface Props {
   resultado: ResultadoConsolidado360;
@@ -20,7 +21,7 @@ export default function ClaudeNarrativa360({ resultado, onNarrativaLista }: Prop
     try {
       const res = await fetch("/api/360-narrativa", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ resultado }),
       });
       const json = await res.json();

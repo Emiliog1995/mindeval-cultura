@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -74,12 +73,13 @@ export default function FormularioOcupante() {
   const [experienciaAnios, setExperienciaAnios] = useState('')
 
   useEffect(() => {
-    supabase
-      .from('puestos')
-      .select('id, nombre_puesto, area, estado_ocupante, empresas_mdt(nombre)')
-      .eq('token', token)
-      .single()
-      .then(({ data }) => {
+    fetch(`/api/token/ocupante/${token}`)
+      .then(async (r) => {
+        if (!r.ok) return null
+        const body = await r.json()
+        return body.puesto as Puesto
+      })
+      .then((data) => {
         setPuesto(data)
         setCargando(false)
       })
@@ -94,21 +94,23 @@ export default function FormularioOcupante() {
     const herramientasArr = herramientas.split('\n').map(h => h.trim()).filter(Boolean)
     const conocimientosArr = conocimientos.split('\n').map(c => c.trim()).filter(Boolean)
 
-    await supabase.from('respuestas_ocupante').insert({
-      puesto_id: puesto.id,
-      nombre,
-      cargo_actual: cargoActual,
-      supervisado_por: supervisadoPor || null,
-      supervisa_a: supervisaA || null,
-      actividades: actividadesValidas,
-      herramientas: herramientasArr,
-      conocimientos: conocimientosArr,
-      nivel_educativo: nivelEducativo,
-      carrera,
-      experiencia_anios: parseInt(experienciaAnios) || 0,
+    await fetch(`/api/token/ocupante/${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre,
+        cargoActual,
+        supervisadoPor,
+        supervisaA,
+        actividades: actividadesValidas,
+        herramientas: herramientasArr,
+        conocimientos: conocimientosArr,
+        nivelEducativo,
+        carrera,
+        experienciaAnios,
+      }),
     })
 
-    await supabase.from('puestos').update({ estado_ocupante: 'completado' }).eq('id', puesto.id)
     setGuardando(false)
     setEnviado(true)
   }

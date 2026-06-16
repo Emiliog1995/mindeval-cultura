@@ -2,6 +2,8 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useAuthGuard } from '@/lib/useAuthGuard'
+import { authHeaders } from '@/lib/auth-headers'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -26,6 +28,7 @@ interface PuestoImportado {
 
 export default function ImportarManual() {
   const router = useRouter()
+  const { verificando } = useAuthGuard()
   const fileRef = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [textoPDF, setTextoPDF] = useState('')
@@ -45,17 +48,18 @@ export default function ImportarManual() {
 
     try {
       let res: Response
+      const headers = await authHeaders()
 
       if (archivo) {
         const form = new FormData()
         form.append('file', archivo)
-        res = await fetch('/api/importar-manual', { method: 'POST', body: form })
+        res = await fetch('/api/importar-manual', { method: 'POST', body: form, headers })
       } else {
         // Texto plano → enviamos como txt
         const blob = new Blob([textoPDF], { type: 'text/plain' })
         const form = new FormData()
         form.append('file', new File([blob], 'manual.txt', { type: 'text/plain' }))
-        res = await fetch('/api/importar-manual', { method: 'POST', body: form })
+        res = await fetch('/api/importar-manual', { method: 'POST', body: form, headers })
       }
 
       const data = await res.json()
@@ -134,6 +138,8 @@ export default function ImportarManual() {
     }
     setImportando(prev => { const n = new Set(prev); n.delete(index); return n })
   }
+
+  if (verificando) return null
 
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>

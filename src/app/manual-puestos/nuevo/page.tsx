@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { calcularTotal, identificarEsenciales, type Actividad } from '@/lib/mdt-formula'
+import { useAuthGuard } from '@/lib/useAuthGuard'
+import { authHeaders } from '@/lib/auth-headers'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -29,6 +31,7 @@ export default function NuevoPuesto() {
 
 function NuevoPuestoInner() {
   const router = useRouter()
+  const { verificando } = useAuthGuard()
   const searchParams = useSearchParams()
   const desdeRespuestaId = searchParams.get('desde')
   const [paso, setPaso] = useState(1)
@@ -166,16 +169,16 @@ function NuevoPuestoInner() {
   useEffect(() => {
     if (paso !== 7 || datos.mision.trim() || generandoMision) return
     setGenerandoMision(true)
-    fetch('/api/sugerir-mision', {
+    authHeaders().then(extraHeaders => fetch('/api/sugerir-mision', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify({
         nombre_puesto: datos.nombre_puesto,
         area: datos.area,
         actividades: esencialesDefinitivas.map(a => a.descripcion),
         empresa_id: datos.empresa_id || undefined,
       }),
-    })
+    }))
       .then(r => r.json())
       .then(data => { if (data.mision) setDatos(prev => ({ ...prev, mision: data.mision })) })
       .finally(() => setGenerandoMision(false))
@@ -219,7 +222,7 @@ function NuevoPuestoInner() {
     try {
       const res = await fetch('/api/sugerir-competencias', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           actividades_esenciales: esencialesDefinitivas.map(a => ({ descripcion: a.descripcion, total: calcularTotal(a.frecuencia, a.consecuencia, a.complejidad) })),
           nombre_puesto: datos.nombre_puesto,
@@ -243,7 +246,7 @@ function NuevoPuestoInner() {
     try {
       const res = await fetch('/api/sugerir-indicadores', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
           actividades_esenciales: esencialesDefinitivas.map(a => ({ descripcion: a.descripcion })),
           nombre_puesto: datos.nombre_puesto,
@@ -351,6 +354,8 @@ function NuevoPuestoInner() {
   const puedeAvanzar2 = actividadesConValores.length >= 3
 
   const PASOS = ['Datos del puesto', 'Actividades MDT', 'Esenciales', 'Competencias IA', 'Instrucción', 'Indicadores', 'Vista previa']
+
+  if (verificando) return null
 
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>

@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/require-auth";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAuth(req);
+  if (authError) return authError;
+
   const { permitido } = checkRateLimit(req, "360-narrativa");
   if (!permitido) return rateLimitResponse();
 

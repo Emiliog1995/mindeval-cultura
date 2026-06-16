@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { calcularTotal } from '@/lib/mdt-formula'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -21,6 +22,7 @@ interface Indicador { id: string; indicador: string; formula?: string; meta?: st
 export default function FichaPuesto() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const { verificando } = useAuthGuard()
 
   const [puesto, setPuesto] = useState<Puesto | null>(null)
   const [actividades, setActividades] = useState<Actividad[]>([])
@@ -75,6 +77,8 @@ export default function FichaPuesto() {
     )
     setExportando(false)
   }
+
+  if (verificando) return null
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

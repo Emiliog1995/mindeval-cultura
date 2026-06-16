@@ -15,9 +15,9 @@ export default function AdminLogin() {
     else setCargando(false);
   }, [router]);
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    if (login(pin)) {
+    if (await login(pin)) {
       router.push("/dashboard");
     } else {
       setError("PIN incorrecto. Inténtalo de nuevo.");

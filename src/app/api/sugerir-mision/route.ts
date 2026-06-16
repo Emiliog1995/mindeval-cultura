@@ -1,13 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { requireAuth } from '@/lib/require-auth'
 
 export async function POST(req: Request) {
+  const authError = await requireAuth(req)
+  if (authError) return authError
+
   const { permitido } = checkRateLimit(req, 'sugerir-mision')
   if (!permitido) return rateLimitResponse()
 
@@ -16,7 +15,7 @@ export async function POST(req: Request) {
 
   let contextoEmpresa = ''
   if (empresa_id) {
-    const { data: emp } = await supabase
+    const { data: emp } = await supabaseAdmin
       .from('empresas_mdt')
       .select('nombre, giro_negocio, mision_empresa, objetivos, valores')
       .eq('id', empresa_id)
