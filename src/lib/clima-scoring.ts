@@ -23,7 +23,7 @@ export function getClimaLevel(mean: number): string {
 
 export function getClimaLevelColor(level: string): string {
   switch (level) {
-    case "MUY FAVORABLE":    return "#16a34a";
+    case "MUY FAVORABLE":    return "#059669";
     case "FAVORABLE":        return "#65a30d";
     case "MODERADO":         return "#ca8a04";
     case "DESFAVORABLE":     return "#ea580c";

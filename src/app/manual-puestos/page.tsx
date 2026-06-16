@@ -85,15 +85,15 @@ export default function PanelManualPuestos() {
   if (verificando) return null
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: '#c9a84c', fontSize: 16 }}>Cargando...</div>
+    <div style={{ minHeight: '100vh', background: '#0A1A32', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ color: '#10b981', fontSize: 16 }}>Cargando...</div>
     </div>
   )
 
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
       {/* Header */}
-      <div style={{ background: '#1a2035', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ background: '#0A1A32', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={() => router.push('/')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 12, padding: 0 }}>
@@ -101,7 +101,7 @@ export default function PanelManualPuestos() {
             </button>
             <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
             <span style={{ fontSize: 18, fontWeight: 700, color: 'white', letterSpacing: 1 }}>
-              MIND<span style={{ color: '#c9a84c' }}>TALENT</span>
+              MIND<span style={{ color: '#10b981' }}>TALENT</span>
             </span>
           </div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
@@ -114,7 +114,7 @@ export default function PanelManualPuestos() {
             Importar Word / PDF
           </button>
           <button onClick={() => router.push('/manual-puestos/nuevo')}
-            style={{ background: '#c9a84c', color: '#1a2035', padding: '.45rem 1.25rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+            style={{ background: '#10b981', color: '#0A1A32', padding: '.45rem 1.25rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
             + Nuevo puesto
           </button>
         </div>
@@ -124,10 +124,10 @@ export default function PanelManualPuestos() {
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
           {[
-            { label: 'Empresas', valor: empresas.length, color: '#1a2035' },
-            { label: 'Puestos registrados', valor: puestos.length, color: '#243447' },
+            { label: 'Empresas', valor: empresas.length, color: '#0A1A32' },
+            { label: 'Puestos registrados', valor: puestos.length, color: '#1E2D5A' },
             { label: 'Fichas completas', valor: puestos.filter(p => p.mision && p.supervisado_por).length, color: '#2d6a4f' },
-            { label: 'Borradores', valor: puestos.filter(p => !p.mision || !p.supervisado_por).length, color: '#c9a84c' },
+            { label: 'Borradores', valor: puestos.filter(p => !p.mision || !p.supervisado_por).length, color: '#10b981' },
           ].map(k => (
             <div key={k.label} style={{ background: 'white', padding: '1rem 1.25rem', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,.08)', borderLeft: `4px solid ${k.color}` }}>
               <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{k.label}</div>
@@ -138,7 +138,7 @@ export default function PanelManualPuestos() {
 
         {/* Enlaces por empresa */}
         <div style={{ background: 'white', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2035', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#0A1A32', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Enlace de diagnóstico por empresa
           </div>
           <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 12 }}>
@@ -148,7 +148,7 @@ export default function PanelManualPuestos() {
             {empresas.map(emp => (
               <div key={emp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
                 <div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{emp.nombre}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#0A1A32' }}>{emp.nombre}</span>
                   {emp.token && (
                     <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }}>
                       /ocupante/empresa/{emp.token.slice(0, 8)}...
@@ -157,10 +157,10 @@ export default function PanelManualPuestos() {
                 </div>
                 <button onClick={() => handleEnlaceEmpresa(emp)}
                   style={{
-                    background: enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.15)' : 'rgba(201,168,76,0.15)',
+                    background: enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.15)' : 'rgba(16,185,129,0.15)',
                     color: enlaceEmpresaCopiad === emp.id ? '#2d6a4f' : '#7a6020',
                     padding: '.3rem .9rem', borderRadius: 5,
-                    border: `1px solid ${enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.3)' : 'rgba(201,168,76,0.4)'}`,
+                    border: `1px solid ${enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.3)' : 'rgba(16,185,129,0.4)'}`,
                     cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
                   }}>
                   {enlaceEmpresaCopiad === emp.id ? '✓ Enlace copiado' : 'Copiar enlace'}
@@ -189,7 +189,7 @@ export default function PanelManualPuestos() {
         <div style={{ background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#243447', color: 'white' }}>
+              <tr style={{ background: '#1E2D5A', color: 'white' }}>
                 {['Puesto', 'Empresa', 'Área', 'Supervisado por', 'Fecha', 'Estado', 'Ocupante', 'Acciones'].map(h => (
                   <th key={h} style={{ padding: '.5rem .75rem', textAlign: 'left', fontSize: 11, fontWeight: 600, letterSpacing: 0.3 }}>{h}</th>
                 ))}
@@ -198,7 +198,7 @@ export default function PanelManualPuestos() {
             <tbody>
               {puestosFiltrados.map((p, i) => (
                 <tr key={p.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{p.nombre_puesto}</td>
+                  <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#0A1A32' }}>{p.nombre_puesto}</td>
                   <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{p.empresas_mdt?.nombre ?? '—'}</td>
                   <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{p.area}</td>
                   <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{p.supervisado_por || '—'}</td>
@@ -208,7 +208,7 @@ export default function PanelManualPuestos() {
                   <td style={{ padding: '.4rem .75rem' }}>
                     <span style={{
                       fontSize: 10, padding: '2px 8px', borderRadius: 99,
-                      background: p.mision && p.supervisado_por ? 'rgba(45,106,79,0.1)' : 'rgba(201,168,76,0.15)',
+                      background: p.mision && p.supervisado_por ? 'rgba(45,106,79,0.1)' : 'rgba(16,185,129,0.15)',
                       color: p.mision && p.supervisado_por ? '#2d6a4f' : '#b8860b',
                       fontWeight: 600,
                     }}>
@@ -227,11 +227,11 @@ export default function PanelManualPuestos() {
                   <td style={{ padding: '.4rem .75rem' }}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button onClick={() => router.push(`/manual-puestos/${p.id}`)}
-                        style={{ background: '#1a2035', color: 'white', padding: '.25rem .6rem', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 11 }}>
+                        style={{ background: '#0A1A32', color: 'white', padding: '.25rem .6rem', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 11 }}>
                         Ver ficha
                       </button>
                       <button onClick={() => router.push(`/manual-puestos/${p.id}/editar`)}
-                        style={{ background: 'rgba(201,168,76,0.15)', color: '#7a6020', padding: '.25rem .6rem', borderRadius: 4, border: '1px solid rgba(201,168,76,0.4)', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                        style={{ background: 'rgba(16,185,129,0.15)', color: '#7a6020', padding: '.25rem .6rem', borderRadius: 4, border: '1px solid rgba(16,185,129,0.4)', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                         Editar
                       </button>
                       <button onClick={() => handleEnviarEnlace(p)}
@@ -256,7 +256,7 @@ export default function PanelManualPuestos() {
                 <tr>
                   <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>
                     {puestos.length === 0
-                      ? <>No hay puestos registrados. <button onClick={() => router.push('/manual-puestos/nuevo')} style={{ color: '#c9a84c', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Crear el primero</button></>
+                      ? <>No hay puestos registrados. <button onClick={() => router.push('/manual-puestos/nuevo')} style={{ color: '#10b981', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Crear el primero</button></>
                       : 'No hay puestos que coincidan con la búsqueda.'}
                   </td>
                 </tr>
@@ -315,7 +315,7 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
 
   return (
     <div style={{ marginTop: 32 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2035', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#0A1A32', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         Respuestas de ocupantes ({respuestas.length})
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -324,7 +324,7 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', cursor: 'pointer' }}
               onClick={() => setExpandido(expandido === r.id ? null : r.id)}>
               <div>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#1a2035' }}>{r.nombre}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0A1A32' }}>{r.nombre}</span>
                 <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8 }}>{r.cargo_actual}</span>
                 <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8 }}>
                   {r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('es-EC') : ''}
@@ -336,7 +336,7 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
                 </span>
                 <button
                   onClick={e => { e.stopPropagation(); router.push(`/manual-puestos/nuevo?desde=${r.id}`) }}
-                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #c9a84c', background: 'rgba(201,168,76,0.08)', color: '#7a6020', cursor: 'pointer', fontWeight: 600 }}>
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #10b981', background: 'rgba(16,185,129,0.08)', color: '#7a6020', cursor: 'pointer', fontWeight: 600 }}>
                   Editar → Ficha MDT
                 </button>
                 <button
@@ -350,7 +350,7 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
             {expandido === r.id && (
               <div style={{ padding: '0 16px 16px', borderTop: '1px solid #f0f0f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 12 }}>
                 <div>
-                  <div style={{ fontWeight: 700, color: '#1a2035', margin: '12px 0 6px' }}>Actividades</div>
+                  <div style={{ fontWeight: 700, color: '#0A1A32', margin: '12px 0 6px' }}>Actividades</div>
                   {r.actividades?.map((a, i) => (
                     <div key={i} style={{ marginBottom: 8, paddingLeft: 8, borderLeft: '2px solid #e5e7eb' }}>
                       <div style={{ fontWeight: 600, color: '#111' }}>{a.descripcion}</div>
@@ -359,11 +359,11 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
                   ))}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, color: '#1a2035', margin: '12px 0 6px' }}>Herramientas</div>
+                  <div style={{ fontWeight: 700, color: '#0A1A32', margin: '12px 0 6px' }}>Herramientas</div>
                   {r.herramientas?.map((h, i) => <div key={i} style={{ color: '#374151' }}>· {h}</div>)}
-                  <div style={{ fontWeight: 700, color: '#1a2035', margin: '12px 0 6px' }}>Conocimientos</div>
+                  <div style={{ fontWeight: 700, color: '#0A1A32', margin: '12px 0 6px' }}>Conocimientos</div>
                   {r.conocimientos?.map((c, i) => <div key={i} style={{ color: '#374151' }}>· {c}</div>)}
-                  <div style={{ fontWeight: 700, color: '#1a2035', margin: '12px 0 6px' }}>Formación</div>
+                  <div style={{ fontWeight: 700, color: '#0A1A32', margin: '12px 0 6px' }}>Formación</div>
                   <div style={{ color: '#374151' }}>{r.nivel_educativo}{r.carrera ? ` — ${r.carrera}` : ''}</div>
                   {r.experiencia_anios ? <div style={{ color: '#374151' }}>{r.experiencia_anios} años de experiencia</div> : null}
                 </div>

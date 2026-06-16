@@ -45,7 +45,7 @@ export function calcularPuntaje360(evaluaciones: Evaluacion360[]): {
 }
 
 export function clasificarNivelDesempeno(puntaje: number): { nivel: NivelDesempeno; color: string } {
-  if (puntaje >= 4.5) return { nivel: 'SOBRESALIENTE', color: '#22c55e' };
+  if (puntaje >= 4.5) return { nivel: 'SOBRESALIENTE', color: '#10b981' };
   if (puntaje >= 3.5) return { nivel: 'MUY BUENO',     color: '#84cc16' };
   if (puntaje >= 2.5) return { nivel: 'BUENO',          color: '#eab308' };
   if (puntaje >= 1.5) return { nivel: 'EN DESARROLLO',  color: '#f97316' };

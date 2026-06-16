@@ -120,15 +120,15 @@ export default function Cuestionario() {
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       {/* Header */}
-      <header style={{ background: "#1a2035" }} className="py-4 px-6 shadow-lg">
+      <header style={{ background: "#0A1A32" }} className="py-4 px-6 shadow-lg">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
-            <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
+            <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
             <p className="text-white text-xs mt-0.5 opacity-70">Quito, Ecuador</p>
           </div>
           <div className="text-right">
             <p className="text-white text-sm font-semibold">DOCS – Cultura Organizacional</p>
-            <p style={{ color: "#c9a84c" }} className="text-xs">Modelo Denison</p>
+            <p style={{ color: "#10b981" }} className="text-xs">Modelo Denison</p>
           </div>
         </div>
       </header>
@@ -164,9 +164,9 @@ export default function Cuestionario() {
               ))}
               <div
                 className="rounded-xl px-4 py-3 text-sm leading-relaxed"
-                style={{ background: "#f8f6f0", borderLeft: "3px solid #c9a84c" }}
+                style={{ background: "#f8f6f0", borderLeft: "3px solid #10b981" }}
               >
-                <p style={{ color: "#1a2035" }}>
+                <p style={{ color: "#0A1A32" }}>
                   Tu nombre se registra solo para validar tu participación. Tus respuestas son
                   confidenciales y los resultados se reportan únicamente de forma grupal por área.
                   Tu nombre nunca aparecerá ligado a tus respuestas.
@@ -186,7 +186,7 @@ export default function Cuestionario() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline font-semibold"
-                    style={{ color: "#1a2035" }}
+                    style={{ color: "#0A1A32" }}
                   >
                     Aviso de Privacidad
                   </a>{" "}
@@ -196,7 +196,7 @@ export default function Cuestionario() {
               <button
                 type="submit"
                 className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-40"
-                style={{ background: "#1a2035" }}
+                style={{ background: "#0A1A32" }}
                 disabled={!consentimiento}
               >
                 Comenzar cuestionario →
@@ -210,9 +210,9 @@ export default function Cuestionario() {
           <div className="bg-white rounded-2xl shadow-md p-10 text-center">
             <div
               className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-              style={{ background: "#1a2035" }}
+              style={{ background: "#0A1A32" }}
             >
-              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="#c9a84c" strokeWidth={2.5}>
+              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="#10b981" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -228,7 +228,7 @@ export default function Cuestionario() {
             <div className="w-full bg-gray-100 rounded-full h-2 mb-3 overflow-hidden">
               <div
                 className="h-2 rounded-full"
-                style={{ background: "#c9a84c", animation: "progress3s 3s linear forwards", width: "0%" }}
+                style={{ background: "#10b981", animation: "progress3s 3s linear forwards", width: "0%" }}
               />
             </div>
             <style>{`
@@ -249,7 +249,7 @@ export default function Cuestionario() {
               <div className="flex-1 bg-gray-100 rounded-full h-2.5">
                 <div
                   className="h-2.5 rounded-full transition-all duration-300"
-                  style={{ width: `${progreso}%`, background: "#c9a84c", minWidth: progreso > 0 ? 8 : 0 }}
+                  style={{ width: `${progreso}%`, background: "#10b981", minWidth: progreso > 0 ? 8 : 0 }}
                 />
               </div>
               <span className="text-sm font-bold whitespace-nowrap text-gray-800">{totalRespondidos}/60</span>
@@ -263,9 +263,9 @@ export default function Cuestionario() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
                   style={
                     i === dimActual
-                      ? { background: "#1a2035", color: "#c9a84c" }
+                      ? { background: "#0A1A32", color: "#10b981" }
                       : i < dimActual
-                      ? { background: "#e7f3e8", color: "#16a34a" }
+                      ? { background: "#e7f3e8", color: "#059669" }
                       : { background: "#f3f4f6", color: "#9ca3af" }
                   }
                 >
@@ -277,7 +277,7 @@ export default function Cuestionario() {
             {error && <p className="text-red-600 bg-red-50 rounded-lg px-4 py-3 mb-5 text-sm">{error}</p>}
 
             {/* Cabecera de la dimensión */}
-            <div className="rounded-xl px-5 py-4 mb-5" style={{ background: "#1a2035" }}>
+            <div className="rounded-xl px-5 py-4 mb-5" style={{ background: "#0A1A32" }}>
               <p className="text-white text-xs opacity-60 mb-0.5">Dimensión {dimActual + 1} de 4</p>
               <span className="text-white font-bold">
                 {dimData.code}. {dimData.label.toUpperCase()}
@@ -293,7 +293,7 @@ export default function Cuestionario() {
 
             {dimData.subscales.map((sub) => (
               <div key={sub.code} className="mb-6">
-                <p className="text-xs font-bold uppercase tracking-widest mb-3 px-1" style={{ color: "#c9a84c" }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-3 px-1" style={{ color: "#10b981" }}>
                   {sub.code}. {sub.label}
                 </p>
                 {sub.items.map((item) => {
@@ -313,7 +313,7 @@ export default function Cuestionario() {
                             className="flex flex-col items-center py-2.5 px-1 rounded-lg border-2 text-xs transition-all"
                             style={
                               selected === op.valor
-                                ? { background: "#1a2035", borderColor: "#c9a84c", color: "#c9a84c", fontWeight: 700 }
+                                ? { background: "#0A1A32", borderColor: "#10b981", color: "#10b981", fontWeight: 700 }
                                 : { borderColor: "#e5e7eb", color: "#374151", background: "#f9fafb" }
                             }
                           >
@@ -344,7 +344,7 @@ export default function Cuestionario() {
                 <button
                   onClick={handleSiguienteDim}
                   className="flex-1 py-3 rounded-xl text-white font-semibold text-sm hover:opacity-90"
-                  style={{ background: "#1a2035" }}
+                  style={{ background: "#0A1A32" }}
                 >
                   Siguiente dimensión →
                 </button>
@@ -353,7 +353,7 @@ export default function Cuestionario() {
                   onClick={handleEnviar}
                   disabled={paso === "enviando"}
                   className="flex-1 py-3 rounded-xl text-white font-bold text-sm hover:opacity-90 disabled:opacity-50"
-                  style={{ background: "#c9a84c", color: "#1a2035" }}
+                  style={{ background: "#10b981", color: "#0A1A32" }}
                 >
                   {paso === "enviando" ? "Procesando..." : "Enviar y ver resultados →"}
                 </button>

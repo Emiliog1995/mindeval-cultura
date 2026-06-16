@@ -97,15 +97,15 @@ export default function EvaluadoIndividualPage() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#1a2035" }}>
-        <div className="w-10 h-10 border-4 rounded-full animate-spin" style={{ borderColor: "#2d3a50", borderTopColor: "#c9a84c" }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#0A1A32" }}>
+        <div className="w-10 h-10 border-4 rounded-full animate-spin" style={{ borderColor: "#2d3a50", borderTopColor: "#10b981" }} />
       </div>
     );
   }
 
   if (evaluadoPendiente) {
     return (
-      <div className="min-h-screen px-6 py-10" style={{ backgroundColor: "#1a2035" }}>
+      <div className="min-h-screen px-6 py-10" style={{ backgroundColor: "#0A1A32" }}>
         <div className="max-w-2xl mx-auto space-y-4">
           <Link href="/evaluacion-360" className="text-sm text-gray-400 hover:text-white transition-colors">
             ← Volver al listado
@@ -134,8 +134,8 @@ export default function EvaluadoIndividualPage() {
                   <span
                     className="text-xs font-semibold px-2 py-1 rounded-full"
                     style={{
-                      backgroundColor: t.completado ? "#22c55e22" : "#9ca3af22",
-                      color: t.completado ? "#22c55e" : "#9ca3af",
+                      backgroundColor: t.completado ? "#10b98122" : "#9ca3af22",
+                      color: t.completado ? "#10b981" : "#9ca3af",
                     }}
                   >
                     {t.completado ? "✅ Completado" : "⏳ Pendiente"}
@@ -153,7 +153,7 @@ export default function EvaluadoIndividualPage() {
 
   if (error || !resultado) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "#1a2035" }}>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: "#0A1A32" }}>
         <p className="text-red-400 text-sm">{error || "Evaluado no encontrado."}</p>
         <Link href="/evaluacion-360" className="text-sm text-gray-400 hover:text-white transition-colors">
           ← Volver al listado
@@ -188,7 +188,7 @@ export default function EvaluadoIndividualPage() {
   }, {});
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
       {/* Header */}
       <div className="border-b border-[#2d3a50] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
@@ -282,14 +282,14 @@ export default function EvaluadoIndividualPage() {
                     <td className="px-2 py-2 text-gray-200">{b.label}</td>
                     <td className="px-2 py-2 text-gray-400">{b.meta.toFixed(1)}</td>
                     <td className="px-2 py-2 text-white font-medium">{b.actual.toFixed(2)}</td>
-                    <td className="px-2 py-2 font-bold" style={{ color: b.brecha > 0 ? "#ef4444" : "#22c55e" }}>
+                    <td className="px-2 py-2 font-bold" style={{ color: b.brecha > 0 ? "#ef4444" : "#10b981" }}>
                       {b.brecha > 0 ? `-${b.brecha.toFixed(2)}` : "✓"}
                     </td>
                     <td className="px-2 py-2">
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
                         b.prioridad === "alta" ? "bg-red-900/40 text-red-400" :
                         b.prioridad === "media" ? "bg-yellow-900/40 text-yellow-400" :
-                        "bg-green-900/40 text-green-400"
+                        "bg-[#10b981]/20 text-[#10b981]"
                       }`}>
                         {b.prioridad}
                       </span>

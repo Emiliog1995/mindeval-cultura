@@ -32,7 +32,7 @@ export function getLevel(mean: number): string {
 
 export function getLevelColor(level: string): string {
   switch (level) {
-    case "MUY ALTO": return "#16a34a";
+    case "MUY ALTO": return "#059669";
     case "ALTO":     return "#65a30d";
     case "MEDIO":    return "#ca8a04";
     case "BAJO":     return "#ea580c";

@@ -44,17 +44,17 @@ export default function Login() {
       {/* Panel izquierdo — branding */}
       <div
         className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12"
-        style={{ background: "linear-gradient(160deg, #1a2035 0%, #243447 100%)" }}
+        style={{ background: "linear-gradient(160deg, #0A1A32 0%, #1E2D5A 100%)" }}
       >
         {/* Logo */}
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: "rgba(201,168,76,0.2)", border: "1.5px solid rgba(201,168,76,0.4)" }}
+            style={{ background: "rgba(16,185,129,0.2)", border: "1.5px solid rgba(16,185,129,0.4)" }}
           >
             <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#c9a84c" opacity="0.3"/>
-              <path d="M9 12l2 2 4-4" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#10b981" opacity="0.3"/>
+              <path d="M9 12l2 2 4-4" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
           <span className="text-white font-bold text-lg tracking-wider">MINDTALENT</span>
@@ -64,7 +64,7 @@ export default function Login() {
         <div>
           <div
             className="inline-block text-xs font-bold tracking-widest px-3 py-1 rounded-full mb-8"
-            style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
+            style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}
           >
             ECOSISTEMA DE TALENTO HUMANO
           </div>
@@ -102,13 +102,13 @@ export default function Login() {
 
         {/* Logo móvil */}
         <div className="lg:hidden mb-10 text-center">
-          <span className="font-bold text-2xl tracking-wider" style={{ color: "#1a2035" }}>MINDTALENT</span>
-          <p className="text-sm mt-1" style={{ color: "#c9a84c", fontWeight: 600 }}>MINDHEART · MINDTALENT</p>
+          <span className="font-bold text-2xl tracking-wider" style={{ color: "#0A1A32" }}>MINDTALENT</span>
+          <p className="text-sm mt-1" style={{ color: "#10b981", fontWeight: 600 }}>MindHealth · by MINDTALENT</p>
         </div>
 
         <div className="w-full max-w-md">
           <div className="bg-white rounded-2xl shadow-xl p-10">
-            <h2 className="text-2xl font-bold mb-1" style={{ color: "#1a2035" }}>Iniciar sesión</h2>
+            <h2 className="text-2xl font-bold mb-1" style={{ color: "#0A1A32" }}>Iniciar sesión</h2>
             <p className="text-sm mb-8" style={{ color: "#9ca3af" }}>Ingresa tus credenciales de acceso</p>
 
             {error && (
@@ -135,7 +135,7 @@ export default function Login() {
                     border: "1.5px solid #e5e7eb",
                     color: "#111",
                   }}
-                  onFocus={e => e.target.style.borderColor = "#c9a84c"}
+                  onFocus={e => e.target.style.borderColor = "#10b981"}
                   onBlur={e => e.target.style.borderColor = "#e5e7eb"}
                 />
               </div>
@@ -158,7 +158,7 @@ export default function Login() {
                       border: "1.5px solid #e5e7eb",
                       color: "#111",
                     }}
-                    onFocus={e => e.target.style.borderColor = "#c9a84c"}
+                    onFocus={e => e.target.style.borderColor = "#10b981"}
                     onBlur={e => e.target.style.borderColor = "#e5e7eb"}
                   />
                   <button
@@ -185,7 +185,7 @@ export default function Login() {
                 type="submit"
                 disabled={enviando}
                 className="w-full py-3 rounded-xl font-semibold text-sm mt-2 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
-                style={{ background: "#c9a84c", color: "#1a2035" }}
+                style={{ background: "#10b981", color: "#0A1A32" }}
               >
                 {enviando ? "Ingresando…" : "Iniciar sesión"}
               </button>

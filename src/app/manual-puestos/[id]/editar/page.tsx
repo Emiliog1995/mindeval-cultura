@@ -3,16 +3,16 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const DARK = '#1a2035'
-const GOLD = '#c9a84c'
-const NAVY = '#243447'
+const DARK = '#0A1A32'
+const GOLD = '#10b981'
+const NAVY = '#1E2D5A'
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '.55rem .75rem', border: '1.5px solid #d1d5db',
   borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: '#111',
 }
 const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: 13, fontWeight: 600, color: '#1a2035', marginBottom: 6,
+  display: 'block', fontSize: 13, fontWeight: 600, color: '#0A1A32', marginBottom: 6,
 }
 
 export default function EditarPuesto() {
@@ -404,7 +404,7 @@ export default function EditarPuesto() {
               )}
 
               {actividades.length === 0 && (
-                <div style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid ${GOLD}`, borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 12, color: '#7a6020' }}>
+                <div style={{ background: 'rgba(16,185,129,0.08)', border: `1px solid ${GOLD}`, borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 12, color: '#7a6020' }}>
                   Este puesto no tiene actividades registradas. La sugerencia IA requiere actividades para funcionar. Puedes completar las competencias manualmente.
                 </div>
               )}
@@ -459,7 +459,7 @@ export default function EditarPuesto() {
                   Siguiente →
                 </button>
               : <button onClick={guardar} disabled={guardando}
-                  style={{ background: GOLD, color: DARK, padding: '.55rem 1.75rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, opacity: guardando ? 0.6 : 1, boxShadow: '0 2px 8px rgba(201,168,76,0.35)' }}>
+                  style={{ background: GOLD, color: DARK, padding: '.55rem 1.75rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700, opacity: guardando ? 0.6 : 1, boxShadow: '0 2px 8px rgba(16,185,129,0.35)' }}>
                   {guardando ? 'Guardando...' : '💾 Guardar cambios'}
                 </button>
             }

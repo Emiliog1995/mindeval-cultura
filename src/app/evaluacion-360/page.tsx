@@ -109,7 +109,7 @@ export default function Evaluacion360Page() {
   if (verificando) return null;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
       {/* Header */}
       <div className="border-b border-[#2d3a50] px-6 py-4 flex items-center justify-between">
         <div>
@@ -123,7 +123,7 @@ export default function Evaluacion360Page() {
           <Link
             href="/evaluacion-360/nueva"
             className="px-4 py-2 rounded-lg text-sm font-semibold"
-            style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+            style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
           >
             ➕ Nueva Evaluación
           </Link>
@@ -135,9 +135,9 @@ export default function Evaluacion360Page() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total evaluados", value: filtrados.length, color: "#2dd4bf" },
-            { label: "% Zona verde", value: `${filtrados.length ? Math.round(zonaVerde / filtrados.length * 100) : 0}%`, color: "#22c55e" },
+            { label: "% Zona verde", value: `${filtrados.length ? Math.round(zonaVerde / filtrados.length * 100) : 0}%`, color: "#10b981" },
             { label: "% Zona roja", value: `${filtrados.length ? Math.round(zonaRoja / filtrados.length * 100) : 0}%`, color: "#ef4444" },
-            { label: "Promedio org 360°", value: promOrg.toFixed(2), color: "#c9a84c" },
+            { label: "Promedio org 360°", value: promOrg.toFixed(2), color: "#10b981" },
           ].map((kpi) => (
             <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
               <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -179,7 +179,7 @@ export default function Evaluacion360Page() {
         ) : filtrados.length === 0 && pendientesFiltrados.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-gray-400 mb-4">No hay evaluados registrados.</p>
-            <Link href="/evaluacion-360/nueva" className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}>
+            <Link href="/evaluacion-360/nueva" className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "#10b981", color: "#0A1A32" }}>
               Registrar primer evaluado
             </Link>
           </div>
@@ -211,7 +211,7 @@ export default function Evaluacion360Page() {
                   {filtrados.map((r) => (
                     <tr
                       key={r.evaluado.id}
-                      className="border-b border-[#2d3a50]/50 hover:bg-[#243447] cursor-pointer transition-colors"
+                      className="border-b border-[#2d3a50]/50 hover:bg-[#1E2D5A] cursor-pointer transition-colors"
                       onClick={() => router.push(`/evaluacion-360/${r.evaluado.id}`)}
                     >
                       <td className="px-4 py-3 text-white text-sm font-medium">{r.evaluado.nombre}</td>
@@ -225,12 +225,12 @@ export default function Evaluacion360Page() {
                       </td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{r.puntajePotencial.toFixed(2)}</td>
                       <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: r.colorCuadrante, color: "#1a2035" }}>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: r.colorCuadrante, color: "#0A1A32" }}>
                           {r.cuadrante} · {r.nombreCuadrante}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-[#c9a84c] text-xs">Ver →</span>
+                        <span className="text-[#10b981] text-xs">Ver →</span>
                       </td>
                     </tr>
                   ))}
@@ -258,18 +258,18 @@ export default function Evaluacion360Page() {
                 {pendientesFiltrados.map((p) => (
                   <tr
                     key={p.evaluado.id}
-                    className="border-b border-[#2d3a50]/50 hover:bg-[#243447] cursor-pointer transition-colors"
+                    className="border-b border-[#2d3a50]/50 hover:bg-[#1E2D5A] cursor-pointer transition-colors"
                     onClick={() => router.push(`/evaluacion-360/${p.evaluado.id}`)}
                   >
                     <td className="px-4 py-3 text-white text-sm font-medium">{p.evaluado.nombre}</td>
                     <td className="px-4 py-3 text-gray-400 text-sm">{p.evaluado.empresa ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-300 text-sm">{p.evaluado.cargo}</td>
                     <td className="px-4 py-3 text-gray-300 text-sm">{p.evaluado.departamento}</td>
-                    <td className="px-4 py-3 text-sm" style={{ color: p.completados === p.total ? "#22c55e" : "#9ca3af" }}>
+                    <td className="px-4 py-3 text-sm" style={{ color: p.completados === p.total ? "#10b981" : "#9ca3af" }}>
                       {p.completados}/{p.total} respondidos
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-[#c9a84c] text-xs">Ver →</span>
+                      <span className="text-[#10b981] text-xs">Ver →</span>
                     </td>
                   </tr>
                 ))}

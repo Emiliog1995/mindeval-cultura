@@ -20,7 +20,7 @@ interface Props {
 const PRIORIDAD_COLOR: Record<string, string> = {
   alta:  '#ef4444',
   media: '#eab308',
-  baja:  '#22c55e',
+  baja:  '#10b981',
 };
 
 export default function BrechasChart({ brechas }: Props) {
@@ -43,9 +43,9 @@ export default function BrechasChart({ brechas }: Props) {
           formatter={(value) => (typeof value === "number" ? value.toFixed(2) : value)}
         />
         <Legend wrapperStyle={{ color: "#94a3b8", fontSize: 12 }} />
-        <ReferenceLine y={4.0} stroke="#c9a84c" strokeDasharray="4 4" label={{ value: "Meta 4.0", fill: "#c9a84c", fontSize: 10 }} />
+        <ReferenceLine y={4.0} stroke="#10b981" strokeDasharray="4 4" label={{ value: "Meta 4.0", fill: "#10b981", fontSize: 10 }} />
         <ReferenceLine y={4.5} stroke="#2dd4bf" strokeDasharray="4 4" label={{ value: "Meta 4.5", fill: "#2dd4bf", fontSize: 10 }} />
-        <Bar dataKey="Meta" fill="#c9a84c" fillOpacity={0.5} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="Meta" fill="#10b981" fillOpacity={0.5} radius={[4, 4, 0, 0]} />
         <Bar dataKey="Actual" fill="#2dd4bf" radius={[4, 4, 0, 0]}>
           <LabelList
             dataKey="brecha"

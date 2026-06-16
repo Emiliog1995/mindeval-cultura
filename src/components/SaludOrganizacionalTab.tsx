@@ -45,19 +45,19 @@ function BubbleShape(props: any) {
     <g>
       <circle
         cx={cx} cy={cy} r={r}
-        fill="#c9a84c" fillOpacity={0.65}
-        stroke="#1a2035" strokeWidth={1.5}
+        fill="#10b981" fillOpacity={0.65}
+        stroke="#0A1A32" strokeWidth={1.5}
       />
       <text
         x={cx} y={cy - 3}
         textAnchor="middle" fontSize={8}
-        fill="#1a2035" fontWeight="700"
+        fill="#0A1A32" fontWeight="700"
       >
         {label}
       </text>
       <text
         x={cx} y={cy + 10}
-        textAnchor="middle" fontSize={7} fill="#243447"
+        textAnchor="middle" fontSize={7} fill="#1E2D5A"
       >
         {`n=${payload.count}`}
       </text>
@@ -188,7 +188,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
           },
         ].map(({ label, value, color, sub }) => (
           <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
-            <p className="text-2xl font-bold" style={{ color: color ?? "#1a2035" }}>{value}</p>
+            <p className="text-2xl font-bold" style={{ color: color ?? "#0A1A32" }}>{value}</p>
             {sub && <p className="text-xs font-semibold mt-0.5" style={{ color: color ?? "#6b7280" }}>{sub}</p>}
             <p className="text-xs text-gray-400 mt-1">{label}</p>
           </div>
@@ -204,7 +204,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
       {/* ISO por área */}
       {!noClima && (
         <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-base font-bold mb-1" style={{ color: "#1a2035" }}>
+          <h2 className="text-base font-bold mb-1" style={{ color: "#0A1A32" }}>
             Índice de Salud Organizacional (ISO) por Área
           </h2>
           <p className="text-xs text-gray-400 mb-5">
@@ -213,9 +213,9 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ background: "#1a2035" }}>
+                <tr style={{ background: "#0A1A32" }}>
                   {["Área", "Evaluados", "Cultura (DOCS)", "Clima (global)", "ISO", "Nivel", "Barra"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
+                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -224,7 +224,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
                   <tr key={row.area} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
                     <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{row.area}</td>
                     <td className="px-3 py-2 text-center text-gray-600">{row.count}</td>
-                    <td className="px-3 py-2 text-center font-semibold" style={{ color: "#1a2035" }}>{row.globalCultura.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-center font-semibold" style={{ color: "#0A1A32" }}>{row.globalCultura.toFixed(2)}</td>
                     <td className="px-3 py-2 text-center text-gray-500">{climaGlobal.toFixed(2)}</td>
                     <td className="px-3 py-2 text-center font-bold" style={{ color: getISOColor(row.isoLevel) }}>
                       {row.iso.toFixed(2)}
@@ -246,7 +246,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
       {/* Mapa de calor burbuja */}
       {areaData.length > 0 && (
         <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-base font-bold mb-1" style={{ color: "#1a2035" }}>
+          <h2 className="text-base font-bold mb-1" style={{ color: "#0A1A32" }}>
             Mapa de Calor Cultural por Área
           </h2>
           <p className="text-xs text-gray-400 mb-5">
@@ -283,7 +283,7 @@ export default function SaludOrganizacionalTab({ evaluaciones, climaData }: Prop
       {/* Matriz de rotación */}
       {areaData.length > 0 && (
         <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-base font-bold mb-1" style={{ color: "#1a2035" }}>
+          <h2 className="text-base font-bold mb-1" style={{ color: "#0A1A32" }}>
             Matriz de Posicionamiento Cultural
           </h2>
           <p className="text-xs text-gray-400 mb-5">

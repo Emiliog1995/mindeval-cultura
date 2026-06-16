@@ -118,7 +118,7 @@ export default function Admin360Page() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
       {/* Header */}
       <div className="border-b border-[#2d3a50] px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -133,7 +133,7 @@ export default function Admin360Page() {
             <Link
               href="/evaluacion-360/nueva"
               className="px-4 py-2 rounded-lg text-sm font-semibold"
-              style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+              style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
             >
               ➕ Nueva Evaluación
             </Link>
@@ -147,9 +147,9 @@ export default function Admin360Page() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total evaluados",    value: filtrados.length,  color: "#2dd4bf" },
-            { label: "% Zona verde (6,8,9)", value: `${filtrados.length ? Math.round(zonaVerde / filtrados.length * 100) : 0}%`, color: "#22c55e" },
+            { label: "% Zona verde (6,8,9)", value: `${filtrados.length ? Math.round(zonaVerde / filtrados.length * 100) : 0}%`, color: "#10b981" },
             { label: "% Zona roja (1,2)",  value: `${filtrados.length ? Math.round(zonaRoja  / filtrados.length * 100) : 0}%`, color: "#ef4444" },
-            { label: "Promedio org 360°",  value: promOrg.toFixed(2), color: "#c9a84c" },
+            { label: "Promedio org 360°",  value: promOrg.toFixed(2), color: "#10b981" },
           ].map((kpi) => (
             <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
               <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -206,7 +206,7 @@ export default function Admin360Page() {
               onClick={exportarCSV}
               disabled={!filtrados.length}
               className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+              style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
             >
               Exportar CSV
             </button>
@@ -237,7 +237,7 @@ export default function Admin360Page() {
 
           {cargando ? (
             <div className="text-center py-12">
-              <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#2d3a50", borderTopColor: "#c9a84c" }} />
+              <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#2d3a50", borderTopColor: "#10b981" }} />
               <p className="text-gray-400 text-sm mt-3">Cargando…</p>
             </div>
           ) : filtrados.length === 0 ? (
@@ -258,7 +258,7 @@ export default function Admin360Page() {
                   {filtrados.map((r) => (
                     <tr
                       key={r.evaluado.id}
-                      className="border-b border-[#2d3a50]/50 hover:bg-[#243447] cursor-pointer transition-colors"
+                      className="border-b border-[#2d3a50]/50 hover:bg-[#1E2D5A] cursor-pointer transition-colors"
                       onClick={() => router.push(`/evaluacion-360/${r.evaluado.id}`)}
                     >
                       <td className="px-4 py-3 text-white text-sm font-medium whitespace-nowrap">{r.evaluado.nombre}</td>
@@ -277,13 +277,13 @@ export default function Admin360Page() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{ backgroundColor: r.colorCuadrante, color: "#1a2035" }}
+                          style={{ backgroundColor: r.colorCuadrante, color: "#0A1A32" }}
                         >
                           {r.cuadrante} · {r.nombreCuadrante}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-[#c9a84c] text-xs">Ver →</span>
+                        <span className="text-[#10b981] text-xs">Ver →</span>
                       </td>
                     </tr>
                   ))}

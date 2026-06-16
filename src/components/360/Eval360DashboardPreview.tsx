@@ -93,7 +93,7 @@ export default function Eval360DashboardPreview() {
         <Link
           href="/evaluacion-360/nueva"
           className="px-4 py-2 rounded-lg text-sm font-semibold"
-          style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+          style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
         >
           Registrar primer evaluado
         </Link>
@@ -107,9 +107,9 @@ export default function Eval360DashboardPreview() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total evaluados", value: resultados.length, color: "#2dd4bf" },
-          { label: "Zona verde (6,8,9)", value: `${resultados.length ? Math.round(zonaVerde / resultados.length * 100) : 0}%`, color: "#22c55e" },
+          { label: "Zona verde (6,8,9)", value: `${resultados.length ? Math.round(zonaVerde / resultados.length * 100) : 0}%`, color: "#10b981" },
           { label: "Zona roja (1,2)", value: `${resultados.length ? Math.round(zonaRoja / resultados.length * 100) : 0}%`, color: "#ef4444" },
-          { label: "Promedio org 360°", value: promOrg.toFixed(2), color: "#c9a84c" },
+          { label: "Promedio org 360°", value: promOrg.toFixed(2), color: "#10b981" },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
             <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -139,7 +139,7 @@ export default function Eval360DashboardPreview() {
         <Link
           href="/evaluacion-360"
           className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-semibold"
-          style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+          style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
         >
           Ver módulo completo →
         </Link>

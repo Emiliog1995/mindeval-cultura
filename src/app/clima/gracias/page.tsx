@@ -18,19 +18,19 @@ function GraciasContent() {
   }, [sesionId]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#1a2035" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#0A1A32" }}>
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-10 text-center">
-        <p className="text-xs font-bold tracking-widest mb-6" style={{ color: "#c9a84c" }}>MINDTALENT</p>
+        <p className="text-xs font-bold tracking-widest mb-6" style={{ color: "#10b981" }}>MINDTALENT</p>
 
         {!listo ? (
           <div className="flex items-center justify-center gap-2 text-sm text-gray-400 py-4">
-            <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+            <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
             Registrando...
           </div>
         ) : (
           <>
             <div className="text-5xl mb-4">&#10003;</div>
-            <h1 className="text-2xl font-bold mb-3" style={{ color: "#1a2035" }}>
+            <h1 className="text-2xl font-bold mb-3" style={{ color: "#0A1A32" }}>
               ¡Gracias por participar!
             </h1>
             <p className="text-sm text-gray-500 leading-relaxed">
@@ -46,8 +46,8 @@ function GraciasContent() {
 export default function GraciasPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#1a2035" }}>
-        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1A32" }}>
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
       </div>
     }>
       <GraciasContent />

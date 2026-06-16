@@ -49,11 +49,11 @@ export default function ClaudeNarrativa360({ resultado, onNarrativaLista }: Prop
             onClick={generar}
             disabled={cargando}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
-            style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+            style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
           >
             {cargando ? (
               <>
-                <span className="inline-block w-4 h-4 border-2 border-[#1a2035]/30 border-t-[#1a2035] rounded-full animate-spin" />
+                <span className="inline-block w-4 h-4 border-2 border-[#0A1A32]/30 border-t-[#0A1A32] rounded-full animate-spin" />
                 Generando…
               </>
             ) : (
@@ -70,7 +70,7 @@ export default function ClaudeNarrativa360({ resultado, onNarrativaLista }: Prop
       )}
 
       {narrativa && (
-        <div className="border border-[#c9a84c]/40 rounded-lg p-4 bg-[#1e2a42] space-y-3">
+        <div className="border border-[#10b981]/40 rounded-lg p-4 bg-[#1e2a42] space-y-3">
           <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-line">{narrativa}</p>
           <div className="flex gap-2 pt-2 border-t border-[#2d3a50]">
             <button

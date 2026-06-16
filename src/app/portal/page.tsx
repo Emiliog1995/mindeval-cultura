@@ -13,7 +13,7 @@ export default function Portal() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ background: "linear-gradient(135deg, #1a2035 0%, #243447 100%)" }}
+      style={{ background: "linear-gradient(135deg, #0A1A32 0%, #1E2D5A 100%)" }}
     >
       {/* Botón cerrar sesión */}
       <button
@@ -31,15 +31,15 @@ export default function Portal() {
       <div className="text-center mb-12">
         <div
           className="inline-block px-6 py-2 rounded-full text-xs font-bold tracking-widest mb-6"
-          style={{ background: "rgba(201,168,76,0.15)", color: "#c9a84c", border: "1px solid rgba(201,168,76,0.3)" }}
+          style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}
         >
           MINDTALENT
         </div>
         <h1 className="text-4xl font-bold text-white mb-3">
           Ecosistema de Talento Humano
         </h1>
-        <p className="text-lg font-semibold" style={{ color: "#c9a84c" }}>
-          MINDHEART · MINDTALENT
+        <p className="text-lg font-semibold" style={{ color: "#10b981" }}>
+          MindHealth · by MINDTALENT
         </p>
       </div>
 
@@ -54,9 +54,9 @@ export default function Portal() {
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
-              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+              style={{ background: "rgba(16,185,129,0.15)", border: "2px solid rgba(16,185,129,0.4)" }}
             >
-              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+              <svg className="w-8 h-8" fill="none" stroke="#10b981" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
                   d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
@@ -67,7 +67,7 @@ export default function Portal() {
             </p>
             <div
               className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
-              style={{ background: "#c9a84c", color: "#1a2035" }}
+              style={{ background: "#10b981", color: "#0A1A32" }}
             >
               Iniciar evaluación →
             </div>
@@ -82,9 +82,9 @@ export default function Portal() {
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
-              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+              style={{ background: "rgba(16,185,129,0.15)", border: "2px solid rgba(16,185,129,0.4)" }}
             >
-              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+              <svg className="w-8 h-8" fill="none" stroke="#10b981" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
                   d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
               </svg>
@@ -95,7 +95,7 @@ export default function Portal() {
             </p>
             <div
               className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
-              style={{ background: "#c9a84c", color: "#1a2035" }}
+              style={{ background: "#10b981", color: "#0A1A32" }}
             >
               Responder encuesta →
             </div>
@@ -110,9 +110,9 @@ export default function Portal() {
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
-              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+              style={{ background: "rgba(16,185,129,0.15)", border: "2px solid rgba(16,185,129,0.4)" }}
             >
-              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+              <svg className="w-8 h-8" fill="none" stroke="#10b981" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -123,7 +123,7 @@ export default function Portal() {
             </p>
             <div
               className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
-              style={{ background: "#c9a84c", color: "#1a2035" }}
+              style={{ background: "#10b981", color: "#0A1A32" }}
             >
               Iniciar 360° →
             </div>
@@ -138,9 +138,9 @@ export default function Portal() {
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
-              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+              style={{ background: "rgba(16,185,129,0.15)", border: "2px solid rgba(16,185,129,0.4)" }}
             >
-              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+              <svg className="w-8 h-8" fill="none" stroke="#10b981" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
@@ -151,7 +151,7 @@ export default function Portal() {
             </p>
             <div
               className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
-              style={{ background: "#c9a84c", color: "#1a2035" }}
+              style={{ background: "#10b981", color: "#0A1A32" }}
             >
               Gestionar puestos →
             </div>

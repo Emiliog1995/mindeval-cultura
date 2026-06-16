@@ -98,16 +98,16 @@ export default function ClimaPage() {
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       {/* Header */}
-      <header style={{ background: "#1a2035" }} className="py-4 px-6 shadow-lg">
+      <header style={{ background: "#0A1A32" }} className="py-4 px-6 shadow-lg">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div>
-            <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
+            <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
             <p className="text-white text-xs mt-0.5 opacity-70">Clima Laboral · Encuesta Anónima</p>
           </div>
           <div className="text-right">
             {paso === "items" ? (
               <>
-                <p className="text-xs font-semibold" style={{ color: "#c9a84c" }}>
+                <p className="text-xs font-semibold" style={{ color: "#10b981" }}>
                   Sección {step + 1} de 3
                 </p>
                 <p className="text-white text-xs opacity-60">{totalRespondidos} de 30 respondidas</p>
@@ -121,10 +121,10 @@ export default function ClimaPage() {
 
       {/* Barra de progreso — solo visible en ítems */}
       {paso === "items" && (
-        <div className="h-1.5" style={{ background: "#243447" }}>
+        <div className="h-1.5" style={{ background: "#1E2D5A" }}>
           <div
             className="h-full transition-all duration-500"
-            style={{ width: `${progreso}%`, background: "#c9a84c" }}
+            style={{ width: `${progreso}%`, background: "#10b981" }}
           />
         </div>
       )}
@@ -159,9 +159,9 @@ export default function ClimaPage() {
               ))}
               <div
                 className="rounded-xl px-4 py-3 text-sm leading-relaxed"
-                style={{ background: "#f8f6f0", borderLeft: "3px solid #c9a84c" }}
+                style={{ background: "#f8f6f0", borderLeft: "3px solid #10b981" }}
               >
-                <p style={{ color: "#1a2035" }}>
+                <p style={{ color: "#0A1A32" }}>
                   Tu nombre se registra solo para validar tu participación. Tus respuestas son
                   confidenciales y los resultados se reportan únicamente de forma grupal por área.
                   Tu nombre nunca aparecerá ligado a tus respuestas.
@@ -181,7 +181,7 @@ export default function ClimaPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline font-semibold"
-                    style={{ color: "#1a2035" }}
+                    style={{ color: "#0A1A32" }}
                   >
                     Aviso de Privacidad
                   </a>{" "}
@@ -192,7 +192,7 @@ export default function ClimaPage() {
                 type="submit"
                 disabled={!consentimiento}
                 className="w-full py-3 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-40"
-                style={{ background: "#1a2035", color: "#c9a84c" }}
+                style={{ background: "#0A1A32", color: "#10b981" }}
               >
                 Comenzar encuesta →
               </button>
@@ -207,7 +207,7 @@ export default function ClimaPage() {
             {heredado && (
               <div
                 className="rounded-xl px-4 py-3 mb-6 text-sm flex items-center gap-2"
-                style={{ background: "#f8f6f0", borderLeft: "3px solid #c9a84c", color: "#1a2035" }}
+                style={{ background: "#f8f6f0", borderLeft: "3px solid #10b981", color: "#0A1A32" }}
               >
                 <span>✓</span>
                 <span>Datos heredados de Cultura Organizacional — <strong>{datos.nombre}</strong>, {datos.cargo}, {datos.area}</span>
@@ -216,7 +216,7 @@ export default function ClimaPage() {
 
             {/* Instrucción */}
             <div className="bg-white rounded-2xl shadow p-5 mb-6">
-              <h2 className="text-base font-bold mb-1" style={{ color: "#1a2035" }}>
+              <h2 className="text-base font-bold mb-1" style={{ color: "#0A1A32" }}>
                 {STEP_LABELS[step]}
               </h2>
               <p className="text-sm text-gray-600 leading-relaxed">
@@ -230,7 +230,7 @@ export default function ClimaPage() {
               const itemsDim = CLIMA_ITEMS.filter((i) => i.dimension === dim);
               return (
                 <div key={dim} className="mb-6">
-                  <h3 className="text-xs font-bold uppercase tracking-widest mb-3 px-1" style={{ color: "#1a2035" }}>
+                  <h3 className="text-xs font-bold uppercase tracking-widest mb-3 px-1" style={{ color: "#0A1A32" }}>
                     {CLIMA_DIMENSIONS[dim]}
                   </h3>
                   <div className="space-y-3">
@@ -239,7 +239,7 @@ export default function ClimaPage() {
                       return (
                         <div key={item.id} className="bg-white rounded-xl shadow p-4">
                           <p className="text-sm text-gray-800 mb-3 leading-relaxed">
-                            <span className="font-semibold" style={{ color: "#c9a84c" }}>{item.id}.</span>{" "}
+                            <span className="font-semibold" style={{ color: "#10b981" }}>{item.id}.</span>{" "}
                             {item.text}
                           </p>
                           <div className="flex gap-1.5">
@@ -251,9 +251,9 @@ export default function ClimaPage() {
                                   onClick={() => responder(item.id, val)}
                                   className="flex-1 flex flex-col items-center py-2.5 rounded-lg border-2 transition-all text-sm font-bold focus:outline-none"
                                   style={{
-                                    borderColor: isSelected ? "#1a2035" : "#e5e7eb",
-                                    background:  isSelected ? "#1a2035" : "white",
-                                    color:       isSelected ? "#c9a84c" : "#9ca3af",
+                                    borderColor: isSelected ? "#0A1A32" : "#e5e7eb",
+                                    background:  isSelected ? "#0A1A32" : "white",
+                                    color:       isSelected ? "#10b981" : "#9ca3af",
                                   }}
                                 >
                                   {val}
@@ -286,7 +286,7 @@ export default function ClimaPage() {
                 onClick={() => { setStep((s) => s - 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                 disabled={step === 0}
                 className="px-5 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all disabled:opacity-30"
-                style={{ borderColor: "#1a2035", color: "#1a2035" }}
+                style={{ borderColor: "#0A1A32", color: "#0A1A32" }}
               >
                 ← Anterior
               </button>
@@ -294,7 +294,7 @@ export default function ClimaPage() {
                 onClick={handleSiguiente}
                 disabled={!todosRespondidos || enviando}
                 className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                style={{ background: "#1a2035", color: "#c9a84c" }}
+                style={{ background: "#0A1A32", color: "#10b981" }}
               >
                 {enviando ? "Enviando..." : step < 2 ? "Siguiente →" : "Enviar respuestas"}
               </button>

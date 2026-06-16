@@ -4,9 +4,9 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { calcularTotal } from '@/lib/mdt-formula'
 
-const DARK = '#1a2035'
-const GOLD = '#c9a84c'
-const NAVY = '#243447'
+const DARK = '#0A1A32'
+const GOLD = '#10b981'
+const NAVY = '#1E2D5A'
 
 interface Puesto {
   id: string; nombre_puesto: string; area: string; supervisado_por?: string
@@ -143,7 +143,7 @@ export default function FichaPuesto() {
 
         {/* Indicador de completitud */}
         {completitud < 100 && (
-          <div style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid ${GOLD}`, borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: 'rgba(16,185,129,0.08)', border: `1px solid ${GOLD}`, borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#7a6020' }}>Ficha incompleta</div>
               <div style={{ fontSize: 11, color: '#9a7c2a', marginTop: 2 }}>
@@ -181,7 +181,7 @@ export default function FichaPuesto() {
               <thead>
                 <tr style={{ background: '#f0f2f5' }}>
                   {['N°', 'Actividad esencial', 'F', 'CE', 'CM', 'Total'].map(h => (
-                    <th key={h} style={{ padding: '6px 8px', textAlign: h === 'N°' || h.length <= 3 ? 'center' : 'left', fontSize: 11, color: '#1a2035', fontWeight: 700 }}>{h}</th>
+                    <th key={h} style={{ padding: '6px 8px', textAlign: h === 'N°' || h.length <= 3 ? 'center' : 'left', fontSize: 11, color: '#0A1A32', fontWeight: 700 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -253,7 +253,7 @@ export default function FichaPuesto() {
               <thead>
                 <tr style={{ background: '#f0f2f5' }}>
                   {['Indicador', 'Fórmula', 'Meta', 'Cliente / Beneficiario'].map(h => (
-                    <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11, color: '#1a2035', fontWeight: 700 }}>{h}</th>
+                    <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 11, color: '#0A1A32', fontWeight: 700 }}>{h}</th>
                   ))}
                 </tr>
               </thead>

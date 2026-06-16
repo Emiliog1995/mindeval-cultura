@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const DARK = '#1a2035'
-const GOLD = '#c9a84c'
+const DARK = '#0A1A32'
+const GOLD = '#10b981'
 
 type Actividad = {
   descripcion: string

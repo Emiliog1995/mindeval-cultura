@@ -156,7 +156,7 @@ export default function NuevaEvaluacion360() {
   if (verificando) return null;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
       <div className="border-b border-[#2d3a50] px-6 py-4 flex items-center gap-4">
         <button onClick={() => router.back()} className="text-gray-400 hover:text-white text-sm">← Volver</button>
         <h1 className="text-lg font-bold text-white">Nueva Evaluación 360°</h1>
@@ -181,14 +181,14 @@ export default function NuevaEvaluacion360() {
                   type={type}
                   value={datos[field as keyof typeof datos]}
                   onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
-                  className="w-full bg-[#1a2035] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
+                  className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
                 />
               </div>
             ))}
             <button
               onClick={() => setVista("modo")}
               className="w-full py-2.5 rounded-lg font-semibold text-sm mt-2"
-              style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+              style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
             >
               Continuar →
             </button>
@@ -201,7 +201,7 @@ export default function NuevaEvaluacion360() {
 
             <div
               className="bg-[#1e2a42] rounded-xl p-6 border-2 cursor-pointer transition-colors"
-              style={{ borderColor: "#c9a84c" }}
+              style={{ borderColor: "#10b981" }}
               onClick={handleGenerarLinks}
             >
               <h2 className="text-white font-semibold mb-1">🔗 Generar links para evaluadores (recomendado)</h2>
@@ -209,7 +209,7 @@ export default function NuevaEvaluacion360() {
                 Cada evaluador (jefe, pares, colaboradores, cliente interno, autoevaluación) recibe su propio link
                 para llenar su sección de forma independiente.
               </p>
-              <p className="mt-3 text-[#c9a84c] text-sm font-semibold">{guardando ? "Generando…" : "Generar links →"}</p>
+              <p className="mt-3 text-[#10b981] text-sm font-semibold">{guardando ? "Generando…" : "Generar links →"}</p>
             </div>
 
             <div
@@ -244,7 +244,7 @@ export default function NuevaEvaluacion360() {
                 <button
                   onClick={() => copiarLink(l.url)}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0"
-                  style={{ backgroundColor: copiado === l.url ? "#2dd4bf" : "#c9a84c", color: "#1a2035" }}
+                  style={{ backgroundColor: copiado === l.url ? "#2dd4bf" : "#10b981", color: "#0A1A32" }}
                 >
                   {copiado === l.url ? "¡Copiado!" : "Copiar"}
                 </button>
@@ -254,7 +254,7 @@ export default function NuevaEvaluacion360() {
             <button
               onClick={() => router.push("/evaluacion-360")}
               className="w-full py-3 rounded-lg font-semibold text-sm mt-2"
-              style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+              style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
             >
               Ir al dashboard 360°
             </button>
@@ -314,9 +314,9 @@ export default function NuevaEvaluacion360() {
                               type="range" min={1} max={5} step={0.1}
                               value={potencial[crit.key]}
                               onChange={(e) => setPot(crit.key, parseFloat(e.target.value))}
-                              className="flex-1 accent-[#c9a84c]"
+                              className="flex-1 accent-[#10b981]"
                             />
-                            <span className="text-[#c9a84c] text-sm font-bold w-10 text-right">
+                            <span className="text-[#10b981] text-sm font-bold w-10 text-right">
                               {potencial[crit.key].toFixed(1)}
                             </span>
                           </div>
@@ -336,7 +336,7 @@ export default function NuevaEvaluacion360() {
               onClick={handleGuardar}
               disabled={guardando}
               className="w-full py-3 rounded-lg font-semibold text-sm disabled:opacity-60"
-              style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+              style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
             >
               {guardando ? "Guardando evaluación…" : "Guardar y ver resultados"}
             </button>

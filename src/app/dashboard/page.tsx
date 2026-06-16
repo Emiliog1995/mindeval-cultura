@@ -340,10 +340,10 @@ export default function Dashboard() {
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
 
       {/* Header */}
-      <header style={{ background: "#1a2035" }} className="py-4 px-6 shadow-lg">
+      <header style={{ background: "#0A1A32" }} className="py-4 px-6 shadow-lg">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
-            <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
+            <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
             <p className="text-white text-xs mt-0.5 opacity-70">Dashboard de Consultor</p>
           </div>
           <button
@@ -356,7 +356,7 @@ export default function Dashboard() {
       </header>
 
       {/* Tab switcher */}
-      <div style={{ background: "#243447" }} className="px-6">
+      <div style={{ background: "#1E2D5A" }} className="px-6">
         <div className="max-w-6xl mx-auto flex gap-1 pt-3">
           {(["docs", "clima", "salud", "sesiones", "eval360"] as Tab[]).map((tab) => {
             const labels: Record<Tab, string> = {
@@ -374,8 +374,8 @@ export default function Dashboard() {
                 onClick={() => setActiveTab(tab)}
                 className="px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-all"
                 style={{
-                  background: isActive ? (tab === "eval360" ? "#c9a84c" : "#f0f4f8") : "transparent",
-                  color:      isActive ? "#1a2035" : "#c9a84c",
+                  background: isActive ? (tab === "eval360" ? "#10b981" : "#f0f4f8") : "transparent",
+                  color:      isActive ? "#0A1A32" : "#10b981",
                 }}
               >
                 {labels[tab]}
@@ -401,7 +401,7 @@ export default function Dashboard() {
                 { label: "Último ingreso",      value: evaluaciones[0] ? new Date(evaluaciones[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
-                  <p className="text-2xl font-bold" style={{ color: "#1a2035" }}>{value}</p>
+                  <p className="text-2xl font-bold" style={{ color: "#0A1A32" }}>{value}</p>
                   <p className="text-xs text-gray-500 mt-1">{label}</p>
                 </div>
               ))}
@@ -444,7 +444,7 @@ export default function Dashboard() {
                   onClick={exportarExcel}
                   disabled={!filtradas.length}
                   className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                  style={{ background: "#c9a84c", color: "#1a2035" }}
+                  style={{ background: "#10b981", color: "#0A1A32" }}
                 >
                   Exportar Excel
                 </button>
@@ -454,15 +454,15 @@ export default function Dashboard() {
             {/* Radar organizacional */}
             {radarData && (
               <div className="bg-white rounded-2xl shadow p-6">
-                <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+                <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                   Perfil Organizacional — Promedio de la muestra ({filtradas.length} evaluados)
                 </h2>
                 <ResponsiveContainer width="100%" height={280}>
                   <RadarChart data={radarData}>
                     <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#1a2035" }} />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#0A1A32" }} />
                     <PolarRadiusAxis domain={[0, 5]} tickCount={6} tick={{ fontSize: 9 }} />
-                    <Radar name="Org." dataKey="value" stroke="#1a2035" fill="#c9a84c" fillOpacity={0.55} />
+                    <Radar name="Org." dataKey="value" stroke="#0A1A32" fill="#10b981" fillOpacity={0.55} />
                     <Tooltip formatter={(v) => (typeof v === "number" ? v.toFixed(2) : v)} />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -471,13 +471,13 @@ export default function Dashboard() {
 
             {/* Tabla de evaluados */}
             <div className="bg-white rounded-2xl shadow p-6">
-              <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+              <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                 Listado de Evaluados{filtradas.length !== evaluaciones.length && ` (${filtradas.length} de ${evaluaciones.length})`}
               </h2>
 
               {cargando ? (
                 <div className="text-center py-10">
-                  <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+                  <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
                   <p className="text-gray-500 text-sm mt-3">Cargando...</p>
                 </div>
               ) : filtradas.length === 0 ? (
@@ -488,9 +488,9 @@ export default function Dashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr style={{ background: "#1a2035" }}>
+                      <tr style={{ background: "#0A1A32" }}>
                         {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Implicación", "Consistencia", "Adaptabilidad", "Misión", ""].map((h) => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -521,7 +521,7 @@ export default function Dashboard() {
                                 <a
                                   href={`/resultados?id=${e.id}`}
                                   className="text-xs underline whitespace-nowrap"
-                                  style={{ color: "#1a2035" }}
+                                  style={{ color: "#0A1A32" }}
                                 >
                                   Ver informe
                                 </a>
@@ -558,7 +558,7 @@ export default function Dashboard() {
                 { label: "Último ingreso",      value: climaData[0] ? new Date(climaData[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
-                  <p className="text-2xl font-bold" style={{ color: "#1a2035" }}>{value}</p>
+                  <p className="text-2xl font-bold" style={{ color: "#0A1A32" }}>{value}</p>
                   <p className="text-xs text-gray-500 mt-1">{label}</p>
                 </div>
               ))}
@@ -601,7 +601,7 @@ export default function Dashboard() {
                   onClick={exportarExcelClima}
                   disabled={!climaFiltrada.length}
                   className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                  style={{ background: "#c9a84c", color: "#1a2035" }}
+                  style={{ background: "#10b981", color: "#0A1A32" }}
                 >
                   Exportar Excel
                 </button>
@@ -611,15 +611,15 @@ export default function Dashboard() {
             {/* Radar clima */}
             {radarDataClima && (
               <div className="bg-white rounded-2xl shadow p-6">
-                <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+                <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                   Perfil de Clima Laboral — Promedio organizacional ({climaFiltrada.length} respuestas)
                 </h2>
                 <ResponsiveContainer width="100%" height={300}>
                   <RadarChart data={radarDataClima}>
                     <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#1a2035" }} />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "#0A1A32" }} />
                     <PolarRadiusAxis domain={[0, 5]} tickCount={6} tick={{ fontSize: 9 }} />
-                    <Radar name="Clima" dataKey="value" stroke="#1a2035" fill="#c9a84c" fillOpacity={0.55} />
+                    <Radar name="Clima" dataKey="value" stroke="#0A1A32" fill="#10b981" fillOpacity={0.55} />
                     <Tooltip formatter={(v) => (typeof v === "number" ? v.toFixed(2) : v)} />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -628,13 +628,13 @@ export default function Dashboard() {
 
             {/* Tabla evaluados clima */}
             <div className="bg-white rounded-2xl shadow p-6">
-              <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+              <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                 Listado de Evaluados{climaFiltrada.length !== climaData.length && ` (${climaFiltrada.length} de ${climaData.length})`}
               </h2>
 
               {cargandoClima ? (
                 <div className="text-center py-10">
-                  <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+                  <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
                   <p className="text-gray-500 text-sm mt-3">Cargando...</p>
                 </div>
               ) : climaFiltrada.length === 0 ? (
@@ -645,9 +645,9 @@ export default function Dashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr style={{ background: "#1a2035" }}>
+                      <tr style={{ background: "#0A1A32" }}>
                         {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo", ""].map((h) => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -678,7 +678,7 @@ export default function Dashboard() {
                                 <a
                                   href={`/resultados-clima?id=${r.id}`}
                                   className="text-xs underline whitespace-nowrap"
-                                  style={{ color: "#1a2035" }}
+                                  style={{ color: "#0A1A32" }}
                                 >
                                   Ver informe
                                 </a>
@@ -719,7 +719,7 @@ export default function Dashboard() {
           <>
             {/* Crear nueva sesión */}
             <div className="bg-white rounded-2xl shadow p-6">
-              <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>Nueva sesión de evaluación</h2>
+              <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>Nueva sesión de evaluación</h2>
               <div className="flex flex-wrap gap-4 items-end">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
@@ -752,8 +752,8 @@ export default function Dashboard() {
                         onClick={() => setModo360(m)}
                         className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
                         style={{
-                          background: modo360 === m ? "#1a2035" : "#f0f4f8",
-                          color: modo360 === m ? "#c9a84c" : "#6b7280",
+                          background: modo360 === m ? "#0A1A32" : "#f0f4f8",
+                          color: modo360 === m ? "#10b981" : "#6b7280",
                         }}
                       >
                         {m === "individual" ? "Uno por uno" : "Carga masiva"}
@@ -835,7 +835,7 @@ export default function Dashboard() {
                     onClick={handleCrearSesion}
                     disabled={creandoSesion}
                     className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                    style={{ background: "#1a2035", color: "#c9a84c" }}
+                    style={{ background: "#0A1A32", color: "#10b981" }}
                   >
                     {creandoSesion ? "Creando..." : "Generar link"}
                   </button>
@@ -859,7 +859,7 @@ export default function Dashboard() {
                       onClick={handleGenerarMasivo360}
                       disabled={creandoSesion}
                       className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                      style={{ background: "#1a2035", color: "#c9a84c" }}
+                      style={{ background: "#0A1A32", color: "#10b981" }}
                     >
                       {progresoMasivo360 ? `Generando ${progresoMasivo360.hecho}/${progresoMasivo360.total}…` : "Generar todos los links"}
                     </button>
@@ -886,13 +886,13 @@ export default function Dashboard() {
             {evaluados360.length > 0 && (
               <div className="bg-white rounded-2xl shadow p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base font-bold" style={{ color: "#1a2035" }}>
+                  <h2 className="text-base font-bold" style={{ color: "#0A1A32" }}>
                     Evaluaciones 360° generadas ({evaluados360.length})
                   </h2>
                   <button
                     onClick={exportarLinks360Excel}
                     className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    style={{ background: "#f0f4f8", color: "#1a2035" }}
+                    style={{ background: "#f0f4f8", color: "#0A1A32" }}
                   >
                     Exportar todos los links a Excel
                   </button>
@@ -905,7 +905,7 @@ export default function Dashboard() {
                         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50"
                       >
                         <div>
-                          <span className="font-semibold text-sm" style={{ color: "#1a2035" }}>{evaluado.nombre}</span>
+                          <span className="font-semibold text-sm" style={{ color: "#0A1A32" }}>{evaluado.nombre}</span>
                           <span className="text-xs text-gray-500 ml-2">
                             {evaluado.cargo} · {evaluado.departamento}{empresa ? ` · ${empresa}` : ""}
                           </span>
@@ -923,7 +923,7 @@ export default function Dashboard() {
                               <button
                                 onClick={() => copiarLink360(l.url)}
                                 className="text-xs font-semibold whitespace-nowrap px-2 py-1 rounded transition-colors shrink-0"
-                                style={{ background: linkCopiado === l.url ? "#c9a84c" : "#fff", color: "#1a2035", border: "1px solid #e5e7eb" }}
+                                style={{ background: linkCopiado === l.url ? "#10b981" : "#fff", color: "#0A1A32", border: "1px solid #e5e7eb" }}
                               >
                                 {linkCopiado === l.url ? "Copiado" : "Copiar"}
                               </button>
@@ -939,7 +939,7 @@ export default function Dashboard() {
 
             {/* Listado de sesiones */}
             <div className="bg-white rounded-2xl shadow p-6">
-              <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+              <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                 Sesiones creadas ({sesiones.length})
               </h2>
               {sesiones.length === 0 ? (
@@ -948,9 +948,9 @@ export default function Dashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr style={{ background: "#1a2035" }}>
+                      <tr style={{ background: "#0A1A32" }}>
                         {["Fecha", "Tipo", "Empresa", "Estado", "Link de participante", ""].map((h) => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#c9a84c" }}>{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -960,12 +960,12 @@ export default function Dashboard() {
                           <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                             {new Date(s.created_at).toLocaleDateString("es-EC")}
                           </td>
-                          <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: "#1a2035" }}>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap" style={{ color: "#0A1A32" }}>
                             {s.tipo === "cultura" ? "Cultura DOCS" : s.tipo === "clima" ? "Clima Laboral" : "Salud"}
                           </td>
                           <td className="px-3 py-2 text-gray-600">{s.empresa ?? "—"}</td>
                           <td className="px-3 py-2">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.estado === "completada" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.estado === "completada" ? "bg-[#10b981]/10 text-[#047857]" : "bg-yellow-100 text-yellow-700"}`}>
                               {s.estado === "completada" ? "Completada" : "Pendiente"}
                             </span>
                           </td>
@@ -975,7 +975,7 @@ export default function Dashboard() {
                               <button
                                 onClick={() => copiarLink(s)}
                                 className="text-xs font-semibold whitespace-nowrap px-2 py-1 rounded transition-colors"
-                                style={{ background: linkCopiado === s.id ? "#c9a84c" : "#f0f4f8", color: "#1a2035" }}
+                                style={{ background: linkCopiado === s.id ? "#10b981" : "#f0f4f8", color: "#0A1A32" }}
                               >
                                 {linkCopiado === s.id ? "Copiado" : "Copiar"}
                               </button>
@@ -1005,7 +1005,7 @@ export default function Dashboard() {
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
-            <h3 className="text-base font-bold mb-2" style={{ color: "#1a2035" }}>
+            <h3 className="text-base font-bold mb-2" style={{ color: "#0A1A32" }}>
               ¿Eliminar registro?
             </h3>
             <p className="text-sm text-gray-600 mb-6">

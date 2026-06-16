@@ -187,7 +187,7 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       onClick={exportar}
       disabled={generando}
       className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
-      style={{ backgroundColor: "#1e2a42", color: "#c9a84c", border: "1px solid #c9a84c" }}
+      style={{ backgroundColor: "#1e2a42", color: "#10b981", border: "1px solid #10b981" }}
     >
       {generando ? "Generando PDF…" : "⬇ Exportar PDF"}
     </button>

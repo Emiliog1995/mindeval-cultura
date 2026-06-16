@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const DARK = '#1a2035'
-const GOLD = '#c9a84c'
+const DARK = '#0A1A32'
+const GOLD = '#10b981'
 
 type Actividad = {
   descripcion: string
@@ -214,8 +214,8 @@ export default function FormularioEmpresa() {
             </div>
 
             {/* Consentimiento LOPDP */}
-            <div style={{ background: '#f8f6f0', borderLeft: '3px solid #c9a84c', borderRadius: 6, padding: '12px 14px', marginBottom: 20 }}>
-              <p style={{ fontSize: 12, color: '#1a2035', margin: 0, lineHeight: 1.6 }}>
+            <div style={{ background: '#f8f6f0', borderLeft: '3px solid #10b981', borderRadius: 6, padding: '12px 14px', marginBottom: 20 }}>
+              <p style={{ fontSize: 12, color: '#0A1A32', margin: 0, lineHeight: 1.6 }}>
                 Tu información se usa <strong>exclusivamente</strong> para elaborar el descriptor de tu puesto. Solo el área de Talento Humano y el consultor de MINDTALENT tendrán acceso a tus datos.
               </p>
             </div>

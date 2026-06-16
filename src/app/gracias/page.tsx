@@ -1,9 +1,9 @@
 export default function Gracias() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#f0f4f8" }}>
-      <header style={{ background: "#1a2035" }} className="py-4 px-6 shadow-lg">
+      <header style={{ background: "#0A1A32" }} className="py-4 px-6 shadow-lg">
         <div className="max-w-3xl mx-auto">
-          <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
+          <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
           <p className="text-white text-xs mt-0.5 opacity-70">Assessment Center Digital · Quito, Ecuador</p>
         </div>
       </header>
@@ -14,9 +14,9 @@ export default function Gracias() {
           {/* Ícono de check */}
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
-            style={{ background: "#1a2035" }}
+            style={{ background: "#0A1A32" }}
           >
-            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="#c9a84c" strokeWidth={2.5}>
+            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="#10b981" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
@@ -32,7 +32,7 @@ export default function Gracias() {
 
           <div
             className="rounded-xl px-5 py-4 text-left mb-6"
-            style={{ background: "#f8f6f0", borderLeft: "4px solid #c9a84c" }}
+            style={{ background: "#f8f6f0", borderLeft: "4px solid #10b981" }}
           >
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Diagnóstico</p>
             <p className="text-sm font-bold text-gray-800">Cultura Organizacional DOCS – Modelo Denison</p>

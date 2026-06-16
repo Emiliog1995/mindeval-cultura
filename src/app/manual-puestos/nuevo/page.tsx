@@ -4,9 +4,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { calcularTotal, identificarEsenciales, type Actividad } from '@/lib/mdt-formula'
 
-const DARK = '#1a2035'
-const GOLD = '#c9a84c'
-const NAVY = '#243447'
+const DARK = '#0A1A32'
+const GOLD = '#10b981'
+const NAVY = '#1E2D5A'
 
 interface Empresa { id: string; nombre: string; sector?: string }
 interface Competencia { tipo: string; descripcion: string; requerimiento?: string; sugerida_ia?: boolean; _key: string }
@@ -21,7 +21,7 @@ const actividadVacia = (orden: number): Actividad => ({ orden, descripcion: '', 
 
 export default function NuevoPuesto() {
   return (
-    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: '#c9a84c' }}>Cargando...</div></div>}>
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#0A1A32', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ color: '#10b981' }}>Cargando...</div></div>}>
       <NuevoPuestoInner />
     </Suspense>
   )
@@ -382,7 +382,7 @@ function NuevoPuestoInner() {
                 onClick={() => num < paso && setPaso(num)}
                 style={{
                   padding: '4px 12px', borderRadius: 99, fontSize: 11, fontWeight: 600, cursor: num < paso ? 'pointer' : 'default',
-                  background: activo ? GOLD : completo ? 'rgba(201,168,76,0.25)' : 'rgba(255,255,255,0.08)',
+                  background: activo ? GOLD : completo ? 'rgba(16,185,129,0.25)' : 'rgba(255,255,255,0.08)',
                   color: activo ? DARK : completo ? GOLD : 'rgba(255,255,255,0.5)',
                   border: activo ? `2px solid ${GOLD}` : '2px solid transparent',
                 }}
@@ -396,7 +396,7 @@ function NuevoPuestoInner() {
       </div>
 
       {bannerOcupante && (
-        <div style={{ background: '#fffbeb', borderBottom: '2px solid #c9a84c', padding: '12px 1.5rem' }}>
+        <div style={{ background: '#fffbeb', borderBottom: '2px solid #10b981', padding: '12px 1.5rem' }}>
           <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
             <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>📋</span>
             <div>
@@ -489,7 +489,7 @@ function NuevoPuestoInner() {
             <div style={{ marginBottom: 28 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label style={{ ...labelStyle, marginBottom: 0 }}>🎯 Misión del puesto</label>
-                <span style={{ fontSize: 11, color: '#c9a84c', fontWeight: 600 }}>✨ La IA puede sugerirla si la dejas vacía</span>
+                <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>✨ La IA puede sugerirla si la dejas vacía</span>
               </div>
               <textarea value={datos.mision} onChange={e => setDatos(d => ({ ...d, mision: e.target.value }))}
                 rows={3} style={{ ...inputStyle, resize: 'vertical' }}
@@ -624,7 +624,7 @@ function NuevoPuestoInner() {
                       style={{
                         display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, marginBottom: 6,
                         cursor: 'pointer', transition: 'all .15s',
-                        background: esEsencial ? 'rgba(201,168,76,0.08)' : '#f9fafb',
+                        background: esEsencial ? 'rgba(16,185,129,0.08)' : '#f9fafb',
                         border: `2px solid ${esEsencial ? GOLD : '#e5e7eb'}`,
                       }}>
                       <div style={{
@@ -645,7 +645,7 @@ function NuevoPuestoInner() {
                 })}
             </div>
 
-            <div style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid ${GOLD}`, borderRadius: 6, padding: '8px 14px', fontSize: 12, color: '#7a6020', marginBottom: 20 }}>
+            <div style={{ background: 'rgba(16,185,129,0.08)', border: `1px solid ${GOLD}`, borderRadius: 6, padding: '8px 14px', fontSize: 12, color: '#7a6020', marginBottom: 20 }}>
               {esencialesDefinitivas.length} actividad{esencialesDefinitivas.length !== 1 ? 'es' : ''} marcada{esencialesDefinitivas.length !== 1 ? 's' : ''} como esencial{esencialesDefinitivas.length !== 1 ? 'es' : ''}
             </div>
 
@@ -844,7 +844,7 @@ function NuevoPuestoInner() {
             <p style={{ color: '#6b7280', fontSize: 12, marginBottom: 20 }}>Revisa antes de guardar. Puedes volver a cualquier paso para editar.</p>
 
             {generandoMision && (
-              <div style={{ background: '#fffbeb', border: '1px solid #c9a84c', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#7a6020', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: '#fffbeb', border: '1px solid #10b981', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#7a6020', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>✨</span> Generando misión del puesto con IA...
               </div>
             )}
@@ -931,8 +931,8 @@ function ResumenFicha({ datos, esenciales, competencias, instruccion, indicadore
 
 // Estilos reutilizables
 const inputStyle: React.CSSProperties = { width: '100%', padding: '.55rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box', color: '#111', transition: 'border-color 0.2s' }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#1a2035', marginBottom: 6 }
-const btnPrimario: React.CSSProperties = { background: GOLD, color: DARK, padding: '.6rem 2rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, boxShadow: '0 2px 8px rgba(201,168,76,0.35)', letterSpacing: 0.3 }
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 600, color: '#0A1A32', marginBottom: 6 }
+const btnPrimario: React.CSSProperties = { background: GOLD, color: DARK, padding: '.6rem 2rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, boxShadow: '0 2px 8px rgba(16,185,129,0.35)', letterSpacing: 0.3 }
 const btnSecundario: React.CSSProperties = { background: 'white', color: DARK, padding: '.5rem 1.25rem', borderRadius: 6, border: '1.5px solid #e5e7eb', cursor: 'pointer', fontSize: 13 }
 const th: React.CSSProperties = { padding: '.5rem .75rem', textAlign: 'left', fontSize: 11, fontWeight: 600 }
 const td: React.CSSProperties = { padding: '.4rem .6rem', verticalAlign: 'top' }

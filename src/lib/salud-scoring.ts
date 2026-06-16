@@ -33,7 +33,7 @@ export function getISOLevel(iso: number): string {
 
 export function getISOColor(level: string): string {
   switch (level) {
-    case "MUY SALUDABLE": return "#16a34a";
+    case "MUY SALUDABLE": return "#059669";
     case "SALUDABLE":     return "#65a30d";
     case "EN DESARROLLO": return "#ca8a04";
     case "EN RIESGO":     return "#ea580c";
@@ -97,7 +97,7 @@ export const CUADRANTE_DESC: Record<Cuadrante, string> = {
 };
 
 export const CUADRANTE_COLOR: Record<Cuadrante, string> = {
-  "ÁGIL Y COMPROMETIDA":         "#16a34a",
+  "ÁGIL Y COMPROMETIDA":         "#059669",
   "COMPROMETIDA PERO RÍGIDA":    "#ca8a04",
   "EN RIESGO":                   "#dc2626",
   "ADAPTABLE PERO DESVINCULADA": "#ea580c",

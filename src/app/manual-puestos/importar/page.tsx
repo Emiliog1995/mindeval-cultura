@@ -3,9 +3,9 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-const DARK = '#1a2035'
-const GOLD = '#c9a84c'
-const NAVY = '#243447'
+const DARK = '#0A1A32'
+const GOLD = '#10b981'
+const NAVY = '#1E2D5A'
 
 interface PuestoImportado {
   nombre_puesto: string
@@ -168,7 +168,7 @@ export default function ImportarManual() {
               onClick={() => fileRef.current?.click()}
               style={{
                 border: `2px dashed ${archivo ? GOLD : '#d1d5db'}`, borderRadius: 8, padding: '2rem',
-                textAlign: 'center', cursor: 'pointer', marginBottom: 16, background: archivo ? 'rgba(201,168,76,0.04)' : '#f9fafb',
+                textAlign: 'center', cursor: 'pointer', marginBottom: 16, background: archivo ? 'rgba(16,185,129,0.04)' : '#f9fafb',
                 transition: 'all .15s',
               }}>
               <input ref={fileRef} type='file' accept='.docx,.txt' style={{ display: 'none' }} onChange={e => { setArchivo(e.target.files?.[0] ?? null); setTextoPDF('') }} />

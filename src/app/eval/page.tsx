@@ -37,31 +37,31 @@ function EvalContent() {
   }, [id, router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#1a2035" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#0A1A32" }}>
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
-        <p className="text-xs font-bold tracking-widest mb-6" style={{ color: "#c9a84c" }}>MINDTALENT</p>
+        <p className="text-xs font-bold tracking-widest mb-6" style={{ color: "#10b981" }}>MINDTALENT</p>
 
         {error ? (
           <>
-            <p className="text-2xl font-bold mb-3" style={{ color: "#1a2035" }}>Sesión no disponible</p>
+            <p className="text-2xl font-bold mb-3" style={{ color: "#0A1A32" }}>Sesión no disponible</p>
             <p className="text-sm text-gray-500">{error}</p>
           </>
         ) : sesion ? (
           <>
-            <p className="text-2xl font-bold mb-2" style={{ color: "#1a2035" }}>
+            <p className="text-2xl font-bold mb-2" style={{ color: "#0A1A32" }}>
               {sesion.tipo === "clima" ? "Encuesta de Clima Laboral" : "Evaluación de Cultura Organizacional"}
             </p>
             {sesion.empresa && (
               <p className="text-sm text-gray-500 mb-4">{sesion.empresa}</p>
             )}
             <div className="flex items-center justify-center gap-2 text-sm text-gray-400 mt-6">
-              <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+              <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
               Redirigiendo al cuestionario...
             </div>
           </>
         ) : !error ? (
           <div className="flex items-center justify-center gap-2 text-sm text-gray-400 py-4">
-            <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+            <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
             Verificando sesión...
           </div>
         ) : null}
@@ -73,8 +73,8 @@ function EvalContent() {
 export default function EvalPortal() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#1a2035" }}>
-        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1A32" }}>
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
       </div>
     }>
       <EvalContent />

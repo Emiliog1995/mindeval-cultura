@@ -22,7 +22,7 @@ const ALERT_COLORS: Record<RiskLevel, { dot: string; text: string }> = {
 };
 
 function ScoreBadge({ label, score }: { label: string; score: number }) {
-  const color = score < 2.5 ? "#dc2626" : score < 3.0 ? "#ea580c" : "#16a34a";
+  const color = score < 2.5 ? "#dc2626" : score < 3.0 ? "#ea580c" : "#059669";
   return (
     <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
       style={{ background: `${color}18`, color }}>
@@ -59,7 +59,7 @@ function AreaCard({ areaRisk }: { areaRisk: AreaRisk }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <span className="text-base font-bold" style={{ color: "#1a2035" }}>
+          <span className="text-base font-bold" style={{ color: "#0A1A32" }}>
             {cfg.emoji} {area}
           </span>
           <p className="text-xs mt-0.5 text-gray-500">{nEvaluados} evaluado{nEvaluados !== 1 ? "s" : ""} en esta área</p>
@@ -112,7 +112,7 @@ export default function RadarRiesgoTab({ evaluaciones, climaData }: Props) {
 
       {/* Título */}
       <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-lg font-bold" style={{ color: "#1a2035" }}>
+        <h2 className="text-lg font-bold" style={{ color: "#0A1A32" }}>
           Radar de Riesgo Organizacional
         </h2>
         <p className="text-sm text-gray-500 mt-1">

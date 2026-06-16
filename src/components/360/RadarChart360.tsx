@@ -20,8 +20,8 @@ export default function RadarChart360({ data, height = 340 }: Props) {
         <Radar
           name="Meta organizacional"
           dataKey="meta"
-          stroke="#c9a84c"
-          fill="#c9a84c"
+          stroke="#10b981"
+          fill="#10b981"
           fillOpacity={0.1}
           strokeDasharray="5 5"
           strokeWidth={2}

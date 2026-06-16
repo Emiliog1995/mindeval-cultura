@@ -66,7 +66,7 @@ export default function EvaluarToken360() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#1a2035" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#0A1A32" }}>
         <p className="text-gray-400 text-sm">Cargando…</p>
       </div>
     );
@@ -74,7 +74,7 @@ export default function EvaluarToken360() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "#1a2035" }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "#0A1A32" }}>
         <div className="bg-[#1e2a42] rounded-xl p-6 border border-red-500/40 max-w-md text-center">
           <p className="text-red-300 text-sm">{error}</p>
         </div>
@@ -84,7 +84,7 @@ export default function EvaluarToken360() {
 
   if (enviado) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "#1a2035" }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "#0A1A32" }}>
         <div className="bg-[#1e2a42] rounded-xl p-8 border border-[#2d3a50] max-w-md text-center space-y-3">
           <div className="text-4xl">✅</div>
           <h1 className="text-white font-bold text-lg">¡Gracias por tu evaluación!</h1>
@@ -97,11 +97,11 @@ export default function EvaluarToken360() {
   if (!data) return null;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>
+    <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
       <div className="border-b border-[#2d3a50] px-6 py-4">
         <h1 className="text-lg font-bold text-white">Evaluación 360°</h1>
         <p className="text-sm text-gray-400">
-          Estás evaluando a <span className="text-[#c9a84c] font-semibold">{data.evaluado.nombre}</span> como{" "}
+          Estás evaluando a <span className="text-[#10b981] font-semibold">{data.evaluado.nombre}</span> como{" "}
           <span className="font-semibold">{FUENTE_LABELS[data.token.fuente]}</span>
         </p>
       </div>
@@ -135,9 +135,9 @@ export default function EvaluarToken360() {
                   type="range" min={1} max={5} step={0.1}
                   value={potencial[crit.key]}
                   onChange={(e) => setPot(crit.key, parseFloat(e.target.value))}
-                  className="flex-1 accent-[#c9a84c]"
+                  className="flex-1 accent-[#10b981]"
                 />
-                <span className="text-[#c9a84c] text-sm font-bold w-10 text-right">
+                <span className="text-[#10b981] text-sm font-bold w-10 text-right">
                   {potencial[crit.key].toFixed(1)}
                 </span>
               </div>
@@ -153,7 +153,7 @@ export default function EvaluarToken360() {
           onClick={handleEnviar}
           disabled={enviando}
           className="w-full py-3 rounded-lg font-semibold text-sm disabled:opacity-60"
-          style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+          style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
         >
           {enviando ? "Enviando…" : "Enviar evaluación"}
         </button>

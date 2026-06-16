@@ -134,7 +134,7 @@ function ResultadosContent() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>
       <div className="bg-white rounded-2xl shadow p-8 text-center max-w-md">
         <p className="text-red-600 font-semibold">{error}</p>
-        <Link href="/" className="mt-4 inline-block text-sm underline" style={{ color: "#1a2035" }}>Volver al portal</Link>
+        <Link href="/" className="mt-4 inline-block text-sm underline" style={{ color: "#0A1A32" }}>Volver al portal</Link>
       </div>
     </div>
   );
@@ -142,7 +142,7 @@ function ResultadosContent() {
   if (!ev) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>
       <div className="text-center">
-        <div className="w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+        <div className="w-10 h-10 border-4 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
         <p className="text-gray-500 text-sm">Cargando resultados...</p>
       </div>
     </div>
@@ -153,16 +153,16 @@ function ResultadosContent() {
 
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
-      <header style={{ background: "#1a2035" }} className="py-4 px-6 shadow-lg">
+      <header style={{ background: "#0A1A32" }} className="py-4 px-6 shadow-lg">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
-            <span style={{ color: "#c9a84c" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
+            <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
             <p className="text-white text-xs mt-0.5 opacity-70">Assessment Center Digital · Quito, Ecuador</p>
           </div>
           <button
             onClick={descargarPDF}
             className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
-            style={{ background: "#c9a84c", color: "#1a2035" }}
+            style={{ background: "#10b981", color: "#0A1A32" }}
           >
             Descargar PDF
           </button>
@@ -173,7 +173,7 @@ function ResultadosContent() {
 
         {/* Encabezado del evaluado */}
         <div className="bg-white rounded-2xl shadow p-6">
-          <h1 className="text-xl font-bold mb-1" style={{ color: "#1a2035" }}>Informe Individual DOCS</h1>
+          <h1 className="text-xl font-bold mb-1" style={{ color: "#0A1A32" }}>Informe Individual DOCS</h1>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
             {[
               { l: "Nombre", v: ev.nombre },
@@ -190,22 +190,22 @@ function ResultadosContent() {
         </div>
 
         {/* Puntuación global */}
-        <div className="rounded-2xl shadow p-6 text-center" style={{ background: "#1a2035" }}>
+        <div className="rounded-2xl shadow p-6 text-center" style={{ background: "#0A1A32" }}>
           <p className="text-white text-sm mb-1">Puntuación Global</p>
-          <p style={{ color: "#c9a84c" }} className="text-5xl font-bold">{scores.global.toFixed(2)}</p>
+          <p style={{ color: "#10b981" }} className="text-5xl font-bold">{scores.global.toFixed(2)}</p>
           <p className="text-white text-lg font-semibold mt-1">{scores.globalLevel}</p>
           <p className="text-white text-xs mt-3 opacity-70 max-w-xl mx-auto">{interpretacion(scores.globalLevel)}</p>
         </div>
 
         {/* Radar chart */}
         <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>Perfil por Dimensión</h2>
+          <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>Perfil por Dimensión</h2>
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={radarData}>
               <PolarGrid />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#1a2035" }} />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: "#0A1A32" }} />
               <PolarRadiusAxis domain={[0, 5]} tickCount={6} tick={{ fontSize: 9 }} />
-              <Radar name="Score" dataKey="value" stroke="#1a2035" fill="#c9a84c" fillOpacity={0.55} />
+              <Radar name="Score" dataKey="value" stroke="#0A1A32" fill="#10b981" fillOpacity={0.55} />
               <Tooltip formatter={(v) => (typeof v === "number" ? v.toFixed(2) : v)} />
             </RadarChart>
           </ResponsiveContainer>
@@ -213,7 +213,7 @@ function ResultadosContent() {
 
         {/* Tabla de dimensiones */}
         <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>Resultados por Dimensión</h2>
+          <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>Resultados por Dimensión</h2>
           <div className="space-y-3">
             {scores.dimensions.map((d) => (
               <div key={d.code} className="flex items-center gap-4">
@@ -237,13 +237,13 @@ function ResultadosContent() {
 
         {/* Tabla de subescalas */}
         <div className="bg-white rounded-2xl shadow p-6">
-          <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>Detalle por Subescala</h2>
+          <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>Detalle por Subescala</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ background: "#1a2035" }}>
+                <tr style={{ background: "#0A1A32" }}>
                   {["Cód.", "Subescala", "Dimensión", "Puntuación", "Nivel"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold" style={{ color: "#c9a84c" }}>{h}</th>
+                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold" style={{ color: "#10b981" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -263,7 +263,7 @@ function ResultadosContent() {
         </div>
 
         <div className="text-center pt-2 pb-8">
-          <Link href="/dashboard" className="text-sm underline" style={{ color: "#1a2035" }}>
+          <Link href="/dashboard" className="text-sm underline" style={{ color: "#0A1A32" }}>
             Ver dashboard de todos los evaluados →
           </Link>
         </div>
@@ -276,7 +276,7 @@ export default function ResultadosPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>
-        <div className="w-10 h-10 border-4 rounded-full animate-spin" style={{ borderColor: "#1a2035", borderTopColor: "#c9a84c" }} />
+        <div className="w-10 h-10 border-4 rounded-full animate-spin" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
       </div>
     }>
       <ResultadosContent />

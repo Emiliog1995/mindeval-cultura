@@ -28,12 +28,12 @@ export default function AdminLogin() {
   if (cargando) return null;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: "#1a2035" }}>
+    <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: "#0A1A32" }}>
       <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-sm">
         <div className="text-center mb-8">
-          <span className="text-2xl font-bold tracking-wide" style={{ color: "#1a2035" }}>MINDTALENT</span>
+          <span className="text-2xl font-bold tracking-wide" style={{ color: "#0A1A32" }}>MINDTALENT</span>
           <p className="text-gray-500 text-xs mt-1">Panel de Consultor</p>
-          <div className="w-12 h-1 rounded-full mx-auto mt-3" style={{ background: "#c9a84c" }} />
+          <div className="w-12 h-1 rounded-full mx-auto mt-3" style={{ background: "#10b981" }} />
         </div>
 
         {error && (
@@ -55,7 +55,7 @@ export default function AdminLogin() {
           <button
             type="submit"
             className="w-full py-3 rounded-xl text-white font-bold text-sm transition-opacity hover:opacity-90"
-            style={{ background: "#1a2035" }}
+            style={{ background: "#0A1A32" }}
           >
             Ingresar al panel →
           </button>
