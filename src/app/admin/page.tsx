@@ -1,19 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, isAdmin } from "@/lib/auth";
+import { login } from "@/lib/auth";
 
 export default function AdminLogin() {
   const router = useRouter();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    if (isAdmin()) router.replace("/dashboard");
-    else setCargando(false);
-  }, [router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -24,8 +18,6 @@ export default function AdminLogin() {
       setPin("");
     }
   }
-
-  if (cargando) return null;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: "#0A1A32" }}>
