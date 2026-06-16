@@ -6,7 +6,12 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
 } from "recharts";
-import { listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion, type Evaluacion, type ClimaRespuesta, type Sesion } from "@/lib/supabase";
+import {
+  listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion,
+  crear360Evaluado, crearTokens360,
+  type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360,
+} from "@/lib/supabase";
+import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
 import { getLevelColor } from "@/lib/scoring";
 import { isAdmin, logout } from "@/lib/auth";
 import type { ScoringResult } from "@/lib/scoring";
@@ -35,10 +40,16 @@ export default function Dashboard() {
 
   // ─── Sesiones ────────────────────────────────────────────────────────────
   const [sesiones, setSesiones]               = useState<Sesion[]>([]);
-  const [nuevaTipo, setNuevaTipo]             = useState<'cultura' | 'clima'>("cultura");
+  const [nuevaTipo, setNuevaTipo]             = useState<'cultura' | 'clima' | '360'>("cultura");
   const [nuevaEmpresa, setNuevaEmpresa]       = useState("");
   const [creandoSesion, setCreandoSesion]     = useState(false);
   const [linkCopiado, setLinkCopiado]         = useState<string | null>(null);
+
+  // ─── 360° (generación de links desde el dashboard) ─────────────────────
+  const [datos360, setDatos360] = useState({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+  const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string }> }>>([]);
+  const [expandido360, setExpandido360] = useState<string | null>(null);
+  const [error360, setError360] = useState("");
 
   // ─── Clima ───────────────────────────────────────────────────────────────
   const [climaData, setClimaData]         = useState<ClimaRespuesta[]>([]);
@@ -62,6 +73,7 @@ export default function Dashboard() {
   }, [router]);
 
   async function handleCrearSesion() {
+    if (nuevaTipo === "360") return handleGenerar360();
     setCreandoSesion(true);
     try {
       const s = await crearSesion({ tipo: nuevaTipo, empresa: nuevaEmpresa || undefined });
@@ -70,6 +82,42 @@ export default function Dashboard() {
     } finally {
       setCreandoSesion(false);
     }
+  }
+
+  async function handleGenerar360() {
+    if (!datos360.nombre || !datos360.cargo || !datos360.departamento || !datos360.periodo) {
+      setError360("Completa nombre, cargo, departamento y período.");
+      return;
+    }
+    setError360("");
+    setCreandoSesion(true);
+    try {
+      const evaluado = await crear360Evaluado({
+        nombre: datos360.nombre,
+        cargo: datos360.cargo,
+        departamento: datos360.departamento,
+        jefe: datos360.jefe || undefined,
+      });
+      const fuentes: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
+      const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
+      const base = typeof window !== "undefined" ? window.location.origin : "";
+      const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
+
+      setEvaluados360((prev) => [{ evaluado, empresa: nuevaEmpresa || undefined, links }, ...prev]);
+      setExpandido360(evaluado.id);
+      setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+      setNuevaEmpresa("");
+    } catch (e) {
+      setError360(e instanceof Error ? e.message : "Error al generar los links de evaluación 360°");
+    } finally {
+      setCreandoSesion(false);
+    }
+  }
+
+  function copiarLink360(url: string) {
+    navigator.clipboard.writeText(url);
+    setLinkCopiado(url);
+    setTimeout(() => setLinkCopiado(null), 2000);
   }
 
   async function handleEliminarSesion(id: string) {
@@ -609,11 +657,12 @@ export default function Dashboard() {
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
                   <select
                     value={nuevaTipo}
-                    onChange={(e) => setNuevaTipo(e.target.value as 'cultura' | 'clima')}
+                    onChange={(e) => setNuevaTipo(e.target.value as 'cultura' | 'clima' | '360')}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
                   >
                     <option value="cultura">Cultura DOCS</option>
                     <option value="clima">Clima Laboral</option>
+                    <option value="360">Evaluación 360°</option>
                   </select>
                 </div>
                 <div>
@@ -626,6 +675,62 @@ export default function Dashboard() {
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-56"
                   />
                 </div>
+
+                {nuevaTipo === "360" && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del evaluado *</label>
+                      <input
+                        type="text"
+                        value={datos360.nombre}
+                        onChange={(e) => setDatos360((p) => ({ ...p, nombre: e.target.value }))}
+                        placeholder="Nombre completo"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-48 text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Cargo *</label>
+                      <input
+                        type="text"
+                        value={datos360.cargo}
+                        onChange={(e) => setDatos360((p) => ({ ...p, cargo: e.target.value }))}
+                        placeholder="Cargo"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-40 text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Departamento *</label>
+                      <input
+                        type="text"
+                        value={datos360.departamento}
+                        onChange={(e) => setDatos360((p) => ({ ...p, departamento: e.target.value }))}
+                        placeholder="Departamento"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-40 text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Jefe directo</label>
+                      <input
+                        type="text"
+                        value={datos360.jefe}
+                        onChange={(e) => setDatos360((p) => ({ ...p, jefe: e.target.value }))}
+                        placeholder="Opcional"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-36 text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Período *</label>
+                      <input
+                        type="text"
+                        value={datos360.periodo}
+                        onChange={(e) => setDatos360((p) => ({ ...p, periodo: e.target.value }))}
+                        placeholder="ej: 2026-S1"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-32 text-gray-900"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <button
                   onClick={handleCrearSesion}
                   disabled={creandoSesion}
@@ -635,7 +740,61 @@ export default function Dashboard() {
                   {creandoSesion ? "Creando..." : "Generar link"}
                 </button>
               </div>
+              {nuevaTipo === "360" && error360 && (
+                <p className="text-xs text-red-600 mt-3">{error360}</p>
+              )}
+              {nuevaTipo === "360" && (
+                <p className="text-xs text-gray-400 mt-3">
+                  Se generarán 5 links independientes (autoevaluación, jefe, par, colaborador, cliente interno) para que cada evaluador responda sin ver las respuestas de los demás.
+                </p>
+              )}
             </div>
+
+            {/* Evaluaciones 360° generadas */}
+            {evaluados360.length > 0 && (
+              <div className="bg-white rounded-2xl shadow p-6">
+                <h2 className="text-base font-bold mb-4" style={{ color: "#1a2035" }}>
+                  Evaluaciones 360° generadas ({evaluados360.length})
+                </h2>
+                <div className="space-y-3">
+                  {evaluados360.map(({ evaluado, empresa, links }) => (
+                    <div key={evaluado.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setExpandido360(expandido360 === evaluado.id ? null : evaluado.id)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50"
+                      >
+                        <div>
+                          <span className="font-semibold text-sm" style={{ color: "#1a2035" }}>{evaluado.nombre}</span>
+                          <span className="text-xs text-gray-500 ml-2">
+                            {evaluado.cargo} · {evaluado.departamento}{empresa ? ` · ${empresa}` : ""}
+                          </span>
+                        </div>
+                        <span className="text-gray-400 text-xs">{expandido360 === evaluado.id ? "▲" : "▼ ver 5 links"}</span>
+                      </button>
+                      {expandido360 === evaluado.id && (
+                        <div className="border-t border-gray-200 px-4 py-3 space-y-2 bg-gray-50">
+                          {links.map((l) => (
+                            <div key={l.fuente} className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="text-xs font-semibold text-gray-700">{FUENTE_LABELS[l.fuente]}</span>
+                                <p className="text-xs text-gray-400 truncate max-w-md">{l.url}</p>
+                              </div>
+                              <button
+                                onClick={() => copiarLink360(l.url)}
+                                className="text-xs font-semibold whitespace-nowrap px-2 py-1 rounded transition-colors shrink-0"
+                                style={{ background: linkCopiado === l.url ? "#c9a84c" : "#fff", color: "#1a2035", border: "1px solid #e5e7eb" }}
+                              >
+                                {linkCopiado === l.url ? "Copiado" : "Copiar"}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Listado de sesiones */}
             <div className="bg-white rounded-2xl shadow p-6">
