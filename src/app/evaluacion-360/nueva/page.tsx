@@ -36,7 +36,7 @@ export default function NuevaEvaluacion360() {
   const [copiado, setCopiado] = useState<string | null>(null);
 
   const [datos, setDatos] = useState({
-    nombre: "", cargo: "", departamento: "", jefe: "", fecha_ingreso: "", periodo: "",
+    nombre: "", cargo: "", departamento: "", empresa: "", jefe: "", fecha_ingreso: "", periodo: "",
   });
 
   const [calificaciones, setCalificaciones] = useState<Record<FuenteEvaluacion, CompetenciasMap>>({
@@ -82,6 +82,7 @@ export default function NuevaEvaluacion360() {
         nombre: datos.nombre,
         cargo: datos.cargo,
         departamento: datos.departamento,
+        empresa: datos.empresa || undefined,
         jefe: datos.jefe || undefined,
         fecha_ingreso: datos.fecha_ingreso || undefined,
       });
@@ -120,6 +121,7 @@ export default function NuevaEvaluacion360() {
         nombre: datos.nombre,
         cargo: datos.cargo,
         departamento: datos.departamento,
+        empresa: datos.empresa || undefined,
         jefe: datos.jefe || undefined,
         fecha_ingreso: datos.fecha_ingreso || undefined,
       });
@@ -166,6 +168,7 @@ export default function NuevaEvaluacion360() {
             <h2 className="text-white font-semibold">Datos del evaluado</h2>
             {[
               { field: "nombre",         label: "Nombre completo *",   type: "text" },
+              { field: "empresa",        label: "Empresa",             type: "text" },
               { field: "cargo",          label: "Cargo *",             type: "text" },
               { field: "departamento",   label: "Departamento *",      type: "text" },
               { field: "jefe",           label: "Jefe directo",        type: "text" },

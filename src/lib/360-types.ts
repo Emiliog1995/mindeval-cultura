@@ -47,6 +47,7 @@ export interface Evaluado360 {
   nombre: string;
   cargo: string;
   departamento: string;
+  empresa?: string;
   jefe?: string;
   fecha_ingreso?: string;
   created_at: string;

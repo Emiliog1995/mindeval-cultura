@@ -99,6 +99,7 @@ export default function Dashboard() {
         nombre: datos360.nombre,
         cargo: datos360.cargo,
         departamento: datos360.departamento,
+        empresa: nuevaEmpresa || undefined,
         jefe: datos360.jefe || undefined,
       });
       const fuentes: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
@@ -153,7 +154,7 @@ export default function Dashboard() {
 
     try {
       for (const [nombre, cargo, departamento, jefe] of filas) {
-        const evaluado = await crear360Evaluado({ nombre, cargo, departamento, jefe: jefe || undefined });
+        const evaluado = await crear360Evaluado({ nombre, cargo, departamento, empresa: nuevaEmpresa || undefined, jefe: jefe || undefined });
         const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
         const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
         nuevos.push({ evaluado, empresa: nuevaEmpresa || undefined, links });

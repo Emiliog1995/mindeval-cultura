@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { listar360Evaluados, listarTodas360Evaluaciones } from "@/lib/supabase";
+import { listar360Evaluados, listarTodas360Evaluaciones, listarTokens360PorEvaluado, type Evaluado360 } from "@/lib/supabase";
 import {
   calcularPuntaje360, calcularPotencial, determinarCuadrante,
   clasificarNivelDesempeno, calcularBrechas,
@@ -16,9 +16,11 @@ export default function Evaluacion360Page() {
   const router = useRouter();
   const { verificando } = useAuthGuard();
   const [resultados, setResultados] = useState<ResultadoConsolidado360[]>([]);
+  const [pendientes, setPendientes] = useState<Array<{ evaluado: Evaluado360; completados: number; total: number }>>([]);
   const [cargando, setCargando]     = useState(true);
   const [filtroDpto, setFiltroDpto] = useState("");
   const [filtroPeriodo, setFiltroPeriodo] = useState("");
+  const [filtroEmpresa, setFiltroEmpresa] = useState("");
 
   useEffect(() => {
     async function cargar() {
@@ -28,9 +30,16 @@ export default function Evaluacion360Page() {
           listarTodas360Evaluaciones(),
         ]);
         const res: ResultadoConsolidado360[] = [];
+        const pend: Array<{ evaluado: Evaluado360; completados: number; total: number }> = [];
         for (const ev of evaluados) {
           const evs = todasEval.filter((e) => e.evaluado_id === ev.id);
-          if (evs.length === 0) continue;
+          if (evs.length === 0) {
+            const tokens = await listarTokens360PorEvaluado(ev.id).catch(() => []);
+            if (tokens.length > 0) {
+              pend.push({ evaluado: ev, completados: tokens.filter((t) => t.completado).length, total: tokens.length });
+            }
+            continue;
+          }
           const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evs);
           const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntaje360);
           const jefeEv = evs.find((e) => e.fuente === "jefe");
@@ -53,6 +62,7 @@ export default function Evaluacion360Page() {
           });
         }
         setResultados(res);
+        setPendientes(pend);
       } catch {
         // estado vacío
       } finally {
@@ -64,12 +74,24 @@ export default function Evaluacion360Page() {
 
   const dptos = [...new Set(resultados.map((r) => r.evaluado.departamento))];
   const periodos = [...new Set(resultados.map((r) => r.periodo))];
+  const empresas = [...new Set([...resultados.map((r) => r.evaluado.empresa), ...pendientes.map((p) => p.evaluado.empresa)].filter((e): e is string => Boolean(e)))];
 
-  const filtrados = resultados.filter((r) => {
-    if (filtroDpto && r.evaluado.departamento !== filtroDpto) return false;
-    if (filtroPeriodo && r.periodo !== filtroPeriodo) return false;
-    return true;
-  });
+  const filtrados = resultados
+    .filter((r) => {
+      if (filtroDpto && r.evaluado.departamento !== filtroDpto) return false;
+      if (filtroPeriodo && r.periodo !== filtroPeriodo) return false;
+      if (filtroEmpresa && r.evaluado.empresa !== filtroEmpresa) return false;
+      return true;
+    })
+    .sort((a, b) => (a.evaluado.empresa ?? "").localeCompare(b.evaluado.empresa ?? "") || a.evaluado.nombre.localeCompare(b.evaluado.nombre));
+
+  const pendientesFiltrados = pendientes
+    .filter((p) => {
+      if (filtroDpto && p.evaluado.departamento !== filtroDpto) return false;
+      if (filtroEmpresa && p.evaluado.empresa !== filtroEmpresa) return false;
+      return true;
+    })
+    .sort((a, b) => (a.evaluado.empresa ?? "").localeCompare(b.evaluado.empresa ?? "") || a.evaluado.nombre.localeCompare(b.evaluado.nombre));
 
   const zonaVerde = filtrados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
   const zonaRoja  = filtrados.filter((r) => [1, 2].includes(r.cuadrante)).length;
@@ -127,6 +149,14 @@ export default function Evaluacion360Page() {
         {/* Filtros */}
         <div className="flex gap-3 flex-wrap">
           <select
+            value={filtroEmpresa}
+            onChange={(e) => setFiltroEmpresa(e.target.value)}
+            className="bg-[#1e2a42] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
+          >
+            <option value="">Todas las empresas</option>
+            {empresas.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
+          </select>
+          <select
             value={filtroDpto}
             onChange={(e) => setFiltroDpto(e.target.value)}
             className="bg-[#1e2a42] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
@@ -146,14 +176,14 @@ export default function Evaluacion360Page() {
 
         {cargando ? (
           <div className="text-center py-16 text-gray-400">Cargando evaluaciones…</div>
-        ) : filtrados.length === 0 ? (
+        ) : filtrados.length === 0 && pendientesFiltrados.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-gray-400 mb-4">No hay evaluados registrados.</p>
             <Link href="/evaluacion-360/nueva" className="px-4 py-2 rounded-lg text-sm font-semibold" style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}>
               Registrar primer evaluado
             </Link>
           </div>
-        ) : (
+        ) : filtrados.length > 0 ? (
           <>
             {/* Nine Box */}
             <div className="bg-[#1e2a42] rounded-xl p-6 border border-[#2d3a50]">
@@ -172,7 +202,7 @@ export default function Evaluacion360Page() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#2d3a50]">
-                    {["Nombre", "Cargo", "Depto", "360°", "Potencial", "Cuadrante", ""].map((h) => (
+                    {["Nombre", "Empresa", "Cargo", "Depto", "360°", "Potencial", "Cuadrante", ""].map((h) => (
                       <th key={h} className="text-left text-xs font-semibold text-gray-400 px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -185,6 +215,7 @@ export default function Evaluacion360Page() {
                       onClick={() => router.push(`/evaluacion-360/${r.evaluado.id}`)}
                     >
                       <td className="px-4 py-3 text-white text-sm font-medium">{r.evaluado.nombre}</td>
+                      <td className="px-4 py-3 text-gray-400 text-sm">{r.evaluado.empresa ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{r.evaluado.cargo}</td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{r.evaluado.departamento}</td>
                       <td className="px-4 py-3">
@@ -207,6 +238,44 @@ export default function Evaluacion360Page() {
               </table>
             </div>
           </>
+        ) : null}
+
+        {/* Pendientes (sin respuestas aún) */}
+        {pendientesFiltrados.length > 0 && (
+          <div className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] overflow-hidden">
+            <h2 className="text-white font-semibold px-4 pt-4 pb-2">
+              ⏳ Evaluaciones en proceso ({pendientesFiltrados.length})
+            </h2>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#2d3a50]">
+                  {["Nombre", "Empresa", "Cargo", "Depto", "Avance", ""].map((h) => (
+                    <th key={h} className="text-left text-xs font-semibold text-gray-400 px-4 py-3">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pendientesFiltrados.map((p) => (
+                  <tr
+                    key={p.evaluado.id}
+                    className="border-b border-[#2d3a50]/50 hover:bg-[#243447] cursor-pointer transition-colors"
+                    onClick={() => router.push(`/evaluacion-360/${p.evaluado.id}`)}
+                  >
+                    <td className="px-4 py-3 text-white text-sm font-medium">{p.evaluado.nombre}</td>
+                    <td className="px-4 py-3 text-gray-400 text-sm">{p.evaluado.empresa ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-300 text-sm">{p.evaluado.cargo}</td>
+                    <td className="px-4 py-3 text-gray-300 text-sm">{p.evaluado.departamento}</td>
+                    <td className="px-4 py-3 text-sm" style={{ color: p.completados === p.total ? "#22c55e" : "#9ca3af" }}>
+                      {p.completados}/{p.total} respondidos
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-[#c9a84c] text-xs">Ver →</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

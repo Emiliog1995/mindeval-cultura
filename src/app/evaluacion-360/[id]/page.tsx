@@ -38,7 +38,7 @@ export default function EvaluadoIndividualPage() {
   const [error, setError] = useState("");
   const [narrativa, setNarrativa] = useState("");
   const [tokens, setTokens] = useState<Token360[]>([]);
-  const [evaluadoPendiente, setEvaluadoPendiente] = useState<{ nombre: string; cargo: string; departamento: string } | null>(null);
+  const [evaluadoPendiente, setEvaluadoPendiente] = useState<{ nombre: string; cargo: string; departamento: string; empresa?: string } | null>(null);
   const radarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function EvaluadoIndividualPage() {
         if (!evaluaciones.length) {
           const todosTokens = await listarTokens360PorEvaluado(id).catch(() => []);
           setTokens(todosTokens);
-          setEvaluadoPendiente({ nombre: evaluado.nombre, cargo: evaluado.cargo, departamento: evaluado.departamento });
+          setEvaluadoPendiente({ nombre: evaluado.nombre, cargo: evaluado.cargo, departamento: evaluado.departamento, empresa: evaluado.empresa });
           return;
         }
 
@@ -112,7 +112,10 @@ export default function EvaluadoIndividualPage() {
           </Link>
           <div>
             <h1 className="text-lg font-bold text-white">{evaluadoPendiente.nombre}</h1>
-            <p className="text-xs text-gray-400">{evaluadoPendiente.cargo} · {evaluadoPendiente.departamento}</p>
+            <p className="text-xs text-gray-400">
+              {evaluadoPendiente.empresa && `${evaluadoPendiente.empresa} · `}
+              {evaluadoPendiente.cargo} · {evaluadoPendiente.departamento}
+            </p>
           </div>
 
           <div className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
@@ -199,6 +202,7 @@ export default function EvaluadoIndividualPage() {
             <div>
               <h1 className="text-lg font-bold text-white">{evaluado.nombre}</h1>
               <p className="text-xs text-gray-400">
+                {evaluado.empresa && `${evaluado.empresa} · `}
                 {evaluado.cargo} · {evaluado.departamento}
                 {evaluado.jefe && ` · Jefe: ${evaluado.jefe}`}
                 {periodo && ` · Período: ${periodo}`}
