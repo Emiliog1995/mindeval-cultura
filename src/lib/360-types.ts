@@ -64,6 +64,16 @@ export interface Evaluacion360 {
   created_at: string;
 }
 
+export interface Token360 {
+  id: string;
+  evaluado_id: string;
+  fuente: FuenteEvaluacion;
+  token: string;
+  periodo: string;
+  completado: boolean;
+  created_at: string;
+}
+
 export interface Pdi360 {
   id: string;
   evaluado_id: string;

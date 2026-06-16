@@ -10,9 +10,11 @@ import {
 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import NineBoxMatrix from "@/components/360/NineBoxMatrix";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 export default function Evaluacion360Page() {
   const router = useRouter();
+  const { verificando } = useAuthGuard();
   const [resultados, setResultados] = useState<ResultadoConsolidado360[]>([]);
   const [cargando, setCargando]     = useState(true);
   const [filtroDpto, setFiltroDpto] = useState("");
@@ -81,6 +83,8 @@ export default function Evaluacion360Page() {
     puntaje360: r.puntaje360,
     potencial: r.puntajePotencial,
   }));
+
+  if (verificando) return null;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>

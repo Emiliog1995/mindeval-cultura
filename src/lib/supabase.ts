@@ -188,8 +188,8 @@ export async function eliminarSesion(id: string): Promise<void> {
 
 // ── 360° ──────────────────────────────────────────────────────────────────────
 
-import type { Evaluado360, Evaluacion360, Pdi360 } from './360-types';
-export type { Evaluado360, Evaluacion360, Pdi360 };
+import type { Evaluado360, Evaluacion360, Pdi360, Token360, FuenteEvaluacion } from './360-types';
+export type { Evaluado360, Evaluacion360, Pdi360, Token360 };
 
 export async function listar360Evaluados(): Promise<Evaluado360[]> {
   const { data, error } = await supabase
@@ -281,4 +281,87 @@ export async function upsert360Pdi(
     .single();
   if (error) throw new Error(error.message);
   return row as Pdi360;
+}
+
+// ── Tokens 360° (links de evaluadores) ──────────────────────────────────────
+
+export async function crearTokens360(
+  evaluadoId: string,
+  periodo: string,
+  fuentes: FuenteEvaluacion[],
+): Promise<Token360[]> {
+  const filas = fuentes.map((fuente) => ({
+    evaluado_id: evaluadoId,
+    periodo,
+    fuente,
+    completado: false,
+  }));
+  const { data, error } = await supabase
+    .from('tokens_360')
+    .insert(filas)
+    .select('*');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Token360[];
+}
+
+export async function listarTokens360PorEvaluado(evaluadoId: string): Promise<Token360[]> {
+  const { data, error } = await supabase
+    .from('tokens_360')
+    .select('*')
+    .eq('evaluado_id', evaluadoId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Token360[];
+}
+
+export async function listarTokens360(
+  evaluadoId: string,
+  periodo: string,
+): Promise<Token360[]> {
+  const { data, error } = await supabase
+    .from('tokens_360')
+    .select('*')
+    .eq('evaluado_id', evaluadoId)
+    .eq('periodo', periodo)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Token360[];
+}
+
+export async function obtenerToken360(token: string): Promise<{ token: Token360; evaluado: Evaluado360 } | null> {
+  const { data, error } = await supabase
+    .from('tokens_360')
+    .select('*, evaluados_360(*)')
+    .eq('token', token)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const { evaluados_360, ...token360 } = data as Token360 & { evaluados_360: Evaluado360 };
+  return { token: token360, evaluado: evaluados_360 };
+}
+
+export async function completarToken360(
+  token: string,
+  competencias: Record<string, number>,
+  potencial?: Record<string, number>,
+): Promise<void> {
+  const tokenRow = await obtenerToken360(token);
+  if (!tokenRow) throw new Error('Link no válido o expirado');
+  if (tokenRow.token.completado) throw new Error('Esta evaluación ya fue enviada');
+
+  await crear360Evaluacion({
+    evaluado_id: tokenRow.token.evaluado_id,
+    periodo: tokenRow.token.periodo,
+    fuente: tokenRow.token.fuente,
+    competencias: competencias as Evaluacion360['competencias'],
+    potencial: potencial as Evaluacion360['potencial'],
+    puntaje_total: undefined,
+    nivel: undefined,
+  });
+
+  const { error } = await supabase
+    .from('tokens_360')
+    .update({ completado: true })
+    .eq('token', token);
+  if (error) throw new Error(error.message);
 }

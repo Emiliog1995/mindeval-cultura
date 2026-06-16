@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,6 +8,9 @@ const supabase = createClient(
 )
 
 export async function POST(req: Request) {
+  const { permitido } = checkRateLimit(req, 'sugerir-mision')
+  if (!permitido) return rateLimitResponse()
+
   const { nombre_puesto, area, actividades, empresa_id } = await req.json()
   const client = new Anthropic()
 

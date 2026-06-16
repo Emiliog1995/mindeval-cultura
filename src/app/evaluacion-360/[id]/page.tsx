@@ -7,7 +7,9 @@ import {
   obtener360Evaluado,
   listar360Evaluaciones,
   obtener360Pdi,
+  listarTokens360PorEvaluado,
   type Pdi360,
+  type Token360,
 } from "@/lib/supabase";
 import {
   calcularPuntaje360,
@@ -24,15 +26,19 @@ import NineBoxMatrix from "@/components/360/NineBoxMatrix";
 import ClaudeNarrativa360 from "@/components/360/ClaudeNarrativa360";
 import PDIForm from "@/components/360/PDIForm";
 import ExportPDF360 from "@/components/360/ExportPDF360";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 export default function EvaluadoIndividualPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { verificando } = useAuthGuard();
 
   const [resultado, setResultado] = useState<ResultadoConsolidado360 | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [narrativa, setNarrativa] = useState("");
+  const [tokens, setTokens] = useState<Token360[]>([]);
+  const [evaluadoPendiente, setEvaluadoPendiente] = useState<{ nombre: string; cargo: string; departamento: string } | null>(null);
   const radarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,7 +50,9 @@ export default function EvaluadoIndividualPage() {
         ]);
 
         if (!evaluaciones.length) {
-          setError("Este evaluado no tiene evaluaciones registradas aún.");
+          const todosTokens = await listarTokens360PorEvaluado(id).catch(() => []);
+          setTokens(todosTokens);
+          setEvaluadoPendiente({ nombre: evaluado.nombre, cargo: evaluado.cargo, departamento: evaluado.departamento });
           return;
         }
 
@@ -85,10 +93,57 @@ export default function EvaluadoIndividualPage() {
     cargar();
   }, [id]);
 
+  if (verificando) return null;
+
   if (cargando) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "#1a2035" }}>
         <div className="w-10 h-10 border-4 rounded-full animate-spin" style={{ borderColor: "#2d3a50", borderTopColor: "#c9a84c" }} />
+      </div>
+    );
+  }
+
+  if (evaluadoPendiente) {
+    return (
+      <div className="min-h-screen px-6 py-10" style={{ backgroundColor: "#1a2035" }}>
+        <div className="max-w-2xl mx-auto space-y-4">
+          <Link href="/evaluacion-360" className="text-sm text-gray-400 hover:text-white transition-colors">
+            ← Volver al listado
+          </Link>
+          <div>
+            <h1 className="text-lg font-bold text-white">{evaluadoPendiente.nombre}</h1>
+            <p className="text-xs text-gray-400">{evaluadoPendiente.cargo} · {evaluadoPendiente.departamento}</p>
+          </div>
+
+          <div className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
+            <p className="text-white text-sm font-semibold mb-1">⏳ Evaluación en proceso</p>
+            <p className="text-gray-400 text-xs">
+              Aún no hay respuestas registradas. El resultado se calculará automáticamente cuando los evaluadores
+              completen sus formularios.
+            </p>
+          </div>
+
+          {tokens.length > 0 ? (
+            <div className="space-y-2">
+              {tokens.map((t) => (
+                <div key={t.id} className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] px-4 py-3 flex items-center justify-between">
+                  <span className="text-white text-sm">{FUENTE_LABELS[t.fuente]}</span>
+                  <span
+                    className="text-xs font-semibold px-2 py-1 rounded-full"
+                    style={{
+                      backgroundColor: t.completado ? "#22c55e22" : "#9ca3af22",
+                      color: t.completado ? "#22c55e" : "#9ca3af",
+                    }}
+                  >
+                    {t.completado ? "✅ Completado" : "⏳ Pendiente"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No se generaron links para este evaluado.</p>
+          )}
+        </div>
       </div>
     );
   }

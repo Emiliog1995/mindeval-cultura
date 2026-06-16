@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useAuthGuard } from '@/lib/useAuthGuard'
 
 type Puesto = {
   id: string
@@ -25,6 +26,7 @@ type Empresa = {
 
 export default function PanelManualPuestos() {
   const router = useRouter()
+  const { verificando } = useAuthGuard()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [puestos, setPuestos] = useState<Puesto[]>([])
   const [empresaSeleccionada, setEmpresaSeleccionada] = useState('')
@@ -79,6 +81,8 @@ export default function PanelManualPuestos() {
   const puestosFiltrados = puestos
     .filter(p => !empresaSeleccionada || p.empresa_id === empresaSeleccionada)
     .filter(p => !busqueda || p.nombre_puesto.toLowerCase().includes(busqueda.toLowerCase()) || p.area.toLowerCase().includes(busqueda.toLowerCase()))
+
+  if (verificando) return null
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#1a2035', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

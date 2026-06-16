@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { crear360Evaluado, crear360Evaluacion } from "@/lib/supabase";
+import { crear360Evaluado, crear360Evaluacion, crearTokens360 } from "@/lib/supabase";
 import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, type FuenteEvaluacion, type CompetenciaKey, type PotencialKey } from "@/lib/360-types";
 import { calcularPuntaje360, clasificarNivelDesempeno } from "@/lib/360-scoring";
-import type { Evaluacion360 } from "@/lib/supabase";
+import type { Evaluacion360, Token360 } from "@/lib/supabase";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 const FUENTES: Array<{ key: FuenteEvaluacion; label: string; peso: string }> = [
   { key: "autoevaluacion",  label: "Autoevaluación",   peso: "10%" },
@@ -27,9 +28,12 @@ function emptyPotencial(): PotencialMap {
 
 export default function NuevaEvaluacion360() {
   const router = useRouter();
-  const [paso, setPaso] = useState(1);
+  const { verificando } = useAuthGuard();
+  const [vista, setVista] = useState<"datos" | "modo" | "links" | "manual">("datos");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [links, setLinks] = useState<Array<{ fuente: FuenteEvaluacion; url: string }>>([]);
+  const [copiado, setCopiado] = useState<string | null>(null);
 
   const [datos, setDatos] = useState({
     nombre: "", cargo: "", departamento: "", jefe: "", fecha_ingreso: "", periodo: "",
@@ -104,27 +108,60 @@ export default function NuevaEvaluacion360() {
     }
   }
 
+  async function handleGenerarLinks() {
+    if (!datos.nombre || !datos.cargo || !datos.departamento || !datos.periodo) {
+      setError("Completa nombre, cargo, departamento y período.");
+      return;
+    }
+    setGuardando(true);
+    setError("");
+    try {
+      const evaluado = await crear360Evaluado({
+        nombre: datos.nombre,
+        cargo: datos.cargo,
+        departamento: datos.departamento,
+        jefe: datos.jefe || undefined,
+        fecha_ingreso: datos.fecha_ingreso || undefined,
+      });
+
+      const tokens: Token360[] = await crearTokens360(
+        evaluado.id,
+        datos.periodo,
+        FUENTES.map((f) => f.key),
+      );
+
+      const base = typeof window !== "undefined" ? window.location.origin : "";
+      setLinks(
+        tokens.map((t) => ({
+          fuente: t.fuente,
+          url: `${base}/evaluar-360/${t.token}`,
+        })),
+      );
+      setVista("links");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al generar links");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  function copiarLink(url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiado(url);
+    setTimeout(() => setCopiado(null), 1500);
+  }
+
+  if (verificando) return null;
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#1a2035" }}>
       <div className="border-b border-[#2d3a50] px-6 py-4 flex items-center gap-4">
         <button onClick={() => router.back()} className="text-gray-400 hover:text-white text-sm">← Volver</button>
         <h1 className="text-lg font-bold text-white">Nueva Evaluación 360°</h1>
-        <div className="ml-auto flex gap-2">
-          {[1, 2].map((n) => (
-            <button
-              key={n}
-              onClick={() => setPaso(n)}
-              className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
-              style={{ backgroundColor: paso === n ? "#c9a84c" : "#1e2a42", color: paso === n ? "#1a2035" : "#9ca3af" }}
-            >
-              Paso {n}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-        {paso === 1 && (
+        {vista === "datos" && (
           <div className="bg-[#1e2a42] rounded-xl p-6 border border-[#2d3a50] space-y-4">
             <h2 className="text-white font-semibold">Datos del evaluado</h2>
             {[
@@ -146,17 +183,84 @@ export default function NuevaEvaluacion360() {
               </div>
             ))}
             <button
-              onClick={() => setPaso(2)}
+              onClick={() => setVista("modo")}
               className="w-full py-2.5 rounded-lg font-semibold text-sm mt-2"
               style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
             >
-              Continuar a calificaciones →
+              Continuar →
             </button>
           </div>
         )}
 
-        {paso === 2 && (
+        {vista === "modo" && (
           <div className="space-y-4">
+            <button onClick={() => setVista("datos")} className="text-gray-400 hover:text-white text-sm">← Volver a datos</button>
+
+            <div
+              className="bg-[#1e2a42] rounded-xl p-6 border-2 cursor-pointer transition-colors"
+              style={{ borderColor: "#c9a84c" }}
+              onClick={handleGenerarLinks}
+            >
+              <h2 className="text-white font-semibold mb-1">🔗 Generar links para evaluadores (recomendado)</h2>
+              <p className="text-gray-400 text-sm">
+                Cada evaluador (jefe, pares, colaboradores, cliente interno, autoevaluación) recibe su propio link
+                para llenar su sección de forma independiente.
+              </p>
+              <p className="mt-3 text-[#c9a84c] text-sm font-semibold">{guardando ? "Generando…" : "Generar links →"}</p>
+            </div>
+
+            <div
+              className="bg-[#1e2a42] rounded-xl p-6 border border-[#2d3a50] cursor-pointer hover:border-gray-500 transition-colors"
+              onClick={() => setVista("manual")}
+            >
+              <h2 className="text-white font-semibold mb-1">✍️ Llenar yo mismo (modo consultor)</h2>
+              <p className="text-gray-400 text-sm">
+                Si ya tienes las calificaciones recopiladas de otra forma, captúralas directamente aquí.
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-900/30 border border-red-500/40 rounded-lg px-4 py-3 text-red-300 text-sm">{error}</div>
+            )}
+          </div>
+        )}
+
+        {vista === "links" && (
+          <div className="space-y-4">
+            <div className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
+              <p className="text-white text-sm font-semibold mb-1">✅ Links generados para {datos.nombre}</p>
+              <p className="text-gray-400 text-xs">Copia y envía cada link al evaluador correspondiente.</p>
+            </div>
+
+            {links.map((l) => (
+              <div key={l.fuente} className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-white text-sm font-medium">{FUENTES.find((f) => f.key === l.fuente)?.label}</span>
+                  <p className="text-gray-500 text-xs truncate max-w-md">{l.url}</p>
+                </div>
+                <button
+                  onClick={() => copiarLink(l.url)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0"
+                  style={{ backgroundColor: copiado === l.url ? "#2dd4bf" : "#c9a84c", color: "#1a2035" }}
+                >
+                  {copiado === l.url ? "¡Copiado!" : "Copiar"}
+                </button>
+              </div>
+            ))}
+
+            <button
+              onClick={() => router.push("/evaluacion-360")}
+              className="w-full py-3 rounded-lg font-semibold text-sm mt-2"
+              style={{ backgroundColor: "#c9a84c", color: "#1a2035" }}
+            >
+              Ir al dashboard 360°
+            </button>
+          </div>
+        )}
+
+        {vista === "manual" && (
+          <div className="space-y-4">
+            <button onClick={() => setVista("modo")} className="text-gray-400 hover:text-white text-sm">← Volver</button>
             {/* Puntaje en tiempo real */}
             <div className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50] flex items-center justify-between">
               <span className="text-gray-400 text-sm">Puntaje 360° calculado en tiempo real</span>

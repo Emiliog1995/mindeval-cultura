@@ -2,15 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-const EMAIL = "gerencia@mindtalentrh.com";
-const PASSWORD = "Mindtalent2026";
-const KEY = "mindeval_portal_v1";
-
-function isLoggedIn() {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(KEY) === "true";
-}
+import { supabase } from "@/lib/supabase";
 
 export default function Login() {
   const router = useRouter();
@@ -19,19 +11,28 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    if (isLoggedIn()) router.replace("/portal");
-    else setLoading(false);
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) router.replace("/portal");
+      else setLoading(false);
+    });
   }, [router]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (email.trim().toLowerCase() === EMAIL && password === PASSWORD) {
-      localStorage.setItem(KEY, "true");
-      router.push("/portal");
-    } else {
+    setEnviando(true);
+    setError("");
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setEnviando(false);
+    if (authError) {
       setError("Correo o contraseña incorrectos.");
+    } else {
+      router.push("/portal");
     }
   }
 
@@ -182,10 +183,11 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl font-semibold text-sm mt-2 transition-all hover:opacity-90 active:scale-95"
+                disabled={enviando}
+                className="w-full py-3 rounded-xl font-semibold text-sm mt-2 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
                 style={{ background: "#c9a84c", color: "#1a2035" }}
               >
-                Iniciar sesión
+                {enviando ? "Ingresando…" : "Iniciar sesión"}
               </button>
             </form>
           </div>

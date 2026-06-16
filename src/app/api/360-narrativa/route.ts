@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const { permitido } = checkRateLimit(req, "360-narrativa");
+  if (!permitido) return rateLimitResponse();
+
   try {
     const { resultado }: { resultado: ResultadoConsolidado360 } = await req.json();
     const { evaluado, periodo, puntaje360, nivelDesempeno, puntajePotencial,

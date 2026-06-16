@@ -1,7 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import mammoth from 'mammoth'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const { permitido } = checkRateLimit(req, 'importar-manual')
+  if (!permitido) return rateLimitResponse()
+
   const formData = await req.formData()
   const file = formData.get('file') as File
 

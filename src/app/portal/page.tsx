@@ -1,20 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-function isLoggedIn() {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem("mindeval_portal_v1") === "true";
-}
+import { useAuthGuard, cerrarSesion } from "@/lib/useAuthGuard";
 
 export default function Portal() {
   const router = useRouter();
+  const { verificando } = useAuthGuard();
 
-  useEffect(() => {
-    if (!isLoggedIn()) router.replace("/");
-  }, [router]);
+  if (verificando) return null;
 
   return (
     <div
@@ -23,7 +17,7 @@ export default function Portal() {
     >
       {/* Botón cerrar sesión */}
       <button
-        onClick={() => { localStorage.removeItem("mindeval_portal_v1"); window.location.href = "/"; }}
+        onClick={async () => { await cerrarSesion(); router.push("/"); }}
         className="fixed top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all hover:opacity-80"
         style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}
       >

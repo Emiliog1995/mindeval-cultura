@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { INDICADORES } from '@/lib/diccionario-indicadores'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,6 +9,9 @@ const supabase = createClient(
 )
 
 export async function POST(req: Request) {
+  const { permitido } = checkRateLimit(req, 'sugerir-indicadores')
+  if (!permitido) return rateLimitResponse()
+
   const { actividades_esenciales, nombre_puesto, area, empresa_id } = await req.json()
   const client = new Anthropic()
 
