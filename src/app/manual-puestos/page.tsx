@@ -52,6 +52,18 @@ export default function PanelManualPuestos() {
     setPuestos(prev => prev.filter(p => p.id !== id))
   }
 
+  const handleEliminarEmpresa = async (emp: Empresa) => {
+    const puestosDeEmpresa = puestos.filter(p => p.empresa_id === emp.id)
+    const msg = puestosDeEmpresa.length > 0
+      ? `¿Eliminar "${emp.nombre}"? Tiene ${puestosDeEmpresa.length} puesto(s) registrado(s) que también se eliminarán. Esta acción no se puede deshacer.`
+      : `¿Eliminar "${emp.nombre}"? Esta acción no se puede deshacer.`
+    if (!confirm(msg)) return
+    await supabase.from('puestos').delete().eq('empresa_id', emp.id)
+    await supabase.from('empresas_mdt').delete().eq('id', emp.id)
+    setEmpresas(prev => prev.filter(e => e.id !== emp.id))
+    setPuestos(prev => prev.filter(p => p.empresa_id !== emp.id))
+  }
+
   const handleEnlaceEmpresa = async (emp: Empresa) => {
     let token = emp.token
     if (!token) {
@@ -155,16 +167,27 @@ export default function PanelManualPuestos() {
                     </span>
                   )}
                 </div>
-                <button onClick={() => handleEnlaceEmpresa(emp)}
-                  style={{
-                    background: enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.15)' : 'rgba(16,185,129,0.15)',
-                    color: enlaceEmpresaCopiad === emp.id ? '#2d6a4f' : '#7a6020',
-                    padding: '.3rem .9rem', borderRadius: 5,
-                    border: `1px solid ${enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.3)' : 'rgba(16,185,129,0.4)'}`,
-                    cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-                  }}>
-                  {enlaceEmpresaCopiad === emp.id ? '✓ Enlace copiado' : 'Copiar enlace'}
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => handleEnlaceEmpresa(emp)}
+                    style={{
+                      background: enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.15)' : 'rgba(16,185,129,0.15)',
+                      color: enlaceEmpresaCopiad === emp.id ? '#2d6a4f' : '#7a6020',
+                      padding: '.3rem .9rem', borderRadius: 5,
+                      border: `1px solid ${enlaceEmpresaCopiad === emp.id ? 'rgba(45,106,79,0.3)' : 'rgba(16,185,129,0.4)'}`,
+                      cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                    }}>
+                    {enlaceEmpresaCopiad === emp.id ? '✓ Enlace copiado' : 'Copiar enlace'}
+                  </button>
+                  <button onClick={() => handleEliminarEmpresa(emp)}
+                    style={{
+                      background: 'rgba(220,38,38,0.08)', color: '#b91c1c',
+                      padding: '.3rem .75rem', borderRadius: 5,
+                      border: '1px solid rgba(220,38,38,0.3)',
+                      cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                    }}>
+                    Eliminar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
