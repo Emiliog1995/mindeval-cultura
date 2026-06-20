@@ -17,7 +17,13 @@ export async function GET(
     return NextResponse.json({ error: "Link no válido o expirado" }, { status: 404 });
   }
 
-  return NextResponse.json({ empresa: data });
+  const { data: catalogo } = await supabaseAdmin
+    .from("catalogo_puestos")
+    .select("nombre_puesto, area, supervisado_por, supervisa_a, actividades")
+    .eq("empresa_id", data.id)
+    .order("orden", { ascending: true });
+
+  return NextResponse.json({ empresa: data, catalogo: catalogo ?? [] });
 }
 
 export async function POST(

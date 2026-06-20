@@ -12,23 +12,31 @@ type Actividad = {
   consecuencia: string
 }
 
+type CatalogoPuesto = {
+  nombre_puesto: string
+  area: string
+  supervisado_por: string
+  supervisa_a: string
+  actividades: string[]
+}
+
 const OPCIONES_FRECUENCIA = [
-  { valor: 'diaria', label: 'Diaria — La hago todos los días' },
-  { valor: 'semanal', label: 'Semanal — Varias veces por semana' },
-  { valor: 'mensual', label: 'Mensual — Algunas veces al mes' },
-  { valor: 'eventual', label: 'Eventual — De vez en cuando' },
+  { valor: 'diaria', label: 'Diaria' },
+  { valor: 'semanal', label: 'Semanal' },
+  { valor: 'mensual', label: 'Mensual' },
+  { valor: 'eventual', label: 'Eventual' },
 ]
 
 const OPCIONES_DIFICULTAD = [
-  { valor: 'simple', label: 'Simple — Sigo pasos establecidos' },
-  { valor: 'analisis', label: 'Requiere análisis — Evalúo opciones antes de actuar' },
-  { valor: 'compleja', label: 'Compleja — Tomo decisiones importantes con poca guía' },
+  { valor: 'simple', label: 'Simple' },
+  { valor: 'analisis', label: 'Requiere análisis' },
+  { valor: 'compleja', label: 'Compleja' },
 ]
 
 const OPCIONES_CONSECUENCIA = [
-  { valor: 'minima', label: 'Mínima — El impacto es pequeño y se corrige fácil' },
-  { valor: 'moderada', label: 'Moderada — Afecta a mi área o equipo' },
-  { valor: 'alta', label: 'Alta — Afecta a toda la empresa o clientes' },
+  { valor: 'minima', label: 'Mínima' },
+  { valor: 'moderada', label: 'Moderada' },
+  { valor: 'alta', label: 'Alta' },
 ]
 
 const NIVELES_EDUCATIVOS = [
@@ -36,9 +44,34 @@ const NIVELES_EDUCATIVOS = [
   'Cuarto nivel (Maestría)', 'Doctorado',
 ]
 
+function RatingGroup({
+  label, name, opciones, valor, onChange,
+}: {
+  label: string
+  name: string
+  opciones: { valor: string; label: string }[]
+  valor: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{label}</div>
+      {opciones.map(op => (
+        <label key={op.valor} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 12, color: '#374151', marginBottom: 4 }}>
+          <input type="radio" name={name} value={op.valor} checked={valor === op.valor}
+            onChange={() => onChange(op.valor)}
+            style={{ marginTop: 2, accentColor: GOLD }} />
+          {op.label}
+        </label>
+      ))}
+    </div>
+  )
+}
+
 export default function FormularioEmpresa() {
   const { token } = useParams<{ token: string }>()
   const [empresa, setEmpresa] = useState<{ id: string; nombre: string; logo_url?: string } | null>(null)
+  const [catalogo, setCatalogo] = useState<CatalogoPuesto[]>([])
   const [cargando, setCargando] = useState(true)
   const [enviado, setEnviado] = useState(false)
   const [paso, setPaso] = useState(1)
@@ -70,18 +103,38 @@ export default function FormularioEmpresa() {
   const [carrera, setCarrera] = useState('')
   const [experienciaAnios, setExperienciaAnios] = useState('')
 
+  const tieneCatalogo = catalogo.length > 0
+  const puestoSeleccionado = catalogo.find(p => p.nombre_puesto === cargoActual) ?? null
+
   useEffect(() => {
     fetch(`/api/token/ocupante-empresa/${token}`)
       .then(async (r) => {
         if (!r.ok) return null
-        const body = await r.json()
-        return body.empresa as { id: string; nombre: string; logo_url?: string }
+        return r.json()
       })
-      .then((data) => {
-        setEmpresa(data)
+      .then((body) => {
+        if (!body) { setCargando(false); return }
+        setEmpresa(body.empresa)
+        setCatalogo(body.catalogo ?? [])
         setCargando(false)
       })
   }, [token])
+
+  const handleSeleccionarPuesto = (nombrePuesto: string) => {
+    setCargoActual(nombrePuesto)
+    const puesto = catalogo.find(p => p.nombre_puesto === nombrePuesto)
+    if (!puesto) {
+      setArea('')
+      setSupervisadoPor('')
+      setSupervisaA('')
+      setActividades(Array(8).fill(null).map(() => ({ descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' })))
+      return
+    }
+    setArea(puesto.area)
+    setSupervisadoPor(puesto.supervisado_por)
+    setSupervisaA(puesto.supervisa_a)
+    setActividades(puesto.actividades.map(desc => ({ descripcion: desc, frecuencia: '', dificultad: '', consecuencia: '' })))
+  }
 
   const actividadesValidas = actividades.filter(
     a => a.descripcion.trim() && a.frecuencia && a.dificultad && a.consecuencia
@@ -114,7 +167,6 @@ export default function FormularioEmpresa() {
     setGuardando(false)
     if (!res.ok) {
       submittedRef.current = false
-      console.error('Error al guardar respuesta')
       alert('Hubo un error al guardar tu respuesta. Por favor intenta de nuevo.')
       return
     }
@@ -154,6 +206,14 @@ export default function FormularioEmpresa() {
     borderRadius: 6, fontSize: 14, color: '#111', outline: 'none', boxSizing: 'border-box',
   }
 
+  const inputReadonlyStyle: React.CSSProperties = {
+    ...inputStyle,
+    background: '#f3f4f6',
+    color: '#6b7280',
+  }
+
+  const camposAutocompletados = tieneCatalogo && !!puestoSeleccionado
+
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
       {/* Header */}
@@ -191,27 +251,59 @@ export default function FormularioEmpresa() {
 
             <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Tu cargo o título del puesto *</div>
-              <input value={cargoActual} onChange={e => setCargoActual(e.target.value)}
-                placeholder="Ej: Analista de Talento Humano" style={inputStyle} maxLength={120} autoComplete="organization-title" />
+              {tieneCatalogo ? (
+                <select
+                  value={cargoActual}
+                  onChange={e => handleSeleccionarPuesto(e.target.value)}
+                  style={{ ...inputStyle, color: cargoActual ? '#111' : '#9ca3af' }}
+                >
+                  <option value=''>Selecciona tu cargo...</option>
+                  {catalogo.map(p => (
+                    <option key={p.nombre_puesto} value={p.nombre_puesto}>{p.nombre_puesto}</option>
+                  ))}
+                </select>
+              ) : (
+                <input value={cargoActual} onChange={e => setCargoActual(e.target.value)}
+                  placeholder="Ej: Analista de Talento Humano" style={inputStyle} maxLength={120} autoComplete="organization-title" />
+              )}
             </label>
 
             <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Área o departamento *</div>
-              <input value={area} onChange={e => setArea(e.target.value)}
-                placeholder="Ej: Talento Humano, Finanzas, Operaciones..." style={inputStyle} maxLength={120} autoComplete="off" />
+              <input
+                value={area}
+                onChange={e => setArea(e.target.value)}
+                readOnly={camposAutocompletados}
+                placeholder="Ej: Talento Humano, Finanzas, Operaciones..."
+                style={camposAutocompletados ? inputReadonlyStyle : inputStyle}
+                maxLength={120}
+                autoComplete="off"
+              />
             </label>
 
             <div style={{ background: '#f9fafb', borderRadius: 8, padding: '14px 16px', marginBottom: 28, border: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>Jerarquía (opcional)</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                Jerarquía {!tieneCatalogo && <span style={{ fontWeight: 400, textTransform: 'none' }}>(opcional)</span>}
+              </div>
               <label style={{ display: 'block', marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>⬆️ Supervisado por</div>
-                <input value={supervisadoPor} onChange={e => setSupervisadoPor(e.target.value)}
-                  placeholder="Cargo de tu jefe directo" style={inputStyle} />
+                <input
+                  value={supervisadoPor}
+                  onChange={e => setSupervisadoPor(e.target.value)}
+                  readOnly={camposAutocompletados}
+                  placeholder="Cargo de tu jefe directo"
+                  style={camposAutocompletados ? inputReadonlyStyle : inputStyle}
+                />
               </label>
               <label style={{ display: 'block' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>⬇️ Supervisa a</div>
-                <input value={supervisaA} onChange={e => setSupervisaA(e.target.value)}
-                  placeholder="Cargos que supervisa (si aplica)" style={inputStyle} />
+                <input
+                  value={supervisaA}
+                  onChange={e => setSupervisaA(e.target.value)}
+                  readOnly={camposAutocompletados}
+                  placeholder="Cargos que supervisa (si aplica)"
+                  style={camposAutocompletados ? inputReadonlyStyle : inputStyle}
+                />
               </label>
             </div>
 
@@ -254,73 +346,83 @@ export default function FormularioEmpresa() {
         {paso === 2 && (
           <div style={{ background: 'white', borderRadius: 10, padding: '1.75rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
             <h2 style={{ color: DARK, marginTop: 0, marginBottom: 4, fontSize: 18 }}>¿Qué haces en tu trabajo?</h2>
-            <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
-              Describe tus actividades del día a día. Sé específico — en vez de &quot;atender clientes&quot;, escribe &quot;responder consultas por teléfono y correo&quot;.
-              <br /><strong style={{ color: DARK }}>Necesitas al menos 3 completas para continuar.</strong>
-            </p>
+
+            {puestoSeleccionado ? (
+              <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
+                Estas son las actividades de tu cargo. Para cada una, indica con qué frecuencia la realizas, qué tan compleja es y qué pasaría si cometieras un error.
+                <br /><strong style={{ color: DARK }}>Debes calificar al menos 3 para continuar.</strong>
+              </p>
+            ) : (
+              <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
+                Describe tus actividades del día a día. Sé específico — en vez de &quot;atender clientes&quot;, escribe &quot;responder consultas por teléfono y correo&quot;.
+                <br /><strong style={{ color: DARK }}>Necesitas al menos 3 completas para continuar.</strong>
+              </p>
+            )}
 
             {actividades.map((act, i) => (
-              <div key={i} style={{ marginBottom: 16, padding: '1rem', background: '#f9fafb', borderRadius: 8, border: `1px solid ${act.descripcion && act.frecuencia && act.dificultad && act.consecuencia ? 'rgba(45,106,79,0.3)' : '#e5e7eb'}` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 8 }}>ACTIVIDAD {i + 1}</div>
-                <textarea
-                  value={act.descripcion}
-                  onChange={e => setActividades(prev => prev.map((a, j) => j === i ? { ...a, descripcion: e.target.value } : a))}
-                  placeholder="¿Qué haces exactamente en esta actividad?"
-                  rows={2}
-                  maxLength={500}
-                  style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: act.descripcion.trim() ? 12 : 0 }}
-                />
-                {act.descripcion.trim() && (
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Frecuencia</div>
-                      {OPCIONES_FRECUENCIA.map(op => (
-                        <label key={op.valor} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 12, color: '#374151', marginBottom: 4 }}>
-                          <input type="radio" name={`freq-${i}`} value={op.valor} checked={act.frecuencia === op.valor}
-                            onChange={() => setActividades(prev => prev.map((a, j) => j === i ? { ...a, frecuencia: op.valor } : a))}
-                            style={{ marginTop: 2 }} />
-                          {op.label.split(' — ')[0]}
-                        </label>
-                      ))}
+              <div key={i} style={{
+                marginBottom: 16, padding: '1rem', background: '#f9fafb', borderRadius: 8,
+                border: `1px solid ${act.descripcion && act.frecuencia && act.dificultad && act.consecuencia ? 'rgba(16,185,129,0.4)' : '#e5e7eb'}`,
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 6 }}>ACTIVIDAD {i + 1}</div>
+
+                {puestoSeleccionado ? (
+                  <>
+                    <div style={{ fontSize: 13, color: DARK, fontWeight: 500, marginBottom: 12, lineHeight: 1.5 }}>
+                      {act.descripcion}
                     </div>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Dificultad</div>
-                      {OPCIONES_DIFICULTAD.map(op => (
-                        <label key={op.valor} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 12, color: '#374151', marginBottom: 4 }}>
-                          <input type="radio" name={`dif-${i}`} value={op.valor} checked={act.dificultad === op.valor}
-                            onChange={() => setActividades(prev => prev.map((a, j) => j === i ? { ...a, dificultad: op.valor } : a))}
-                            style={{ marginTop: 2 }} />
-                          {op.label.split(' — ')[0]}
-                        </label>
-                      ))}
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
+                      <RatingGroup label="Frecuencia" name={`freq-${i}`} opciones={OPCIONES_FRECUENCIA} valor={act.frecuencia}
+                        onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, frecuencia: v } : a))} />
+                      <RatingGroup label="Dificultad" name={`dif-${i}`} opciones={OPCIONES_DIFICULTAD} valor={act.dificultad}
+                        onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, dificultad: v } : a))} />
+                      <RatingGroup label="Si fallo, las consecuencias serían..." name={`cons-${i}`} opciones={OPCIONES_CONSECUENCIA} valor={act.consecuencia}
+                        onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, consecuencia: v } : a))} />
                     </div>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Si fallo, las consecuencias serían...</div>
-                      {OPCIONES_CONSECUENCIA.map(op => (
-                        <label key={op.valor} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, cursor: 'pointer', fontSize: 12, color: '#374151', marginBottom: 4 }}>
-                          <input type="radio" name={`cons-${i}`} value={op.valor} checked={act.consecuencia === op.valor}
-                            onChange={() => setActividades(prev => prev.map((a, j) => j === i ? { ...a, consecuencia: op.valor } : a))}
-                            style={{ marginTop: 2 }} />
-                          {op.label.split(' — ')[0]}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    <textarea
+                      value={act.descripcion}
+                      onChange={e => setActividades(prev => prev.map((a, j) => j === i ? { ...a, descripcion: e.target.value } : a))}
+                      placeholder="¿Qué haces exactamente en esta actividad?"
+                      rows={2} maxLength={500}
+                      style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: act.descripcion.trim() ? 12 : 0 }}
+                    />
+                    {act.descripcion.trim() && (
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
+                        <RatingGroup label="Frecuencia" name={`freq-${i}`} opciones={OPCIONES_FRECUENCIA} valor={act.frecuencia}
+                          onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, frecuencia: v } : a))} />
+                        <RatingGroup label="Dificultad" name={`dif-${i}`} opciones={OPCIONES_DIFICULTAD} valor={act.dificultad}
+                          onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, dificultad: v } : a))} />
+                        <RatingGroup label="Si fallo, las consecuencias serían..." name={`cons-${i}`} opciones={OPCIONES_CONSECUENCIA} valor={act.consecuencia}
+                          onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, consecuencia: v } : a))} />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ))}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <button
-                onClick={() => setActividades(prev => [...prev, { descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' }])}
-                disabled={actividades.length >= 20}
-                style={{ background: 'none', border: `1px dashed ${GOLD}`, color: GOLD, padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                + Agregar actividad
-              </button>
-              <div style={{ fontSize: 12, color: actividadesValidas.length >= 3 ? '#2d6a4f' : '#9ca3af', fontWeight: 600 }}>
-                {actividadesValidas.length} actividad{actividadesValidas.length !== 1 ? 'es' : ''} completa{actividadesValidas.length !== 1 ? 's' : ''}
+            {!puestoSeleccionado && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <button
+                  onClick={() => setActividades(prev => [...prev, { descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' }])}
+                  disabled={actividades.length >= 20}
+                  style={{ background: 'none', border: `1px dashed ${GOLD}`, color: GOLD, padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  + Agregar actividad
+                </button>
+                <div style={{ fontSize: 12, color: actividadesValidas.length >= 3 ? '#059669' : '#9ca3af', fontWeight: 600 }}>
+                  {actividadesValidas.length} actividad{actividadesValidas.length !== 1 ? 'es' : ''} completa{actividadesValidas.length !== 1 ? 's' : ''}
+                </div>
               </div>
-            </div>
+            )}
+
+            {puestoSeleccionado && (
+              <div style={{ fontSize: 12, color: actividadesValidas.length === actividades.length ? '#059669' : '#6b7280', fontWeight: 600, marginBottom: 12, textAlign: 'right' }}>
+                {actividadesValidas.length} de {actividades.length} actividades calificadas
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setPaso(1)}
@@ -343,19 +445,17 @@ export default function FormularioEmpresa() {
 
             <label style={{ display: 'block', marginBottom: 20 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 4 }}>¿Qué programas o herramientas usas?</div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Excel, SAP, Teams, cámara, vehículo...</div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Excel, Abila, Marylink, Teams, cámara, vehículo...</div>
               <textarea value={herramientas} onChange={e => setHerramientas(e.target.value)} rows={4}
-                placeholder={"Excel\nSistema de nómina\nTeléfono IP"}
-                maxLength={1000}
+                placeholder={"Excel\nSistema de nómina\nTeléfono IP"} maxLength={1000}
                 style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
             </label>
 
             <label style={{ display: 'block', marginBottom: 28 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 4 }}>¿Qué conocimientos necesitas para hacer tu trabajo?</div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Manual de correspondencia, Manual de la fundación, normas internas...</div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Manual de correspondencia, políticas de Kansas, normativa tributaria...</div>
               <textarea value={conocimientos} onChange={e => setConocimientos(e.target.value)} rows={4}
-                placeholder={"Legislación laboral\nGestión documental\nAtención al cliente"}
-                maxLength={1000}
+                placeholder={"Legislación laboral\nGestión documental\nAtención al cliente"} maxLength={1000}
                 style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
             </label>
 
@@ -390,7 +490,7 @@ export default function FormularioEmpresa() {
             <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Carrera o área de estudio</div>
               <input value={carrera} onChange={e => setCarrera(e.target.value)}
-                placeholder="Ej: Psicología, Administración, Ingeniería Industrial..."
+                placeholder="Ej: Psicología, Contabilidad, Trabajo Social..."
                 style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, color: '#111', outline: 'none', boxSizing: 'border-box' }} />
             </label>
 
@@ -401,12 +501,11 @@ export default function FormularioEmpresa() {
                 style={{ width: 140, padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, color: '#111', outline: 'none' }} />
             </label>
 
-            {/* Resumen */}
             <div style={{ background: '#f9fafb', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: 24, border: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: DARK, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tu respuesta incluye</div>
               <div style={{ fontSize: 12, color: '#374151', lineHeight: 2 }}>
                 <div>· Nombre: <strong>{nombre}</strong> — {cargoActual} ({area})</div>
-                <div>· {actividadesValidas.length} actividades registradas</div>
+                <div>· {actividadesValidas.length} actividades calificadas</div>
                 <div>· {herramientas.split('\n').filter(Boolean).length} herramientas / {conocimientos.split('\n').filter(Boolean).length} conocimientos</div>
               </div>
             </div>
