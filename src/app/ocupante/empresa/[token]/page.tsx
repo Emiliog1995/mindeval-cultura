@@ -39,10 +39,6 @@ const OPCIONES_CONSECUENCIA = [
   { valor: 'alta', label: 'Alta' },
 ]
 
-const NIVELES_EDUCATIVOS = [
-  'Bachillerato', 'Técnico / Tecnológico', 'Tercer nivel (Ingeniería / Licenciatura)',
-  'Cuarto nivel (Maestría)', 'Doctorado',
-]
 
 const HERRAMIENTAS_UNBOUND = [
   'Portal Sede Unbound', 'Módulo de traducción', 'Portales Bancarios', 'Firma electrónica',
@@ -150,9 +146,6 @@ export default function FormularioEmpresa() {
   const [herramientasOtras, setHerramientasOtras] = useState('')
   const [conocimientos, setConocimientos] = useState<string[]>([])
   const [conocimientosOtros, setConocimientosOtros] = useState('')
-  const [nivelEducativo, setNivelEducativo] = useState('')
-  const [carrera, setCarrera] = useState('')
-  const [experienciaAnios, setExperienciaAnios] = useState('')
 
   const tieneCatalogo = catalogo.length > 0
   const puestoSeleccionado = catalogo.find(p => p.nombre_puesto === cargoActual) ?? null
@@ -209,9 +202,6 @@ export default function FormularioEmpresa() {
         actividades: actividadesValidas,
         herramientas: [...herramientas, ...herramientasOtras.split('\n').map(h => h.trim()).filter(Boolean)],
         conocimientos: [...conocimientos, ...conocimientosOtros.split('\n').map(c => c.trim()).filter(Boolean)],
-        nivelEducativo,
-        carrera,
-        experienciaAnios,
       }),
     })
 
@@ -250,7 +240,7 @@ export default function FormularioEmpresa() {
     </div>
   )
 
-  const totalPasos = 4
+  const totalPasos = 3
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db',
@@ -556,49 +546,7 @@ export default function FormularioEmpresa() {
                 style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setPaso(2)}
-                style={{ background: '#f3f4f6', color: '#374151', padding: '.6rem 1.25rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 14 }}>
-                ← Atrás
-              </button>
-              <button onClick={() => setPaso(4)}
-                style={{ flex: 1, background: GOLD, color: DARK, padding: '.6rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
-                Continuar →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* PASO 4 — Perfil */}
-        {paso === 4 && (
-          <div style={{ background: 'white', borderRadius: 10, padding: '1.75rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
-            <h2 style={{ color: DARK, marginTop: 0, marginBottom: 4, fontSize: 18 }}>Tu formación y experiencia</h2>
-            <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>Último paso — ya casi terminas.</p>
-
-            <label style={{ display: 'block', marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Nivel de educación más alto alcanzado *</div>
-              <select value={nivelEducativo} onChange={e => setNivelEducativo(e.target.value)}
-                style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, color: nivelEducativo ? '#111' : '#9ca3af', outline: 'none', boxSizing: 'border-box' }}>
-                <option value=''>Selecciona...</option>
-                {NIVELES_EDUCATIVOS.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </label>
-
-            <label style={{ display: 'block', marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Carrera o área de estudio</div>
-              <input value={carrera} onChange={e => setCarrera(e.target.value)}
-                placeholder="Ej: Psicología, Contabilidad, Trabajo Social..."
-                style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, color: '#111', outline: 'none', boxSizing: 'border-box' }} />
-            </label>
-
-            <label style={{ display: 'block', marginBottom: 24 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Años de experiencia en este tipo de trabajo</div>
-              <input type="number" min="0" max="50" value={experienciaAnios} onChange={e => setExperienciaAnios(e.target.value)}
-                placeholder="Ej: 5"
-                style={{ width: 140, padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 14, color: '#111', outline: 'none' }} />
-            </label>
-
-            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: 24, border: '1px solid #e5e7eb' }}>
+            <div style={{ background: '#f9fafb', borderRadius: 8, padding: '1rem 1.25rem', marginBottom: 20, border: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: DARK, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tu respuesta incluye</div>
               <div style={{ fontSize: 12, color: '#374151', lineHeight: 2 }}>
                 <div>· Nombre: <strong>{nombre}</strong> — {cargoActual} ({area})</div>
@@ -608,16 +556,16 @@ export default function FormularioEmpresa() {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setPaso(3)}
+              <button onClick={() => setPaso(2)}
                 style={{ background: '#f3f4f6', color: '#374151', padding: '.6rem 1.25rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 14 }}>
                 ← Atrás
               </button>
-              <button onClick={handleEnviar} disabled={!nivelEducativo || guardando}
+              <button onClick={handleEnviar} disabled={guardando}
                 style={{
                   flex: 1, padding: '.6rem', borderRadius: 6, border: 'none', fontWeight: 700, fontSize: 14,
-                  background: nivelEducativo && !guardando ? DARK : '#e5e7eb',
-                  color: nivelEducativo && !guardando ? 'white' : '#9ca3af',
-                  cursor: nivelEducativo && !guardando ? 'pointer' : 'not-allowed',
+                  background: !guardando ? DARK : '#e5e7eb',
+                  color: !guardando ? 'white' : '#9ca3af',
+                  cursor: !guardando ? 'pointer' : 'not-allowed',
                 }}>
                 {guardando ? 'Enviando...' : 'Enviar mi información'}
               </button>
