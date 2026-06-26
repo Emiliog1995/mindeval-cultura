@@ -44,6 +44,55 @@ const NIVELES_EDUCATIVOS = [
   'Cuarto nivel (Maestría)', 'Doctorado',
 ]
 
+const HERRAMIENTAS_UNBOUND = [
+  'Portal Sede Unbound', 'Módulo de traducción', 'Portales Bancarios', 'Firma electrónica',
+  'Teams', 'Abila', 'Marylink', 'Dimm', 'Plataforma IESS', 'Plataforma SRI',
+  'Plataforma SUT', 'Plataforma del S.O.O.', 'Power BI', 'Office', 'Canva', 'Prezi',
+  'Zoom', 'Laptop', 'Impresora', 'Tablet', 'Teléfono celular', 'Proyector',
+  'Micrófono', 'Caja amplificada', 'Camioneta de la fundación',
+]
+
+const CONOCIMIENTOS_UNBOUND = [
+  // Marco legal y normativo
+  'Constitución de la República y Código Civil',
+  'Código de la Niñez y de la Adolescencia',
+  'Ley Orgánica del Adulto Mayor',
+  'Ley para Prevenir y Erradicar la Violencia contra las Mujeres',
+  'Normativa y Legislación Laboral',
+  'Normativa Tributaria y Financiera',
+  'Normas Internacionales de Información Financiera (NIIF)',
+  'Reglamentos y Normas de Seguridad en el Trabajo',
+  'Reglamento Interno del Trabajo',
+  'Reglamento Interno de Seguridad y Salud en el Trabajo',
+  // Políticas y manuales internos
+  'Estatutos de la Fundación',
+  'Misión de la Fundación Unbound Ecuador',
+  'Visión de la Fundación Unbound Ecuador',
+  'Políticas internas de Contabilidad',
+  'Políticas internas del Programa de Becas',
+  'Políticas internas de Correspondencia',
+  'Procedimientos del proyecto',
+  'Política de tecnología de información y gestión de datos',
+  'Manual de Apadrinamiento de la Sede Unbound',
+  'Manual de Correspondencia de la Sede Unbound',
+  'Manual de Políticas Financieras de la Sede Unbound',
+  'Manual de Evaluaciones de la Sede Unbound',
+  'Manual de Viajes de la Sede Unbound',
+  'Manual y rutas de la Política de Protección del Niño y el Adulto Mayor',
+  'Reglamentos de las redes de apoyo comunitarias (RAC)',
+  // Conocimientos técnicos y operativos
+  'Sistemas informáticos y contables (Office, Abila, Marylink)',
+  'Conocimientos en estadística y muestreo',
+  'Modelos de Intervención Familiar y Social',
+  'Planificación y Formulación de Proyectos (POA)',
+  'Técnicas de entrevista y visitas domiciliarias',
+  'Habilidades de escucha activa y liderazgo con humildad',
+  'Portales institucionales de correspondencia y sistemas contables',
+  'Metodologías de traducción al idioma inglés (nivel B2 o superior)',
+  'Gestión documental y archivo confidencial',
+  'Logística y movilización terrestre en comunidades',
+]
+
 function RatingGroup({
   label, name, opciones, valor, onChange,
 }: {
@@ -97,8 +146,10 @@ export default function FormularioEmpresa() {
     Array(8).fill(null).map(() => ({ descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' }))
   )
 
-  const [herramientas, setHerramientas] = useState('')
-  const [conocimientos, setConocimientos] = useState('')
+  const [herramientas, setHerramientas] = useState<string[]>([])
+  const [herramientasOtras, setHerramientasOtras] = useState('')
+  const [conocimientos, setConocimientos] = useState<string[]>([])
+  const [conocimientosOtros, setConocimientosOtros] = useState('')
   const [nivelEducativo, setNivelEducativo] = useState('')
   const [carrera, setCarrera] = useState('')
   const [experienciaAnios, setExperienciaAnios] = useState('')
@@ -156,8 +207,8 @@ export default function FormularioEmpresa() {
         supervisadoPor,
         supervisaA,
         actividades: actividadesValidas,
-        herramientas: herramientas.split('\n').map(h => h.trim()).filter(Boolean),
-        conocimientos: conocimientos.split('\n').map(c => c.trim()).filter(Boolean),
+        herramientas: [...herramientas, ...herramientasOtras.split('\n').map(h => h.trim()).filter(Boolean)],
+        conocimientos: [...conocimientos, ...conocimientosOtros.split('\n').map(c => c.trim()).filter(Boolean)],
         nivelEducativo,
         carrera,
         experienciaAnios,
@@ -441,23 +492,69 @@ export default function FormularioEmpresa() {
         {paso === 3 && (
           <div style={{ background: 'white', borderRadius: 10, padding: '1.75rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
             <h2 style={{ color: DARK, marginTop: 0, marginBottom: 4, fontSize: 18 }}>Herramientas y conocimientos</h2>
-            <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>Escribe uno por línea.</p>
+            <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 24 }}>Selecciona todo lo que aplica a tu trabajo.</p>
 
-            <label style={{ display: 'block', marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 4 }}>¿Qué programas o herramientas usas?</div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Excel, Abila, Marylink, Teams, cámara, vehículo...</div>
-              <textarea value={herramientas} onChange={e => setHerramientas(e.target.value)} rows={4}
-                placeholder={"Excel\nSistema de nómina\nTeléfono IP"} maxLength={1000}
-                style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
-            </label>
+            {/* Herramientas */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: DARK, marginBottom: 10 }}>
+                ¿Qué programas o herramientas usas?
+                <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 6 }}>({herramientas.length} seleccionadas)</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                {HERRAMIENTAS_UNBOUND.map(h => {
+                  const sel = herramientas.includes(h)
+                  return (
+                    <button key={h} type="button"
+                      onClick={() => setHerramientas(prev => sel ? prev.filter(x => x !== h) : [...prev, h])}
+                      style={{
+                        padding: '5px 12px', borderRadius: 99, fontSize: 12, cursor: 'pointer',
+                        border: `1.5px solid ${sel ? GOLD : '#d1d5db'}`,
+                        background: sel ? 'rgba(16,185,129,0.12)' : '#f9fafb',
+                        color: sel ? '#065f46' : '#374151',
+                        fontWeight: sel ? 700 : 400,
+                        transition: 'all 0.15s',
+                      }}>
+                      {sel ? '✓ ' : ''}{h}
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>¿Usas alguna otra que no está en la lista?</div>
+              <textarea value={herramientasOtras} onChange={e => setHerramientasOtras(e.target.value)} rows={2}
+                placeholder="Escribe una por línea..." maxLength={500}
+                style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
 
-            <label style={{ display: 'block', marginBottom: 28 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 4 }}>¿Qué conocimientos necesitas para hacer tu trabajo?</div>
-              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>Ej: Manual de correspondencia, políticas de Kansas, normativa tributaria...</div>
-              <textarea value={conocimientos} onChange={e => setConocimientos(e.target.value)} rows={4}
-                placeholder={"Legislación laboral\nGestión documental\nAtención al cliente"} maxLength={1000}
-                style={{ width: '100%', padding: '.6rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
-            </label>
+            {/* Conocimientos */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: DARK, marginBottom: 10 }}>
+                ¿Qué conocimientos necesitas para hacer tu trabajo?
+                <span style={{ fontWeight: 400, color: '#9ca3af', marginLeft: 6 }}>({conocimientos.length} seleccionados)</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                {CONOCIMIENTOS_UNBOUND.map(c => {
+                  const sel = conocimientos.includes(c)
+                  return (
+                    <button key={c} type="button"
+                      onClick={() => setConocimientos(prev => sel ? prev.filter(x => x !== c) : [...prev, c])}
+                      style={{
+                        padding: '5px 12px', borderRadius: 99, fontSize: 12, cursor: 'pointer',
+                        border: `1.5px solid ${sel ? GOLD : '#d1d5db'}`,
+                        background: sel ? 'rgba(16,185,129,0.12)' : '#f9fafb',
+                        color: sel ? '#065f46' : '#374151',
+                        fontWeight: sel ? 700 : 400,
+                        transition: 'all 0.15s',
+                      }}>
+                      {sel ? '✓ ' : ''}{c}
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>¿Algún otro conocimiento que no está en la lista?</div>
+              <textarea value={conocimientosOtros} onChange={e => setConocimientosOtros(e.target.value)} rows={2}
+                placeholder="Escribe uno por línea..." maxLength={500}
+                style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+            </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setPaso(2)}
@@ -506,7 +603,7 @@ export default function FormularioEmpresa() {
               <div style={{ fontSize: 12, color: '#374151', lineHeight: 2 }}>
                 <div>· Nombre: <strong>{nombre}</strong> — {cargoActual} ({area})</div>
                 <div>· {actividadesValidas.length} actividades calificadas</div>
-                <div>· {herramientas.split('\n').filter(Boolean).length} herramientas / {conocimientos.split('\n').filter(Boolean).length} conocimientos</div>
+                <div>· {herramientas.length + herramientasOtras.split('\n').filter(Boolean).length} herramientas / {conocimientos.length + conocimientosOtros.split('\n').filter(Boolean).length} conocimientos</div>
               </div>
             </div>
 
