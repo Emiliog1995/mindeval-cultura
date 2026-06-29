@@ -263,11 +263,7 @@ export default function FormularioEmpresa() {
       <div style={{ background: DARK, padding: '1rem 1.5rem' }}>
         <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            {empresa.logo_url
-              ? <img src={empresa.logo_url} alt={empresa.nombre} style={{ height: 36, objectFit: 'contain' }} />
-              : <><div style={{ fontSize: 16, fontWeight: 700, color: 'white', letterSpacing: 1 }}>MIND<span style={{ color: GOLD }}>TALENT</span></div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{empresa.nombre}</div></>
-            }
+            <img src="/logo-unbound.png.png" alt={empresa.nombre} style={{ height: 36, objectFit: 'contain' }} />
           </div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Paso {paso} de {totalPasos}</div>
         </div>
