@@ -133,6 +133,7 @@ export default function FormularioEmpresa() {
   }, [])
 
   const [nombre, setNombre] = useState('')
+  const [cedula, setCedula] = useState('')
   const [cargoActual, setCargoActual] = useState('')
   const [area, setArea] = useState('')
   const [supervisadoPor, setSupervisadoPor] = useState('')
@@ -195,6 +196,7 @@ export default function FormularioEmpresa() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nombre,
+        cedula,
         cargoActual,
         area,
         supervisadoPor,
@@ -291,6 +293,25 @@ export default function FormularioEmpresa() {
             </label>
 
             <label style={{ display: 'block', marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Número de cédula *</div>
+              <input
+                value={cedula}
+                onChange={e => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 10)
+                  setCedula(v)
+                }}
+                placeholder="Ej: 1712345678"
+                style={{ ...inputStyle, borderColor: cedula.length > 0 && cedula.length !== 10 ? '#f87171' : undefined }}
+                maxLength={10}
+                inputMode="numeric"
+                autoComplete="off"
+              />
+              {cedula.length > 0 && cedula.length !== 10 && (
+                <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>La cédula debe tener exactamente 10 dígitos</div>
+              )}
+            </label>
+
+            <label style={{ display: 'block', marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: DARK, marginBottom: 6 }}>Tu cargo o título del puesto *</div>
               {tieneCatalogo ? (
                 <select
@@ -371,12 +392,12 @@ export default function FormularioEmpresa() {
               </span>
             </label>
 
-            <button onClick={() => setPaso(2)} disabled={!nombre.trim() || !cargoActual.trim() || !area.trim() || !consentimiento}
+            <button onClick={() => setPaso(2)} disabled={!nombre.trim() || cedula.length !== 10 || !cargoActual.trim() || !area.trim() || !consentimiento}
               style={{
                 width: '100%', padding: '.7rem', borderRadius: 6, border: 'none', fontWeight: 700, fontSize: 14,
-                background: nombre && cargoActual && area && consentimiento ? GOLD : '#e5e7eb',
-                color: nombre && cargoActual && area && consentimiento ? DARK : '#9ca3af',
-                cursor: nombre && cargoActual && area && consentimiento ? 'pointer' : 'not-allowed',
+                background: nombre && cedula.length === 10 && cargoActual && area && consentimiento ? GOLD : '#e5e7eb',
+                color: nombre && cedula.length === 10 && cargoActual && area && consentimiento ? DARK : '#9ca3af',
+                cursor: nombre && cedula.length === 10 && cargoActual && area && consentimiento ? 'pointer' : 'not-allowed',
               }}>
               Continuar →
             </button>

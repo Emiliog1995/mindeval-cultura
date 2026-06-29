@@ -44,7 +44,7 @@ export async function POST(
   }
 
   const {
-    nombre, cargoActual, area, supervisadoPor, supervisaA, actividades,
+    nombre, cedula, cargoActual, area, supervisadoPor, supervisaA, actividades,
     herramientas, conocimientos, nivelEducativo, carrera, experienciaAnios,
   } = body as Record<string, unknown>;
 
@@ -52,6 +52,7 @@ export async function POST(
     empresa_id: empresa.id,
     puesto_id: null,
     nombre,
+    cedula,
     cargo_actual: cargoActual,
     area,
     supervisado_por: supervisadoPor || null,
