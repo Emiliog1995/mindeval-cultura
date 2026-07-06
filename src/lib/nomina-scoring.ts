@@ -181,6 +181,22 @@ export function indemnizacionDespidoIntempestivo(sueldoNominal: number, anios: n
   return sueldoNominal * Math.min(25, Math.max(3, meses))
 }
 
+// ── Vacaciones ────────────────────────────────────────────────────────────
+// 15 días anuales desde el primer año de servicio = 1.25 días por mes
+// completo trabajado (Art. 69 Código del Trabajo, régimen general sin
+// incremento por antigüedad a partir del 5to año, que se maneja aparte
+// si el consultor lo necesita).
+
+function mesesCompletosTranscurridos(desde: Date, hasta: Date): number {
+  let meses = (hasta.getFullYear() - desde.getFullYear()) * 12 + (hasta.getMonth() - desde.getMonth())
+  if (hasta.getDate() < desde.getDate()) meses -= 1
+  return Math.max(0, meses)
+}
+
+export function diasVacacionesAcumulados(fechaIngreso: Date, fechaCorte: Date): number {
+  return mesesCompletosTranscurridos(fechaIngreso, fechaCorte) * 1.25
+}
+
 export type ResultadoLiquidacion = {
   aniosServicio: number
   proporcionalDecimo3: number

@@ -96,6 +96,7 @@ export default function DashboardNomina() {
     { label: 'Empleados', desc: 'Importar desde Manual de Puestos, fichas', href: '/nomina/empleados' },
     { label: `Rol de nómina — ${periodo}`, desc: 'Grilla mensual, cálculo automático', href: `/nomina/periodo/${periodo}` },
     { label: 'Novedades', desc: 'Ausencias, permisos, horas extra, anticipos', href: '/nomina/novedades' },
+    { label: 'Vacaciones', desc: 'Saldo acumulado, días tomados, pendientes', href: '/nomina/vacaciones' },
     { label: 'Liquidaciones', desc: 'Desahucio, despido intempestivo', href: '/nomina/liquidaciones' },
     { label: 'Utilidades', desc: 'Cálculo anual 15%', href: '/nomina/utilidades' },
     { label: 'Parámetros legales', desc: 'SBU, tasas IESS, tabla IR (editable)', href: '/nomina/admin/parametros' },
