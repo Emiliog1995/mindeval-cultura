@@ -158,6 +158,34 @@ export default function Portal() {
           </div>
         </Link>
 
+        {/* Nómina */}
+        <Link href="/nomina" className="group block">
+          <div
+            className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+            >
+              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                  d="M9 7h6m-6 4h6m-6 4h4M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Nómina Ecuador</h2>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: "1.5" }}>
+              Rol de pagos, provisiones, décimos, vacaciones y liquidaciones — Ecuador 2026
+            </p>
+            <div
+              className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
+              style={{ background: "#c9a84c", color: "#1a2035" }}
+            >
+              Gestionar nómina →
+            </div>
+          </div>
+        </Link>
+
         {/* Consultor */}
         <Link href="/admin" className="group block">
           <div
