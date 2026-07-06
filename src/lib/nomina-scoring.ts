@@ -182,10 +182,10 @@ export function indemnizacionDespidoIntempestivo(sueldoNominal: number, anios: n
 }
 
 // ── Vacaciones ────────────────────────────────────────────────────────────
-// 15 días anuales desde el primer año de servicio = 1.25 días por mes
-// completo trabajado (Art. 69 Código del Trabajo, régimen general sin
-// incremento por antigüedad a partir del 5to año, que se maneja aparte
-// si el consultor lo necesita).
+// Art. 69 Código del Trabajo: 15 días anuales desde el primer año de
+// servicio. Desde el 5to año, +1 día adicional por cada año extra de
+// servicio (año 5 = 16 días, año 6 = 17...), con tope de 15 días extra
+// (máximo 30 días anuales totales).
 
 function mesesCompletosTranscurridos(desde: Date, hasta: Date): number {
   let meses = (hasta.getFullYear() - desde.getFullYear()) * 12 + (hasta.getMonth() - desde.getMonth())
@@ -193,8 +193,25 @@ function mesesCompletosTranscurridos(desde: Date, hasta: Date): number {
   return Math.max(0, meses)
 }
 
+// anioServicio: 1 = primer año trabajado, 2 = segundo, etc.
+function diasAnualesPorAntiguedad(anioServicio: number): number {
+  if (anioServicio <= 4) return 15
+  const diasExtra = Math.min(anioServicio - 4, 15)
+  return 15 + diasExtra
+}
+
 export function diasVacacionesAcumulados(fechaIngreso: Date, fechaCorte: Date): number {
-  return mesesCompletosTranscurridos(fechaIngreso, fechaCorte) * 1.25
+  const mesesTotales = mesesCompletosTranscurridos(fechaIngreso, fechaCorte)
+  const aniosCompletos = Math.floor(mesesTotales / 12)
+  const mesesResiduales = mesesTotales % 12
+
+  let total = 0
+  for (let anio = 1; anio <= aniosCompletos; anio++) {
+    total += diasAnualesPorAntiguedad(anio)
+  }
+  total += diasAnualesPorAntiguedad(aniosCompletos + 1) * (mesesResiduales / 12)
+
+  return total
 }
 
 export type ResultadoLiquidacion = {

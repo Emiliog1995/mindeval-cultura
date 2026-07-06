@@ -122,7 +122,7 @@ export default function Vacaciones() {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem' }}>
         <div style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.4)', borderRadius: 8, padding: '.9rem 1.1rem', color: '#7a6020', fontSize: 12, marginBottom: 20, lineHeight: 1.6 }}>
-          15 días anuales desde el primer año de servicio, acumulados a razón de 1.25 días por mes completo trabajado. El acumulado se recalcula automáticamente cada vez que abres esta pantalla; los días tomados se registran manualmente.
+          15 días anuales desde el primer año de servicio. Desde el 5to año, +1 día adicional por cada año extra de servicio (año 5 = 16 días, año 6 = 17…), con tope de 30 días anuales. El acumulado se recalcula automáticamente cada vez que abres esta pantalla; los días tomados se registran manualmente.
         </div>
 
         <div style={{ marginBottom: 20 }}>
