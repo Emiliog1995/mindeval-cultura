@@ -40,6 +40,7 @@ export default function RolIndividual() {
   const [empresaNombre, setEmpresaNombre] = useState('')
   const [novedades, setNovedades] = useState<Novedades | null>(null)
   const [existeGuardado, setExisteGuardado] = useState(false)
+  const [estadoRol, setEstadoRol] = useState<'borrador' | 'aprobado' | 'pagado'>('borrador')
   const [parametros, setParametros] = useState<ParametrosLegales | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -58,6 +59,7 @@ export default function RolIndividual() {
       }
       if (nomina) {
         setExisteGuardado(true)
+        setEstadoRol((nomina.estado ?? 'borrador') as 'borrador' | 'aprobado' | 'pagado')
         setNovedades({
           diasTrabajados: nomina.dias_trabajados,
           horasSuplementarias: nomina.horas_suplementarias,
@@ -110,6 +112,10 @@ export default function RolIndividual() {
     parametros
   )
 
+  // El PDF solo lleva marca de agua BORRADOR si el rol no está guardado o
+  // sigue en estado 'borrador'; una vez aprobado o pagado, se exporta limpio.
+  const esBorrador = !existeGuardado || estadoRol === 'borrador'
+
   return (
     <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
       <div style={{ background: '#1a2035', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -119,11 +125,20 @@ export default function RolIndividual() {
           </button>
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>{empleado.nombre}</span>
+          {existeGuardado && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+              background: estadoRol === 'pagado' ? 'rgba(45,106,79,0.25)' : estadoRol === 'aprobado' ? 'rgba(255,255,255,0.15)' : 'rgba(201,168,76,0.25)',
+              color: estadoRol === 'pagado' ? '#7ee6b0' : estadoRol === 'aprobado' ? 'white' : '#e8cf8a',
+            }}>
+              {estadoRol}
+            </span>
+          )}
         </div>
         <button
           onClick={() => exportarRolPDF(
             { nombre: empleado.nombre, cedula: empleado.cedula, cargo: empleado.cargo, area: empleado.area },
-            novedades, resultado, periodo, empresaNombre, !existeGuardado
+            novedades, resultado, periodo, empresaNombre, esBorrador
           )}
           style={{ background: '#c9a84c', color: '#1a2035', padding: '.45rem 1.1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
           Exportar PDF
@@ -134,6 +149,12 @@ export default function RolIndividual() {
         {!existeGuardado && (
           <div style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.4)', borderRadius: 8, padding: '.75rem 1rem', color: '#7a6020', fontSize: 12, marginBottom: 20 }}>
             Este rol aún no ha sido guardado en el periodo {periodo} (se está mostrando con novedades por defecto). Ve a la grilla del rol de nómina para capturar novedades reales y guardarlo. El PDF se marcará como <b>BORRADOR</b>.
+          </div>
+        )}
+
+        {existeGuardado && estadoRol === 'borrador' && (
+          <div style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.4)', borderRadius: 8, padding: '.75rem 1rem', color: '#7a6020', fontSize: 12, marginBottom: 20 }}>
+            Este rol está guardado pero aún no ha sido aprobado. Ve a la grilla del rol de nómina para aprobarlo. El PDF se marcará como <b>BORRADOR</b> mientras tanto.
           </div>
         )}
 

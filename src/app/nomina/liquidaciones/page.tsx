@@ -28,6 +28,15 @@ const CAUSALES: { value: CausalLiquidacion; label: string }[] = [
 
 const money = (n: number) => `$${n.toFixed(2)}`
 
+type LiquidacionHistorico = {
+  id: string
+  empleado_id: string
+  fecha_liquidacion: string
+  causal: CausalLiquidacion
+  total_liquidacion: number
+  nombreEmpleado?: string
+}
+
 export default function Liquidaciones() {
   const router = useRouter()
   const { verificando } = useAuthGuard()
@@ -43,16 +52,34 @@ export default function Liquidaciones() {
   const [diasVacaciones, setDiasVacaciones] = useState('0')
   const [mesesDecimo3, setMesesDecimo3] = useState('0')
   const [mesesDecimo4, setMesesDecimo4] = useState('0')
+  const [guardandoLiquidacion, setGuardandoLiquidacion] = useState(false)
+  const [historial, setHistorial] = useState<LiquidacionHistorico[]>([])
 
   useEffect(() => {
     supabase.from('empresas_mdt').select('id, nombre').order('nombre').then(({ data }) => setEmpresas(data ?? []))
   }, [])
 
   useEffect(() => {
-    if (!empresaSeleccionada) { setEmpleados([]); return }
+    if (!empresaSeleccionada) { setEmpleados([]); setHistorial([]); return }
     supabase.from('empleados_nomina').select('id, nombre, cedula, cargo, sueldo_nominal, fecha_ingreso').eq('empresa_id', empresaSeleccionada).order('nombre')
       .then(({ data }) => setEmpleados(data ?? []))
+    cargarHistorial(empresaSeleccionada)
   }, [empresaSeleccionada])
+
+  async function cargarHistorial(empresaId: string) {
+    const { data } = await supabase
+      .from('liquidaciones_procesadas')
+      .select('id, empleado_id, fecha_liquidacion, causal, total_liquidacion')
+      .eq('empresa_id', empresaId)
+      .order('fecha_liquidacion', { ascending: false })
+    const lista = data ?? []
+    const idsEmpleados = [...new Set(lista.map(l => l.empleado_id))]
+    const { data: emps } = idsEmpleados.length > 0
+      ? await supabase.from('empleados_nomina').select('id, nombre').in('id', idsEmpleados)
+      : { data: [] }
+    const mapaNombres = new Map((emps ?? []).map(e => [e.id, e.nombre]))
+    setHistorial(lista.map(l => ({ ...l, nombreEmpleado: mapaNombres.get(l.empleado_id) ?? '—' })))
+  }
 
   useEffect(() => {
     const anio = new Date(fechaLiquidacion).getFullYear()
@@ -166,17 +193,68 @@ export default function Liquidaciones() {
               </div>
 
               <button
-                onClick={() => empleado && exportarLiquidacionPDF(
-                  { nombre: empleado.nombre, cedula: empleado.cedula, cargo: empleado.cargo },
-                  empresas.find(e => e.id === empresaSeleccionada)?.nombre ?? '',
-                  causal, fechaLiquidacion, resultado
-                )}
+                onClick={async () => {
+                  if (!empleado || !resultado) return
+                  exportarLiquidacionPDF(
+                    { nombre: empleado.nombre, cedula: empleado.cedula, cargo: empleado.cargo },
+                    empresas.find(e => e.id === empresaSeleccionada)?.nombre ?? '',
+                    causal, fechaLiquidacion, resultado
+                  )
+                  setGuardandoLiquidacion(true)
+                  await supabase.from('liquidaciones_procesadas').insert({
+                    empleado_id: empleado.id,
+                    empresa_id: empresaSeleccionada,
+                    fecha_liquidacion: fechaLiquidacion,
+                    causal,
+                    anios_servicio: resultado.aniosServicio,
+                    sueldo_base: empleado.sueldo_nominal,
+                    valor_desahucio: resultado.bonificacionDesahucio,
+                    valor_indemnizacion: resultado.indemnizacionDespido,
+                    prop_decimo3: resultado.proporcionalDecimo3,
+                    prop_decimo4: resultado.proporcionalDecimo4,
+                    prop_vacaciones: resultado.vacacionesNoGozadas,
+                    total_liquidacion: resultado.total,
+                    pdf_generado: true,
+                  })
+                  setGuardandoLiquidacion(false)
+                  cargarHistorial(empresaSeleccionada)
+                }}
+                disabled={guardandoLiquidacion}
                 style={{ marginTop: 16, background: '#1a2035', color: 'white', padding: '.6rem 1.5rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
-                Exportar PDF (borrador)
+                {guardandoLiquidacion ? 'Guardando…' : 'Exportar PDF (borrador)'}
               </button>
             </div>
           )}
         </div>
+
+        {empresaSeleccionada && historial.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2035', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Histórico de liquidaciones procesadas
+            </div>
+            <div style={{ background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#1a2035', color: 'white' }}>
+                    {['Empleado', 'Fecha', 'Causal', 'Total'].map(h => (
+                      <th key={h} style={{ padding: '.5rem .75rem', textAlign: 'left', fontSize: 11, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {historial.map((h, i) => (
+                    <tr key={h.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{h.nombreEmpleado}</td>
+                      <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{h.fecha_liquidacion}</td>
+                      <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{CAUSALES.find(c => c.value === h.causal)?.label ?? h.causal}</td>
+                      <td style={{ padding: '.4rem .75rem', fontSize: 12, fontWeight: 700, color: '#2d6a4f' }}>{money(h.total_liquidacion)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

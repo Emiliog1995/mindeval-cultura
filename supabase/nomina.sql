@@ -134,26 +134,76 @@ values (
 )
 on conflict (anio) do nothing;
 
+-- 6. Liquidaciones procesadas (histórico) ------------------------------------
+create table if not exists liquidaciones_procesadas (
+  id uuid primary key default gen_random_uuid(),
+  empleado_id uuid not null references empleados_nomina(id) on delete cascade,
+  empresa_id uuid not null references empresas_mdt(id) on delete cascade,
+  fecha_liquidacion date not null,
+  causal text not null,
+  anios_servicio numeric not null,
+  sueldo_base numeric not null,
+  valor_desahucio numeric not null default 0,
+  valor_indemnizacion numeric not null default 0,
+  prop_decimo3 numeric not null default 0,
+  prop_decimo4 numeric not null default 0,
+  prop_vacaciones numeric not null default 0,
+  total_liquidacion numeric not null default 0,
+  pdf_generado boolean not null default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists liquidaciones_procesadas_empresa_idx on liquidaciones_procesadas(empresa_id);
+create index if not exists liquidaciones_procesadas_empleado_idx on liquidaciones_procesadas(empleado_id);
+
+-- 7. Utilidades procesadas (histórico) ----------------------------------------
+create table if not exists utilidades_procesadas (
+  id uuid primary key default gen_random_uuid(),
+  empresa_id uuid not null references empresas_mdt(id) on delete cascade,
+  anio int not null,
+  utilidad_liquida numeric not null,
+  valor_10_porciento numeric not null default 0,
+  valor_5_porciento numeric not null default 0,
+  total_empleados int not null default 0,
+  created_at timestamptz default now(),
+  unique (empresa_id, anio)
+);
+
 -- RLS ------------------------------------------------------------------------
 -- Mismo patrón que el resto del ecosistema (ver rls_setup.sql): solo el
 -- equipo MINDTALENT autenticado accede; sin acceso anon.
 
 alter table empleados_nomina enable row level security;
+drop policy if exists "empleados_nomina_all_auth" on empleados_nomina;
 create policy "empleados_nomina_all_auth" on empleados_nomina
   for all to authenticated using (true) with check (true);
 
 alter table nomina_mensual enable row level security;
+drop policy if exists "nomina_mensual_all_auth" on nomina_mensual;
 create policy "nomina_mensual_all_auth" on nomina_mensual
   for all to authenticated using (true) with check (true);
 
 alter table vacaciones_empleado enable row level security;
+drop policy if exists "vacaciones_empleado_all_auth" on vacaciones_empleado;
 create policy "vacaciones_empleado_all_auth" on vacaciones_empleado
   for all to authenticated using (true) with check (true);
 
 alter table novedades_nomina enable row level security;
+drop policy if exists "novedades_nomina_all_auth" on novedades_nomina;
 create policy "novedades_nomina_all_auth" on novedades_nomina
   for all to authenticated using (true) with check (true);
 
 alter table parametros_legales enable row level security;
+drop policy if exists "parametros_legales_all_auth" on parametros_legales;
 create policy "parametros_legales_all_auth" on parametros_legales
+  for all to authenticated using (true) with check (true);
+
+alter table liquidaciones_procesadas enable row level security;
+drop policy if exists "liquidaciones_procesadas_all_auth" on liquidaciones_procesadas;
+create policy "liquidaciones_procesadas_all_auth" on liquidaciones_procesadas
+  for all to authenticated using (true) with check (true);
+
+alter table utilidades_procesadas enable row level security;
+drop policy if exists "utilidades_procesadas_all_auth" on utilidades_procesadas;
+create policy "utilidades_procesadas_all_auth" on utilidades_procesadas
   for all to authenticated using (true) with check (true);

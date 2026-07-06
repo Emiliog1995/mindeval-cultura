@@ -28,12 +28,15 @@ type Novedades = {
   otrosDescuentos: number
 }
 
+type EstadoRol = 'borrador' | 'aprobado' | 'pagado'
+
 type FilaNomina = {
   empleado: EmpleadoNomina
   novedades: Novedades
   resultado: ResultadoNomina
   guardado: boolean
   guardando: boolean
+  estado: EstadoRol
 }
 
 const novedadesPorDefecto: Novedades = {
@@ -61,6 +64,9 @@ export default function RolNominaPeriodo() {
   const [filas, setFilas] = useState<FilaNomina[]>([])
   const [loading, setLoading] = useState(true)
   const [guardandoTodo, setGuardandoTodo] = useState(false)
+  // Ids de novedades_nomina pendientes que se usaron para pre-llenar cada fila;
+  // se marcan aplicado=true recién cuando el consultor guarda esa fila.
+  const [novedadesConsumidas, setNovedadesConsumidas] = useState<Record<string, string[]>>({})
 
   const anio = useMemo(() => Number(periodo.split('-')[0]), [periodo])
 
@@ -87,30 +93,74 @@ export default function RolNominaPeriodo() {
   }, [anio])
 
   useEffect(() => {
-    if (!empresaSeleccionada) { setFilas([]); setLoading(false); return }
+    if (!empresaSeleccionada) { setFilas([]); setNovedadesConsumidas({}); setLoading(false); return }
     setLoading(true)
-    Promise.all([
-      supabase.from('empleados_nomina').select('*').eq('empresa_id', empresaSeleccionada).eq('estado', 'activo').order('nombre'),
-      supabase.from('nomina_mensual').select('*').eq('empresa_id', empresaSeleccionada).eq('periodo', periodo),
-    ]).then(([{ data: emps }, { data: existentes }]) => {
-      const mapaExistentes = new Map((existentes ?? []).map(n => [n.empleado_id, n]))
-      const nuevasFilas: FilaNomina[] = (emps ?? []).map(empleado => {
-        const previo = mapaExistentes.get(empleado.id)
-        const novedades: Novedades = previo ? {
-          diasTrabajados: previo.dias_trabajados,
-          horasSuplementarias: previo.horas_suplementarias,
-          horasExtraordinarias: previo.horas_extraordinarias,
-          comisiones: previo.comisiones,
-          bonos: previo.bonos,
-          anticipos: previo.anticipos,
-          prestamoIess: previo.prestamo_iess,
-          otrosDescuentos: previo.otros_descuentos,
-        } : { ...novedadesPorDefecto }
-        return { empleado, novedades, resultado: resultadoVacio(), guardado: !!previo, guardando: false }
+    supabase.from('empleados_nomina').select('*').eq('empresa_id', empresaSeleccionada).eq('estado', 'activo').order('nombre')
+      .then(async ({ data: emps }) => {
+        const empleadosLista = emps ?? []
+        const ids = empleadosLista.map(e => e.id)
+
+        const [{ data: existentes }, { data: novedadesPendientes }] = await Promise.all([
+          supabase.from('nomina_mensual').select('*').eq('empresa_id', empresaSeleccionada).eq('periodo', periodo),
+          ids.length > 0
+            ? supabase.from('novedades_nomina').select('*').eq('periodo', periodo).eq('aplicado', false).in('empleado_id', ids)
+            : Promise.resolve({ data: [] }),
+        ])
+
+        const mapaExistentes = new Map((existentes ?? []).map(n => [n.empleado_id, n]))
+        const consumidas: Record<string, string[]> = {}
+
+        const nuevasFilas: FilaNomina[] = empleadosLista.map(empleado => {
+          const previo = mapaExistentes.get(empleado.id)
+
+          if (previo) {
+            // Ya hay un rol guardado para este periodo: no se pisa con novedades,
+            // el consultor ya lo procesó y puede seguir ajustándolo a mano.
+            return {
+              empleado,
+              novedades: {
+                diasTrabajados: previo.dias_trabajados,
+                horasSuplementarias: previo.horas_suplementarias,
+                horasExtraordinarias: previo.horas_extraordinarias,
+                comisiones: previo.comisiones,
+                bonos: previo.bonos,
+                anticipos: previo.anticipos,
+                prestamoIess: previo.prestamo_iess,
+                otrosDescuentos: previo.otros_descuentos,
+              },
+              resultado: resultadoVacio(),
+              guardado: true,
+              guardando: false,
+              estado: (previo.estado ?? 'borrador') as EstadoRol,
+            }
+          }
+
+          // Sin rol guardado todavía: pre-llenar con las novedades pendientes
+          // del mes (ausencias descuentan días, horas y anticipos se suman).
+          const novedadesEmpleado = (novedadesPendientes ?? []).filter(n => n.empleado_id === empleado.id)
+          const sumar = (tipo: string) => novedadesEmpleado.filter(n => n.tipo_novedad === tipo).reduce((acc, n) => acc + n.valor, 0)
+
+          const diasAusencia = sumar('ausencia')
+          const novedades: Novedades = {
+            ...novedadesPorDefecto,
+            diasTrabajados: Math.max(0, 30 - diasAusencia),
+            horasSuplementarias: sumar('suplementaria'),
+            horasExtraordinarias: sumar('extra'),
+            anticipos: sumar('anticipo'),
+          }
+
+          const idsConsumidos = novedadesEmpleado
+            .filter(n => ['ausencia', 'suplementaria', 'extra', 'anticipo'].includes(n.tipo_novedad))
+            .map(n => n.id)
+          if (idsConsumidos.length > 0) consumidas[empleado.id] = idsConsumidos
+
+          return { empleado, novedades, resultado: resultadoVacio(), guardado: false, guardando: false, estado: 'borrador' as EstadoRol }
+        })
+
+        setNovedadesConsumidas(consumidas)
+        setFilas(nuevasFilas)
+        setLoading(false)
       })
-      setFilas(nuevasFilas)
-      setLoading(false)
-    })
   }, [empresaSeleccionada, periodo])
 
   useEffect(() => {
@@ -181,6 +231,17 @@ export default function RolNominaPeriodo() {
       provision_decimo4: fila.resultado.provisionDecimo4,
       provision_vacaciones: fila.resultado.provisionVacaciones,
     }, { onConflict: 'empleado_id,periodo' })
+
+    const idsConsumidos = novedadesConsumidas[fila.empleado.id]
+    if (!error && idsConsumidos && idsConsumidos.length > 0) {
+      await supabase.from('novedades_nomina').update({ aplicado: true }).in('id', idsConsumidos)
+      setNovedadesConsumidas(prev => {
+        const copia = { ...prev }
+        delete copia[fila.empleado.id]
+        return copia
+      })
+    }
+
     setFilas(prev => prev.map(f => f.empleado.id === fila.empleado.id ? { ...f, guardando: false, guardado: !error } : f))
   }
 
@@ -191,6 +252,24 @@ export default function RolNominaPeriodo() {
     }
     setGuardandoTodo(false)
   }
+
+  async function cambiarEstadoMasivo(nuevoEstado: EstadoRol) {
+    const idsGuardados = filas.filter(f => f.guardado).map(f => f.empleado.id)
+    if (idsGuardados.length === 0) return
+    const { error } = await supabase.from('nomina_mensual')
+      .update({ estado: nuevoEstado })
+      .eq('empresa_id', empresaSeleccionada)
+      .eq('periodo', periodo)
+      .in('empleado_id', idsGuardados)
+    if (!error) {
+      setFilas(prev => prev.map(f => f.guardado ? { ...f, estado: nuevoEstado } : f))
+    }
+  }
+
+  const conteoEstados = filas.reduce(
+    (acc, f) => { if (f.guardado) acc[f.estado] += 1; return acc },
+    { borrador: 0, aprobado: 0, pagado: 0 } as Record<EstadoRol, number>
+  )
 
   const totales = filas.reduce((acc, f) => ({
     totalIngresos: acc.totalIngresos + f.resultado.totalIngresos,
@@ -211,10 +290,20 @@ export default function RolNominaPeriodo() {
           <span style={{ fontSize: 16, fontWeight: 700, color: 'white' }}>Rol de nómina — {periodo}</span>
         </div>
         {filas.length > 0 && (
-          <button onClick={guardarTodo} disabled={guardandoTodo}
-            style={{ background: '#c9a84c', color: '#1a2035', padding: '.45rem 1.1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
-            {guardandoTodo ? 'Guardando…' : 'Guardar todo'}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={guardarTodo} disabled={guardandoTodo}
+              style={{ background: '#c9a84c', color: '#1a2035', padding: '.45rem 1.1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+              {guardandoTodo ? 'Guardando…' : 'Guardar todo'}
+            </button>
+            <button onClick={() => cambiarEstadoMasivo('aprobado')} disabled={conteoEstados.borrador === 0 && conteoEstados.aprobado === 0}
+              style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '.45rem 1.1rem', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+              Aprobar nómina
+            </button>
+            <button onClick={() => cambiarEstadoMasivo('pagado')} disabled={filas.filter(f => f.guardado).length === 0}
+              style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '.45rem 1.1rem', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+              Marcar como pagado
+            </button>
+          </div>
         )}
       </div>
 
@@ -256,6 +345,10 @@ export default function RolNominaPeriodo() {
               ))}
             </div>
 
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+              Estado de roles: <b style={{ color: '#7a6020' }}>{conteoEstados.borrador} borrador</b> · <b style={{ color: '#1a2035' }}>{conteoEstados.aprobado} aprobado</b> · <b style={{ color: '#2d6a4f' }}>{conteoEstados.pagado} pagado</b>
+            </div>
+
             {filas.length === 0 ? (
               <div style={{ background: 'white', borderRadius: 8, padding: '2rem', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
                 Esta empresa no tiene empleados activos. Ve a Nómina → Empleados para agregarlos.
@@ -265,7 +358,7 @@ export default function RolNominaPeriodo() {
                 <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1400 }}>
                   <thead>
                     <tr style={{ background: '#1a2035', color: 'white' }}>
-                      {['Nombre', 'Sueldo nom.', 'Días', 'H. Suplem.', 'H. Extra', 'Comis./Bonos', 'Total ingr.', 'Aporte IESS', 'Anticipos', 'Préstamo', 'Otros desc.', 'IR', 'Total desc.', 'Líquido', 'Ap. Patronal', 'F. Reserva', 'Costo empresa', ''].map(h => (
+                      {['Nombre', 'Sueldo nom.', 'Días', 'H. Suplem.', 'H. Extra', 'Comis./Bonos', 'Total ingr.', 'Aporte IESS', 'Anticipos', 'Préstamo', 'Otros desc.', 'IR', 'Total desc.', 'Líquido', 'Ap. Patronal', 'F. Reserva', 'Costo empresa', 'Estado', ''].map(h => (
                         <th key={h} style={{ padding: '.5rem .6rem', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -273,7 +366,14 @@ export default function RolNominaPeriodo() {
                   <tbody>
                     {filas.map((f, i) => (
                       <tr key={f.empleado.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
-                        <td style={{ padding: '.4rem .6rem', fontSize: 12, fontWeight: 600, color: '#1a2035', whiteSpace: 'nowrap' }}>{f.empleado.nombre}</td>
+                        <td style={{ padding: '.4rem .6rem', fontSize: 12, fontWeight: 600, color: '#1a2035', whiteSpace: 'nowrap' }}>
+                          {f.empleado.nombre}
+                          {novedadesConsumidas[f.empleado.id] && (
+                            <span title="Pre-llenado desde Novedades del periodo" style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#7a6020', background: 'rgba(201,168,76,0.15)', padding: '1px 5px', borderRadius: 8 }}>
+                              novedades
+                            </span>
+                          )}
+                        </td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.empleado.sueldo_nominal.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.diasTrabajados} onChange={e => actualizarNovedad(f.empleado.id, 'diasTrabajados', Number(e.target.value))} style={inputNum} /></td>
                         <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.horasSuplementarias} onChange={e => actualizarNovedad(f.empleado.id, 'horasSuplementarias', Number(e.target.value))} style={inputNum} /></td>
@@ -290,6 +390,15 @@ export default function RolNominaPeriodo() {
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.resultado.aportePatronal.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.resultado.fondosReserva.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, fontWeight: 700, color: '#c9a84c' }}>${f.resultado.costoEmpresa.toFixed(2)}</td>
+                        <td style={{ padding: '.4rem .6rem' }}>
+                          <span style={{
+                            padding: '.15rem .6rem', borderRadius: 12, fontSize: 10, fontWeight: 700,
+                            background: f.estado === 'pagado' ? 'rgba(45,106,79,0.12)' : f.estado === 'aprobado' ? 'rgba(26,32,53,0.1)' : 'rgba(201,168,76,0.15)',
+                            color: f.estado === 'pagado' ? '#2d6a4f' : f.estado === 'aprobado' ? '#1a2035' : '#7a6020',
+                          }}>
+                            {f.estado}
+                          </span>
+                        </td>
                         <td style={{ padding: '.4rem .6rem', whiteSpace: 'nowrap' }}>
                           <button onClick={() => guardarFila(f)} disabled={f.guardando}
                             style={{ background: f.guardado ? 'rgba(45,106,79,0.12)' : '#c9a84c', color: f.guardado ? '#2d6a4f' : '#1a2035', padding: '.3rem .7rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, marginRight: 6 }}>

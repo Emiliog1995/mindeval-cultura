@@ -24,11 +24,22 @@ type EmpleadoNomina = {
   area: string | null
   sueldo_nominal: number
   tipo_contrato: string | null
+  cargas_familiares: number
   estado: string
   fondos_reserva_activo: boolean
 }
 
 const inputStyle = { padding: '.4rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }
+
+const TIPOS_CONTRATO: { value: string; label: string }[] = [
+  { value: 'indefinido', label: 'Indefinido' },
+  { value: 'plazo_fijo', label: 'Plazo fijo' },
+  { value: 'obra', label: 'Por obra' },
+]
+
+function cedulaValida(cedula: string): boolean {
+  return /^\d{10}$/.test(cedula)
+}
 
 export default function EmpleadosNomina() {
   const router = useRouter()
@@ -42,15 +53,17 @@ export default function EmpleadosNomina() {
   const [busqueda, setBusqueda] = useState('')
 
   const [puestoAImportar, setPuestoAImportar] = useState<Puesto | null>(null)
-  const [nombreImportar, setNombreImportar] = useState('')
-  const [sueldoImportar, setSueldoImportar] = useState('')
+  const [formImportar, setFormImportar] = useState({ nombre: '', cedula: '', sueldo: '', tipoContrato: 'indefinido', cargasFamiliares: '0' })
   const [guardando, setGuardando] = useState(false)
 
   const [nuevoManual, setNuevoManual] = useState(false)
-  const [formNuevo, setFormNuevo] = useState({ nombre: '', cargo: '', area: '', sueldo: '', fechaIngreso: '' })
+  const [formNuevo, setFormNuevo] = useState({ nombre: '', cedula: '', cargo: '', area: '', sueldo: '', fechaIngreso: '', tipoContrato: 'indefinido', cargasFamiliares: '0' })
 
   const [editandoId, setEditandoId] = useState<string | null>(null)
-  const [formEdicion, setFormEdicion] = useState({ nombre: '', sueldo: '', fechaIngreso: '', tipoContrato: '', estado: 'activo', fondosReserva: false })
+  const [formEdicion, setFormEdicion] = useState({
+    nombre: '', cedula: '', cargo: '', area: '', sueldo: '', fechaIngreso: '',
+    tipoContrato: 'indefinido', cargasFamiliares: '0', estado: 'activo', fondosReserva: false,
+  })
 
   useEffect(() => {
     supabase.from('empresas_mdt').select('id, nombre').order('nombre').then(({ data }) => setEmpresas(data ?? []))
@@ -72,44 +85,53 @@ export default function EmpleadosNomina() {
   const puestosImportados = new Set(empleados.map(e => e.puesto_id).filter(Boolean))
   const puestosDisponibles = puestos.filter(p => !puestosImportados.has(p.id))
 
+  const importarValido = formImportar.nombre.trim() !== '' && cedulaValida(formImportar.cedula)
+  const nuevoValido = formNuevo.nombre.trim() !== '' && cedulaValida(formNuevo.cedula)
+  const edicionValida = formEdicion.nombre.trim() !== '' && cedulaValida(formEdicion.cedula)
+
   async function confirmarImportacion() {
-    if (!puestoAImportar || !nombreImportar.trim()) return
+    if (!puestoAImportar || !importarValido) return
     setGuardando(true)
     const { data, error } = await supabase.from('empleados_nomina').insert({
       empresa_id: puestoAImportar.empresa_id,
       puesto_id: puestoAImportar.id,
-      nombre: nombreImportar.trim(),
+      nombre: formImportar.nombre.trim(),
+      cedula: formImportar.cedula,
       cargo: puestoAImportar.nombre_puesto,
       area: puestoAImportar.area,
-      sueldo_nominal: Number(sueldoImportar) || 0,
+      sueldo_nominal: Number(formImportar.sueldo) || 0,
+      tipo_contrato: formImportar.tipoContrato,
+      cargas_familiares: Number(formImportar.cargasFamiliares) || 0,
       estado: 'activo',
     }).select().single()
     setGuardando(false)
     if (!error && data) {
       setEmpleados(prev => [...prev, data])
       setPuestoAImportar(null)
-      setNombreImportar('')
-      setSueldoImportar('')
+      setFormImportar({ nombre: '', cedula: '', sueldo: '', tipoContrato: 'indefinido', cargasFamiliares: '0' })
     }
   }
 
   async function confirmarNuevoManual() {
-    if (!formNuevo.nombre.trim() || !empresaSeleccionada) return
+    if (!nuevoValido || !empresaSeleccionada) return
     setGuardando(true)
     const { data, error } = await supabase.from('empleados_nomina').insert({
       empresa_id: empresaSeleccionada,
       nombre: formNuevo.nombre.trim(),
+      cedula: formNuevo.cedula,
       cargo: formNuevo.cargo || null,
       area: formNuevo.area || null,
       sueldo_nominal: Number(formNuevo.sueldo) || 0,
       fecha_ingreso: formNuevo.fechaIngreso || null,
+      tipo_contrato: formNuevo.tipoContrato,
+      cargas_familiares: Number(formNuevo.cargasFamiliares) || 0,
       estado: 'activo',
     }).select().single()
     setGuardando(false)
     if (!error && data) {
       setEmpleados(prev => [...prev, data])
       setNuevoManual(false)
-      setFormNuevo({ nombre: '', cargo: '', area: '', sueldo: '', fechaIngreso: '' })
+      setFormNuevo({ nombre: '', cedula: '', cargo: '', area: '', sueldo: '', fechaIngreso: '', tipoContrato: 'indefinido', cargasFamiliares: '0' })
     }
   }
 
@@ -117,21 +139,30 @@ export default function EmpleadosNomina() {
     setEditandoId(e.id)
     setFormEdicion({
       nombre: e.nombre,
+      cedula: e.cedula ?? '',
+      cargo: e.cargo ?? '',
+      area: e.area ?? '',
       sueldo: String(e.sueldo_nominal),
       fechaIngreso: e.fecha_ingreso ?? '',
-      tipoContrato: e.tipo_contrato ?? '',
+      tipoContrato: e.tipo_contrato ?? 'indefinido',
+      cargasFamiliares: String(e.cargas_familiares ?? 0),
       estado: e.estado,
       fondosReserva: e.fondos_reserva_activo,
     })
   }
 
   async function guardarEdicion(id: string) {
+    if (!edicionValida) return
     setGuardando(true)
     const cambios = {
       nombre: formEdicion.nombre.trim(),
+      cedula: formEdicion.cedula,
+      cargo: formEdicion.cargo || null,
+      area: formEdicion.area || null,
       sueldo_nominal: Number(formEdicion.sueldo) || 0,
       fecha_ingreso: formEdicion.fechaIngreso || null,
-      tipo_contrato: formEdicion.tipoContrato || null,
+      tipo_contrato: formEdicion.tipoContrato,
+      cargas_familiares: Number(formEdicion.cargasFamiliares) || 0,
       estado: formEdicion.estado,
       fondos_reserva_activo: formEdicion.fondosReserva,
     }
@@ -153,6 +184,8 @@ export default function EmpleadosNomina() {
     !busqueda || e.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (e.cargo ?? '').toLowerCase().includes(busqueda.toLowerCase())
   )
 
+  const tipoContratoLabel = (v: string | null) => TIPOS_CONTRATO.find(t => t.value === v)?.label ?? '[ Por completar ]'
+
   if (verificando) return null
 
   return (
@@ -173,7 +206,7 @@ export default function EmpleadosNomina() {
         )}
       </div>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '2rem 1.5rem' }}>
+      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '2rem 1.5rem' }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
           <select value={empresaSeleccionada} onChange={e => setEmpresaSeleccionada(e.target.value)} style={inputStyle}>
             <option value=''>Selecciona una empresa…</option>
@@ -208,7 +241,7 @@ export default function EmpleadosNomina() {
                         <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{p.nombre_puesto}</span>
                         <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>{p.area}</span>
                       </div>
-                      <button onClick={() => { setPuestoAImportar(p); setNombreImportar(''); setSueldoImportar('') }}
+                      <button onClick={() => { setPuestoAImportar(p); setFormImportar({ nombre: '', cedula: '', sueldo: '', tipoContrato: 'indefinido', cargasFamiliares: '0' }) }}
                         style={{ background: 'rgba(201,168,76,0.15)', color: '#7a6020', padding: '.3rem .9rem', borderRadius: 5, border: '1px solid rgba(201,168,76,0.4)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>
                         Importar
                       </button>
@@ -224,10 +257,20 @@ export default function EmpleadosNomina() {
                   Importar: {puestoAImportar.nombre_puesto}
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input value={nombreImportar} onChange={e => setNombreImportar(e.target.value)} placeholder="Nombre completo del empleado *" style={{ ...inputStyle, width: 240 }} />
-                  <input value={sueldoImportar} onChange={e => setSueldoImportar(e.target.value)} placeholder="Sueldo nominal" type="number" style={{ ...inputStyle, width: 140 }} />
-                  <button disabled={!nombreImportar.trim() || guardando} onClick={confirmarImportacion}
-                    style={{ background: '#c9a84c', color: '#1a2035', padding: '.4rem 1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: !nombreImportar.trim() ? 0.5 : 1 }}>
+                  <input value={formImportar.nombre} onChange={e => setFormImportar({ ...formImportar, nombre: e.target.value })} placeholder="Nombre completo *" style={{ ...inputStyle, width: 200 }} />
+                  <div>
+                    <input value={formImportar.cedula} onChange={e => setFormImportar({ ...formImportar, cedula: e.target.value })} placeholder="Cédula (10 dígitos) *" maxLength={10} style={{ ...inputStyle, width: 150, borderColor: formImportar.cedula && !cedulaValida(formImportar.cedula) ? '#dc2626' : '#d1d5db' }} />
+                    {formImportar.cedula && !cedulaValida(formImportar.cedula) && (
+                      <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2 }}>Debe tener 10 dígitos numéricos</div>
+                    )}
+                  </div>
+                  <input value={formImportar.sueldo} onChange={e => setFormImportar({ ...formImportar, sueldo: e.target.value })} placeholder="Sueldo nominal" type="number" style={{ ...inputStyle, width: 130 }} />
+                  <select value={formImportar.tipoContrato} onChange={e => setFormImportar({ ...formImportar, tipoContrato: e.target.value })} style={{ ...inputStyle, width: 130 }}>
+                    {TIPOS_CONTRATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                  <input value={formImportar.cargasFamiliares} onChange={e => setFormImportar({ ...formImportar, cargasFamiliares: e.target.value })} placeholder="Cargas familiares" type="number" style={{ ...inputStyle, width: 130 }} />
+                  <button disabled={!importarValido || guardando} onClick={confirmarImportacion}
+                    style={{ background: '#c9a84c', color: '#1a2035', padding: '.4rem 1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: !importarValido ? 0.5 : 1 }}>
                     Confirmar
                   </button>
                   <button onClick={() => setPuestoAImportar(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12 }}>
@@ -241,13 +284,23 @@ export default function EmpleadosNomina() {
               <div style={{ background: 'white', borderRadius: 8, padding: '1.25rem', marginBottom: 20, boxShadow: '0 1px 4px rgba(0,0,0,.08)', border: '1px solid #c9a84c' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2035', marginBottom: 12 }}>Nuevo empleado (sin vincular a un puesto)</div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input value={formNuevo.nombre} onChange={e => setFormNuevo({ ...formNuevo, nombre: e.target.value })} placeholder="Nombre completo *" style={{ ...inputStyle, width: 200 }} />
-                  <input value={formNuevo.cargo} onChange={e => setFormNuevo({ ...formNuevo, cargo: e.target.value })} placeholder="Cargo" style={{ ...inputStyle, width: 160 }} />
-                  <input value={formNuevo.area} onChange={e => setFormNuevo({ ...formNuevo, area: e.target.value })} placeholder="Área" style={{ ...inputStyle, width: 140 }} />
-                  <input value={formNuevo.sueldo} onChange={e => setFormNuevo({ ...formNuevo, sueldo: e.target.value })} placeholder="Sueldo nominal" type="number" style={{ ...inputStyle, width: 130 }} />
+                  <input value={formNuevo.nombre} onChange={e => setFormNuevo({ ...formNuevo, nombre: e.target.value })} placeholder="Nombre completo *" style={{ ...inputStyle, width: 180 }} />
+                  <div>
+                    <input value={formNuevo.cedula} onChange={e => setFormNuevo({ ...formNuevo, cedula: e.target.value })} placeholder="Cédula (10 dígitos) *" maxLength={10} style={{ ...inputStyle, width: 150, borderColor: formNuevo.cedula && !cedulaValida(formNuevo.cedula) ? '#dc2626' : '#d1d5db' }} />
+                    {formNuevo.cedula && !cedulaValida(formNuevo.cedula) && (
+                      <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2 }}>Debe tener 10 dígitos numéricos</div>
+                    )}
+                  </div>
+                  <input value={formNuevo.cargo} onChange={e => setFormNuevo({ ...formNuevo, cargo: e.target.value })} placeholder="Cargo" style={{ ...inputStyle, width: 140 }} />
+                  <input value={formNuevo.area} onChange={e => setFormNuevo({ ...formNuevo, area: e.target.value })} placeholder="Área" style={{ ...inputStyle, width: 120 }} />
+                  <input value={formNuevo.sueldo} onChange={e => setFormNuevo({ ...formNuevo, sueldo: e.target.value })} placeholder="Sueldo nominal" type="number" style={{ ...inputStyle, width: 120 }} />
                   <input value={formNuevo.fechaIngreso} onChange={e => setFormNuevo({ ...formNuevo, fechaIngreso: e.target.value })} type="date" style={inputStyle} />
-                  <button disabled={!formNuevo.nombre.trim() || guardando} onClick={confirmarNuevoManual}
-                    style={{ background: '#c9a84c', color: '#1a2035', padding: '.4rem 1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: !formNuevo.nombre.trim() ? 0.5 : 1 }}>
+                  <select value={formNuevo.tipoContrato} onChange={e => setFormNuevo({ ...formNuevo, tipoContrato: e.target.value })} style={{ ...inputStyle, width: 130 }}>
+                    {TIPOS_CONTRATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                  <input value={formNuevo.cargasFamiliares} onChange={e => setFormNuevo({ ...formNuevo, cargasFamiliares: e.target.value })} placeholder="Cargas familiares" type="number" style={{ ...inputStyle, width: 130 }} />
+                  <button disabled={!nuevoValido || guardando} onClick={confirmarNuevoManual}
+                    style={{ background: '#c9a84c', color: '#1a2035', padding: '.4rem 1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: !nuevoValido ? 0.5 : 1 }}>
                     Guardar
                   </button>
                   <button onClick={() => setNuevoManual(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12 }}>
@@ -257,25 +310,34 @@ export default function EmpleadosNomina() {
               </div>
             )}
 
-            <div style={{ background: 'white', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div style={{ background: 'white', borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,.08)', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
                 <thead>
                   <tr style={{ background: '#1a2035', color: 'white' }}>
-                    {['Nombre', 'Cargo', 'Área', 'Sueldo nominal', 'Fecha ingreso', 'F. Reserva', 'Estado', 'Acciones'].map(h => (
-                      <th key={h} style={{ padding: '.5rem .75rem', textAlign: 'left', fontSize: 11, fontWeight: 600, letterSpacing: 0.3 }}>{h}</th>
+                    {['Nombre', 'Cédula', 'Cargo', 'Área', 'Tipo contrato', 'Cargas', 'Sueldo nominal', 'Fecha ingreso', 'F. Reserva', 'Estado', 'Acciones'].map(h => (
+                      <th key={h} style={{ padding: '.5rem .75rem', textAlign: 'left', fontSize: 11, fontWeight: 600, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {empleadosFiltrados.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Sin empleados registrados todavía.</td></tr>
+                    <tr><td colSpan={11} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Sin empleados registrados todavía.</td></tr>
                   )}
                   {empleadosFiltrados.map((e, i) => (
                     editandoId === e.id ? (
                       <tr key={e.id} style={{ background: 'rgba(201,168,76,0.08)' }}>
                         <td style={{ padding: '.4rem .75rem' }}><input value={formEdicion.nombre} onChange={ev => setFormEdicion({ ...formEdicion, nombre: ev.target.value })} style={{ ...inputStyle, width: 140 }} /></td>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.cargo || '[ Por completar ]'}</td>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.area || '[ Por completar ]'}</td>
+                        <td style={{ padding: '.4rem .75rem' }}>
+                          <input value={formEdicion.cedula} onChange={ev => setFormEdicion({ ...formEdicion, cedula: ev.target.value })} maxLength={10} style={{ ...inputStyle, width: 110, borderColor: formEdicion.cedula && !cedulaValida(formEdicion.cedula) ? '#dc2626' : '#d1d5db' }} />
+                        </td>
+                        <td style={{ padding: '.4rem .75rem' }}><input value={formEdicion.cargo} onChange={ev => setFormEdicion({ ...formEdicion, cargo: ev.target.value })} style={{ ...inputStyle, width: 130 }} /></td>
+                        <td style={{ padding: '.4rem .75rem' }}><input value={formEdicion.area} onChange={ev => setFormEdicion({ ...formEdicion, area: ev.target.value })} style={{ ...inputStyle, width: 110 }} /></td>
+                        <td style={{ padding: '.4rem .75rem' }}>
+                          <select value={formEdicion.tipoContrato} onChange={ev => setFormEdicion({ ...formEdicion, tipoContrato: ev.target.value })} style={{ ...inputStyle, width: 120 }}>
+                            {TIPOS_CONTRATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding: '.4rem .75rem' }}><input value={formEdicion.cargasFamiliares} onChange={ev => setFormEdicion({ ...formEdicion, cargasFamiliares: ev.target.value })} type="number" style={{ ...inputStyle, width: 70 }} /></td>
                         <td style={{ padding: '.4rem .75rem' }}><input value={formEdicion.sueldo} onChange={ev => setFormEdicion({ ...formEdicion, sueldo: ev.target.value })} type="number" style={{ ...inputStyle, width: 100 }} /></td>
                         <td style={{ padding: '.4rem .75rem' }}><input value={formEdicion.fechaIngreso} onChange={ev => setFormEdicion({ ...formEdicion, fechaIngreso: ev.target.value })} type="date" style={inputStyle} /></td>
                         <td style={{ padding: '.4rem .75rem' }}>
@@ -287,16 +349,19 @@ export default function EmpleadosNomina() {
                             <option value="inactivo">inactivo</option>
                           </select>
                         </td>
-                        <td style={{ padding: '.4rem .75rem', display: 'flex', gap: 6 }}>
-                          <button onClick={() => guardarEdicion(e.id)} disabled={guardando} style={{ background: '#c9a84c', color: '#1a2035', padding: '.3rem .75rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Guardar</button>
+                        <td style={{ padding: '.4rem .75rem', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => guardarEdicion(e.id)} disabled={guardando || !edicionValida} style={{ background: '#c9a84c', color: '#1a2035', padding: '.3rem .75rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, marginRight: 6, opacity: !edicionValida ? 0.5 : 1 }}>Guardar</button>
                           <button onClick={() => setEditandoId(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 11 }}>Cancelar</button>
                         </td>
                       </tr>
                     ) : (
                       <tr key={e.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{e.nombre || '[ Por completar ]'}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035', whiteSpace: 'nowrap' }}>{e.nombre || '[ Por completar ]'}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.cedula || '[ Por completar ]'}</td>
                         <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.cargo || '[ Por completar ]'}</td>
                         <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.area || '[ Por completar ]'}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{tipoContratoLabel(e.tipo_contrato)}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.cargas_familiares ?? 0}</td>
                         <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>${e.sueldo_nominal.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.fecha_ingreso || '[ Por completar ]'}</td>
                         <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{e.fondos_reserva_activo ? '✓' : '—'}</td>
@@ -305,8 +370,8 @@ export default function EmpleadosNomina() {
                             {e.estado}
                           </span>
                         </td>
-                        <td style={{ padding: '.4rem .75rem', display: 'flex', gap: 6 }}>
-                          <button onClick={() => empezarEdicion(e)} style={{ background: 'rgba(26,32,53,0.06)', color: '#1a2035', padding: '.3rem .75rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Editar</button>
+                        <td style={{ padding: '.4rem .75rem', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => empezarEdicion(e)} style={{ background: 'rgba(26,32,53,0.06)', color: '#1a2035', padding: '.3rem .75rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, marginRight: 6 }}>Editar</button>
                           <button onClick={() => handleBorrar(e.id, e.nombre)} style={{ background: 'rgba(220,38,38,0.08)', color: '#b91c1c', padding: '.3rem .75rem', borderRadius: 5, border: '1px solid rgba(220,38,38,0.3)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Eliminar</button>
                         </td>
                       </tr>

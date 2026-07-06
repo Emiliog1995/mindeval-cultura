@@ -46,12 +46,28 @@ export default function DashboardNomina() {
   const [novedadesPendientes, setNovedadesPendientes] = useState<NovedadPendiente[]>([])
   const [vacacionesVencidas, setVacacionesVencidas] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [nuevaEmpresa, setNuevaEmpresa] = useState(false)
+  const [nombreNuevaEmpresa, setNombreNuevaEmpresa] = useState('')
+  const [creandoEmpresa, setCreandoEmpresa] = useState(false)
 
   useEffect(() => {
     supabase.from('empresas_mdt').select('id, nombre').order('nombre').then(({ data }) => {
       setEmpresas(data ?? [])
     })
   }, [])
+
+  async function crearEmpresa() {
+    if (!nombreNuevaEmpresa.trim()) return
+    setCreandoEmpresa(true)
+    const { data, error } = await supabase.from('empresas_mdt').insert({ nombre: nombreNuevaEmpresa.trim() }).select().single()
+    setCreandoEmpresa(false)
+    if (!error && data) {
+      setEmpresas(prev => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)))
+      setEmpresaSeleccionada(data.id)
+      setNuevaEmpresa(false)
+      setNombreNuevaEmpresa('')
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -83,6 +99,11 @@ export default function DashboardNomina() {
       anticipos: acc.anticipos + (f.anticipos || 0),
     }),
     { liquido: 0, costoEmpresa: 0, provisiones: 0, horasExtra: 0, anticipos: 0 }
+  )
+
+  const conteoEstados = filas.reduce(
+    (acc, f) => { acc[f.estado as 'borrador' | 'aprobado' | 'pagado'] = (acc[f.estado as 'borrador' | 'aprobado' | 'pagado'] ?? 0) + 1; return acc },
+    {} as Record<'borrador' | 'aprobado' | 'pagado', number>
   )
 
   const rolesProcesados = filas.length
@@ -128,8 +149,36 @@ export default function DashboardNomina() {
           </select>
           <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
             style={{ padding: '.4rem .75rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.1)', color: 'white' }} />
+          <button onClick={() => setNuevaEmpresa(true)}
+            style={{ background: '#c9a84c', color: '#1a2035', padding: '.4rem 1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            + Nueva empresa
+          </button>
         </div>
       </div>
+
+      {nuevaEmpresa && (
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '1rem 1.5rem 0' }}>
+          <div style={{ background: 'white', borderRadius: 8, padding: '1.25rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)', border: '1px solid #c9a84c', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#1a2035' }}>Nueva empresa:</span>
+            <input
+              value={nombreNuevaEmpresa}
+              onChange={e => setNombreNuevaEmpresa(e.target.value)}
+              placeholder="Nombre de la empresa"
+              style={{ padding: '.4rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111', width: 260 }}
+            />
+            <button onClick={crearEmpresa} disabled={!nombreNuevaEmpresa.trim() || creandoEmpresa}
+              style={{ background: '#c9a84c', color: '#1a2035', padding: '.4rem 1rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, opacity: !nombreNuevaEmpresa.trim() ? 0.5 : 1 }}>
+              {creandoEmpresa ? 'Creando…' : 'Crear'}
+            </button>
+            <button onClick={() => { setNuevaEmpresa(false); setNombreNuevaEmpresa('') }} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12 }}>
+              Cancelar
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
+            Esta empresa queda disponible en todo el ecosistema (Cultura, Clima, 360°, Manual de Puestos), no solo en Nómina.
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '2rem 1.5rem' }}>
         {/* KPIs */}
@@ -147,6 +196,12 @@ export default function DashboardNomina() {
             </div>
           ))}
         </div>
+
+        {rolesProcesados > 0 && (
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 24 }}>
+            Estado de roles ({periodo}): <b style={{ color: '#7a6020' }}>{conteoEstados.borrador ?? 0} borrador</b> · <b style={{ color: '#1a2035' }}>{conteoEstados.aprobado ?? 0} aprobado</b> · <b style={{ color: '#2d6a4f' }}>{conteoEstados.pagado ?? 0} pagado</b>
+          </div>
+        )}
 
         {/* Alertas */}
         {(rolesPendientes > 0 || anticiposPendientesCount > 0 || horasExtraAlerta > 0 || vacacionesVencidas > 0) && (
