@@ -133,6 +133,8 @@ const CATALOGO = [
       "Capacitar, en procesos de inducción o retroalimentación, al equipo de especialistas de correspondencia de los subproyectos",
       "Realizar visitas de acompañamiento técnico a los subproyectos para auditar la correcta ejecución de los talleres y supervisar el uso adecuado del material metodológico asignado al área",
       "Brindar acompañamiento técnico, supervisión y mentoría continua a la Asistente de Correspondencia, asegurando la correcta ejecución de los procesos de revisión, traducción y control de calidad de las cartas de todo el proyecto",
+      "Realizar el seguimiento oportuno a notas rápidas y solicitudes de información, garantizando la atención eficiente a los requerimientos",
+      "Verificar los fondos de educación y que cuenten con un calendario de desembolso",
     ],
   },
   {
@@ -276,11 +278,13 @@ const CATALOGO = [
     orden: 9,
     actividades: [
       "Revisar la correspondencia y su traducción para el envío digital a los apadrinados",
+      "Verificar que las familias registren su fotografía anual con el formato establecido, cumpliendo con los requerimientos solicitados por el personal del subproyecto mediante el portal",
       "Editar las fotografías y verificar que cumplan los requerimientos del manual de correspondencia",
       "Colaborar en la grabación de videomensajes en las comunidades de familias con dificultades tecnológicas",
       "Participar en la elaboración del material para cada proceso anual y mensual",
       "Revisar diariamente todos los procesos de correspondencia y las actualizaciones del portal",
       "Capacitar a los apadrinados y sus familias en el cumplimiento de la carta de presentación, los mensajes regulares (carta o video), las cartas de contestación, las finales y la fotografía anual",
+      "Brindar acompañamiento a familias que no cuentan con un dispositivo electrónico adecuado para la toma de fotografías y grabación de video mensaje regular",
       "Desarrollar talleres, capacitaciones y programas en las comunidades apadrinadas",
       "Contactar mensualmente a las nuevas familias apadrinadas para el taller de inducción",
       "Alimentar la base de datos interna de cumplimiento de la correspondencia de los apadrinados",
