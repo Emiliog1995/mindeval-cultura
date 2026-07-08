@@ -142,6 +142,7 @@ export default function FormularioEmpresa() {
   const [actividades, setActividades] = useState<Actividad[]>(
     Array(8).fill(null).map(() => ({ descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' }))
   )
+  const [catalogCount, setCatalogCount] = useState(0)
 
   const [herramientas, setHerramientas] = useState<string[]>([])
   const [herramientasOtras, setHerramientasOtras] = useState('')
@@ -173,12 +174,14 @@ export default function FormularioEmpresa() {
       setSupervisadoPor('')
       setSupervisaA('')
       setActividades(Array(8).fill(null).map(() => ({ descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' })))
+      setCatalogCount(0)
       return
     }
     setArea(puesto.area)
     setSupervisadoPor(puesto.supervisado_por)
     setSupervisaA(puesto.supervisa_a)
     setActividades(puesto.actividades.map(desc => ({ descripcion: desc, frecuencia: '', dificultad: '', consecuencia: '' })))
+    setCatalogCount(puesto.actividades.length)
   }
 
   const actividadesValidas = actividades.filter(
@@ -417,18 +420,39 @@ export default function FormularioEmpresa() {
               </p>
             )}
 
-            {actividades.map((act, i) => (
+            {actividades.map((act, i) => {
+              const esExtra = !!puestoSeleccionado && i >= catalogCount
+              return (
               <div key={i} style={{
                 marginBottom: 16, padding: '1rem', background: '#f9fafb', borderRadius: 8,
                 border: `1px solid ${act.descripcion && act.frecuencia && act.dificultad && act.consecuencia ? 'rgba(16,185,129,0.4)' : '#e5e7eb'}`,
               }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 6 }}>ACTIVIDAD {i + 1}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>ACTIVIDAD {i + 1}{esExtra ? ' (agregada por ti)' : ''}</span>
+                  {esExtra && (
+                    <button
+                      onClick={() => setActividades(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>
+                      × Quitar
+                    </button>
+                  )}
+                </div>
 
                 {puestoSeleccionado ? (
                   <>
-                    <div style={{ fontSize: 13, color: DARK, fontWeight: 500, marginBottom: 12, lineHeight: 1.5 }}>
-                      {act.descripcion}
-                    </div>
+                    {esExtra ? (
+                      <textarea
+                        value={act.descripcion}
+                        onChange={e => setActividades(prev => prev.map((a, j) => j === i ? { ...a, descripcion: e.target.value } : a))}
+                        placeholder="Describe la actividad que quieres agregar..."
+                        rows={2} maxLength={500}
+                        style={{ width: '100%', padding: '.5rem .75rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, color: '#111', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 12 }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 13, color: DARK, fontWeight: 500, marginBottom: 12, lineHeight: 1.5 }}>
+                        {act.descripcion}
+                      </div>
+                    )}
                     <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
                       <RatingGroup label="Frecuencia" name={`freq-${i}`} opciones={OPCIONES_FRECUENCIA} valor={act.frecuencia}
                         onChange={v => setActividades(prev => prev.map((a, j) => j === i ? { ...a, frecuencia: v } : a))} />
@@ -460,7 +484,7 @@ export default function FormularioEmpresa() {
                   </>
                 )}
               </div>
-            ))}
+            )})}
 
             {!puestoSeleccionado && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -477,8 +501,16 @@ export default function FormularioEmpresa() {
             )}
 
             {puestoSeleccionado && (
-              <div style={{ fontSize: 12, color: actividadesValidas.length === actividades.length ? '#059669' : '#6b7280', fontWeight: 600, marginBottom: 12, textAlign: 'right' }}>
-                {actividadesValidas.length} de {actividades.length} actividades calificadas
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <button
+                  onClick={() => setActividades(prev => [...prev, { descripcion: '', frecuencia: '', dificultad: '', consecuencia: '' }])}
+                  disabled={actividades.length >= 40}
+                  style={{ background: 'none', border: `1px dashed ${GOLD}`, color: GOLD, padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  + Agregar actividad
+                </button>
+                <div style={{ fontSize: 12, color: actividadesValidas.length === actividades.length ? '#059669' : '#6b7280', fontWeight: 600 }}>
+                  {actividadesValidas.length} de {actividades.length} actividades calificadas
+                </div>
               </div>
             )}
 
