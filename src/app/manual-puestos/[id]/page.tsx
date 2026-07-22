@@ -163,7 +163,7 @@ export default function FichaPuesto() {
           </div>
         )}
 
-        <div style={{ background: 'white', borderRadius: 10, padding: '2rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)' }}>
+        <div style={{ background: 'white', borderRadius: 10, padding: '2rem', boxShadow: '0 1px 4px rgba(0,0,0,.08)', color: '#111827' }}>
           {seccion(1, 'DATOS DE IDENTIFICACIÓN DEL PUESTO')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
             <div><span style={label}>Nombre del puesto</span>{pendiente(puesto.nombre_puesto)}</div>
