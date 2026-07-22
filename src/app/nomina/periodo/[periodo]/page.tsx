@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
-import { calcularNomina, type ParametrosLegales, type ResultadoNomina } from '@/lib/nomina-scoring'
+import { calcularNomina, resultadoDesdeGuardado, type ParametrosLegales, type ResultadoNomina } from '@/lib/nomina-scoring'
 
 type Empresa = { id: string; nombre: string }
 
@@ -37,6 +37,9 @@ type FilaNomina = {
   guardado: boolean
   guardando: boolean
   estado: EstadoRol
+  // true cuando estado es 'aprobado' o 'pagado': el resultado viene tal cual
+  // se guardó en nomina_mensual y no se vuelve a calcular ni se deja editar.
+  bloqueado: boolean
 }
 
 const novedadesPorDefecto: Novedades = {
@@ -116,6 +119,8 @@ export default function RolNominaPeriodo() {
           if (previo) {
             // Ya hay un rol guardado para este periodo: no se pisa con novedades,
             // el consultor ya lo procesó y puede seguir ajustándolo a mano.
+            const estadoPrevio = (previo.estado ?? 'borrador') as EstadoRol
+            const bloqueado = estadoPrevio === 'aprobado' || estadoPrevio === 'pagado'
             return {
               empleado,
               novedades: {
@@ -128,10 +133,13 @@ export default function RolNominaPeriodo() {
                 prestamoIess: previo.prestamo_iess,
                 otrosDescuentos: previo.otros_descuentos,
               },
-              resultado: resultadoVacio(),
+              // Roles aprobados/pagados: se leen tal cual se guardaron, nunca
+              // se recalculan. Borradores: se recalculan en el efecto de abajo.
+              resultado: bloqueado ? resultadoDesdeGuardado(previo) : resultadoVacio(),
               guardado: true,
               guardando: false,
-              estado: (previo.estado ?? 'borrador') as EstadoRol,
+              estado: estadoPrevio,
+              bloqueado,
             }
           }
 
@@ -154,7 +162,7 @@ export default function RolNominaPeriodo() {
             .map(n => n.id)
           if (idsConsumidos.length > 0) consumidas[empleado.id] = idsConsumidos
 
-          return { empleado, novedades, resultado: resultadoVacio(), guardado: false, guardando: false, estado: 'borrador' as EstadoRol }
+          return { empleado, novedades, resultado: resultadoVacio(), guardado: false, guardando: false, estado: 'borrador' as EstadoRol, bloqueado: false }
         })
 
         setNovedadesConsumidas(consumidas)
@@ -165,20 +173,25 @@ export default function RolNominaPeriodo() {
 
   useEffect(() => {
     if (!parametros) return
-    setFilas(prev => prev.map(f => ({
-      ...f,
-      resultado: calcularNomina(
-        { sueldoNominal: f.empleado.sueldo_nominal, fondosReservaActivo: f.empleado.fondos_reserva_activo },
-        f.novedades,
-        parametros
-      ),
-    })))
+    setFilas(prev => prev.map(f => {
+      // Bloqueadas (aprobado/pagado): el resultado ya vino de resultadoDesdeGuardado
+      // y no se toca, aunque cambien los parámetros legales del año.
+      if (f.bloqueado) return f
+      return {
+        ...f,
+        resultado: calcularNomina(
+          { sueldoNominal: f.empleado.sueldo_nominal, fondosReservaActivo: f.empleado.fondos_reserva_activo },
+          f.novedades,
+          parametros
+        ),
+      }
+    }))
   }, [parametros, filas.length])
 
   function actualizarNovedad(empleadoId: string, campo: keyof Novedades, valor: number) {
     if (!parametros) return
     setFilas(prev => prev.map(f => {
-      if (f.empleado.id !== empleadoId) return f
+      if (f.empleado.id !== empleadoId || f.bloqueado) return f
       const novedades = { ...f.novedades, [campo]: valor }
       return { ...f, novedades, guardado: false, resultado: calcularNomina(
         { sueldoNominal: f.empleado.sueldo_nominal, fondosReservaActivo: f.empleado.fondos_reserva_activo },
@@ -194,7 +207,7 @@ export default function RolNominaPeriodo() {
   function actualizarComisionesBonos(empleadoId: string, valor: number) {
     if (!parametros) return
     setFilas(prev => prev.map(f => {
-      if (f.empleado.id !== empleadoId) return f
+      if (f.empleado.id !== empleadoId || f.bloqueado) return f
       const novedades = { ...f.novedades, comisiones: valor, bonos: 0 }
       return { ...f, novedades, guardado: false, resultado: calcularNomina(
         { sueldoNominal: f.empleado.sueldo_nominal, fondosReservaActivo: f.empleado.fondos_reserva_activo },
@@ -205,6 +218,8 @@ export default function RolNominaPeriodo() {
   }
 
   async function guardarFila(fila: FilaNomina) {
+    // Bloqueada (aprobado/pagado): ya está congelada, no se vuelve a guardar.
+    if (fila.bloqueado) return
     setFilas(prev => prev.map(f => f.empleado.id === fila.empleado.id ? { ...f, guardando: true } : f))
     const { error } = await supabase.from('nomina_mensual').upsert({
       empleado_id: fila.empleado.id,
@@ -219,6 +234,8 @@ export default function RolNominaPeriodo() {
       prestamo_iess: fila.novedades.prestamoIess,
       otros_descuentos: fila.novedades.otrosDescuentos,
       sueldo_ganado: fila.resultado.sueldoGanado,
+      valor_horas_suplementarias: fila.resultado.valorHorasSuplementarias,
+      valor_horas_extraordinarias: fila.resultado.valorHorasExtraordinarias,
       total_ingresos: fila.resultado.totalIngresos,
       aporte_iess_personal: fila.resultado.aporteIessPersonal,
       impuesto_renta: fila.resultado.impuestoRenta,
@@ -262,7 +279,10 @@ export default function RolNominaPeriodo() {
       .eq('periodo', periodo)
       .in('empleado_id', idsGuardados)
     if (!error) {
-      setFilas(prev => prev.map(f => f.guardado ? { ...f, estado: nuevoEstado } : f))
+      // A partir de aprobado/pagado la fila queda congelada: su `resultado`
+      // actual es exactamente lo que se guardó (guardarFila ya se llamó antes
+      // para poder aprobar), así que se conserva tal cual y se bloquea edición.
+      setFilas(prev => prev.map(f => f.guardado ? { ...f, estado: nuevoEstado, bloqueado: true } : f))
     }
   }
 
@@ -375,15 +395,15 @@ export default function RolNominaPeriodo() {
                           )}
                         </td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.empleado.sueldo_nominal.toFixed(2)}</td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.diasTrabajados} onChange={e => actualizarNovedad(f.empleado.id, 'diasTrabajados', Number(e.target.value))} style={inputNum} /></td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.horasSuplementarias} onChange={e => actualizarNovedad(f.empleado.id, 'horasSuplementarias', Number(e.target.value))} style={inputNum} /></td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.horasExtraordinarias} onChange={e => actualizarNovedad(f.empleado.id, 'horasExtraordinarias', Number(e.target.value))} style={inputNum} /></td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.comisiones + f.novedades.bonos} onChange={e => actualizarComisionesBonos(f.empleado.id, Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.diasTrabajados} disabled={f.bloqueado} onChange={e => actualizarNovedad(f.empleado.id, 'diasTrabajados', Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.horasSuplementarias} disabled={f.bloqueado} onChange={e => actualizarNovedad(f.empleado.id, 'horasSuplementarias', Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.horasExtraordinarias} disabled={f.bloqueado} onChange={e => actualizarNovedad(f.empleado.id, 'horasExtraordinarias', Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.comisiones + f.novedades.bonos} disabled={f.bloqueado} onChange={e => actualizarComisionesBonos(f.empleado.id, Number(e.target.value))} style={inputNum} /></td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, fontWeight: 700, color: '#1a2035' }}>${f.resultado.totalIngresos.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.resultado.aporteIessPersonal.toFixed(2)}</td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.anticipos} onChange={e => actualizarNovedad(f.empleado.id, 'anticipos', Number(e.target.value))} style={inputNum} /></td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.prestamoIess} onChange={e => actualizarNovedad(f.empleado.id, 'prestamoIess', Number(e.target.value))} style={inputNum} /></td>
-                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.otrosDescuentos} onChange={e => actualizarNovedad(f.empleado.id, 'otrosDescuentos', Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.anticipos} disabled={f.bloqueado} onChange={e => actualizarNovedad(f.empleado.id, 'anticipos', Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.prestamoIess} disabled={f.bloqueado} onChange={e => actualizarNovedad(f.empleado.id, 'prestamoIess', Number(e.target.value))} style={inputNum} /></td>
+                        <td style={{ padding: '.4rem .6rem' }}><input type="number" value={f.novedades.otrosDescuentos} disabled={f.bloqueado} onChange={e => actualizarNovedad(f.empleado.id, 'otrosDescuentos', Number(e.target.value))} style={inputNum} /></td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.resultado.impuestoRenta.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, color: '#374151' }}>${f.resultado.totalDescuentos.toFixed(2)}</td>
                         <td style={{ padding: '.4rem .6rem', fontSize: 12, fontWeight: 700, color: '#2d6a4f' }}>${f.resultado.liquidoRecibir.toFixed(2)}</td>
@@ -400,9 +420,9 @@ export default function RolNominaPeriodo() {
                           </span>
                         </td>
                         <td style={{ padding: '.4rem .6rem', whiteSpace: 'nowrap' }}>
-                          <button onClick={() => guardarFila(f)} disabled={f.guardando}
-                            style={{ background: f.guardado ? 'rgba(45,106,79,0.12)' : '#c9a84c', color: f.guardado ? '#2d6a4f' : '#1a2035', padding: '.3rem .7rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, marginRight: 6 }}>
-                            {f.guardando ? '…' : f.guardado ? '✓ Guardado' : 'Guardar'}
+                          <button onClick={() => guardarFila(f)} disabled={f.guardando || f.bloqueado}
+                            style={{ background: f.guardado ? 'rgba(45,106,79,0.12)' : '#c9a84c', color: f.guardado ? '#2d6a4f' : '#1a2035', padding: '.3rem .7rem', borderRadius: 5, border: 'none', cursor: f.bloqueado ? 'default' : 'pointer', fontSize: 11, fontWeight: 700, marginRight: 6, opacity: f.bloqueado ? 0.6 : 1 }}>
+                            {f.guardando ? '…' : f.bloqueado ? `🔒 ${f.estado}` : f.guardado ? '✓ Guardado' : 'Guardar'}
                           </button>
                           <button onClick={() => router.push(`/nomina/periodo/${periodo}/${f.empleado.id}`)}
                             style={{ background: 'rgba(26,32,53,0.06)', color: '#1a2035', padding: '.3rem .7rem', borderRadius: 5, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>

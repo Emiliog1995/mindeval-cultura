@@ -110,6 +110,45 @@ export function impuestoRentaMensual(
   return Math.max(0, impuestoAnual / 12)
 }
 
+// Fila ya guardada en nomina_mensual — usada para roles con estado
+// 'aprobado' o 'pagado', que NUNCA deben recalcularse, solo leerse tal cual
+// se guardaron. Ver resultadoDesdeGuardado.
+export type NominaMensualGuardada = {
+  sueldo_ganado: number
+  valor_horas_suplementarias: number
+  valor_horas_extraordinarias: number
+  total_ingresos: number
+  aporte_iess_personal: number
+  impuesto_renta: number
+  total_descuentos: number
+  liquido_recibir: number
+  aporte_patronal: number
+  fondos_reserva: number
+  costo_empresa: number
+  provision_decimo3: number
+  provision_decimo4: number
+  provision_vacaciones: number
+}
+
+export function resultadoDesdeGuardado(row: NominaMensualGuardada): ResultadoNomina {
+  return {
+    sueldoGanado: row.sueldo_ganado,
+    valorHorasSuplementarias: row.valor_horas_suplementarias,
+    valorHorasExtraordinarias: row.valor_horas_extraordinarias,
+    totalIngresos: row.total_ingresos,
+    aporteIessPersonal: row.aporte_iess_personal,
+    impuestoRenta: row.impuesto_renta,
+    totalDescuentos: row.total_descuentos,
+    liquidoRecibir: row.liquido_recibir,
+    aportePatronal: row.aporte_patronal,
+    fondosReserva: row.fondos_reserva,
+    costoEmpresa: row.costo_empresa,
+    provisionDecimo3: row.provision_decimo3,
+    provisionDecimo4: row.provision_decimo4,
+    provisionVacaciones: row.provision_vacaciones,
+  }
+}
+
 export function calcularNomina(
   empleado: EmpleadoParaCalculo,
   novedades: NovedadesEntrada,

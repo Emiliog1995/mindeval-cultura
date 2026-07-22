@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
-import { calcularNomina, type ParametrosLegales, type ResultadoNomina } from '@/lib/nomina-scoring'
+import { calcularNomina, resultadoDesdeGuardado, type ParametrosLegales, type ResultadoNomina } from '@/lib/nomina-scoring'
 import { exportarRolPDF } from '@/lib/exportar-rol-pdf'
 
 type EmpleadoNomina = {
@@ -41,6 +41,9 @@ export default function RolIndividual() {
   const [novedades, setNovedades] = useState<Novedades | null>(null)
   const [existeGuardado, setExisteGuardado] = useState(false)
   const [estadoRol, setEstadoRol] = useState<'borrador' | 'aprobado' | 'pagado'>('borrador')
+  // Resultado congelado tal cual se guardó, solo cuando estadoRol es
+  // 'aprobado' o 'pagado'. Si es null, se calcula en vivo más abajo.
+  const [resultadoGuardado, setResultadoGuardado] = useState<ResultadoNomina | null>(null)
   const [parametros, setParametros] = useState<ParametrosLegales | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -59,7 +62,8 @@ export default function RolIndividual() {
       }
       if (nomina) {
         setExisteGuardado(true)
-        setEstadoRol((nomina.estado ?? 'borrador') as 'borrador' | 'aprobado' | 'pagado')
+        const estado = (nomina.estado ?? 'borrador') as 'borrador' | 'aprobado' | 'pagado'
+        setEstadoRol(estado)
         setNovedades({
           diasTrabajados: nomina.dias_trabajados,
           horasSuplementarias: nomina.horas_suplementarias,
@@ -70,6 +74,11 @@ export default function RolIndividual() {
           prestamoIess: nomina.prestamo_iess,
           otrosDescuentos: nomina.otros_descuentos,
         })
+        // Aprobado/pagado: se congela el resultado tal cual se guardó, nunca
+        // se recalcula con el sueldo o parámetros vigentes hoy.
+        if (estado === 'aprobado' || estado === 'pagado') {
+          setResultadoGuardado(resultadoDesdeGuardado(nomina))
+        }
       } else {
         setNovedades({
           diasTrabajados: 30, horasSuplementarias: 0, horasExtraordinarias: 0,
@@ -106,7 +115,9 @@ export default function RolIndividual() {
 
   if (!novedades) return null
 
-  const resultado: ResultadoNomina = calcularNomina(
+  // Aprobado/pagado: usar el resultado congelado. Solo un borrador se calcula
+  // en vivo con el sueldo y los parámetros legales vigentes.
+  const resultado: ResultadoNomina = resultadoGuardado ?? calcularNomina(
     { sueldoNominal: empleado.sueldo_nominal, fondosReservaActivo: empleado.fondos_reserva_activo },
     novedades,
     parametros

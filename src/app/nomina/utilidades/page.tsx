@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
-import { calcularUtilidades, type ResultadoUtilidades } from '@/lib/nomina-scoring'
+import { calcularUtilidades, type ResultadoUtilidades, type ReparticionUtilidad } from '@/lib/nomina-scoring'
 import { exportarUtilidadesPDF } from '@/lib/exportar-utilidades-pdf'
 
 type Empresa = { id: string; nombre: string }
@@ -14,12 +14,19 @@ type EmpleadoNomina = {
   cargas_familiares: number
 }
 
+// Reparto guardado de un año ya calculado. Incluye cargasFamiliares porque, a
+// diferencia de ReparticionUtilidad, esto es lo que se muestra en la tabla
+// para un año congelado (no viene de empleados_nomina, que puede haber
+// cambiado desde entonces).
+type ReparticionGuardada = ReparticionUtilidad & { cargasFamiliares: number }
+
 type UtilidadHistorico = {
   anio: number
   utilidad_liquida: number
   valor_10_porciento: number
   valor_5_porciento: number
   total_empleados: number
+  reparticiones: ReparticionGuardada[]
 }
 
 const inputStyle = { padding: '.4rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }
@@ -54,10 +61,10 @@ export default function Utilidades() {
   async function cargarHistorial(empresaId: string) {
     const { data } = await supabase
       .from('utilidades_procesadas')
-      .select('anio, utilidad_liquida, valor_10_porciento, valor_5_porciento, total_empleados')
+      .select('anio, utilidad_liquida, valor_10_porciento, valor_5_porciento, total_empleados, reparticiones')
       .eq('empresa_id', empresaId)
       .order('anio', { ascending: false })
-    setHistorial(data ?? [])
+    setHistorial((data ?? []) as UtilidadHistorico[])
   }
 
   async function actualizarCargas(id: string, valor: number) {
@@ -67,8 +74,20 @@ export default function Utilidades() {
     if (!error) setEmpleados(prev => prev.map(e => e.id === id ? { ...e, cargas_familiares: valor } : e))
   }
 
+  // Si este año ya se calculó y guardó antes, se muestra el snapshot congelado
+  // (empleados y cargas familiares de ESE momento), nunca la nómina de hoy.
+  const historicoAnioActual = historial.find(h => h.anio === anio) ?? null
+  const anioBloqueado = historicoAnioActual !== null
+
   let resultado: ResultadoUtilidades | null = null
-  if (empleados.length > 0 && Number(utilidadLiquida) > 0) {
+  if (historicoAnioActual) {
+    resultado = {
+      totalUtilidades: historicoAnioActual.utilidad_liquida * 0.15,
+      pool10Porciento: historicoAnioActual.valor_10_porciento,
+      pool5Porciento: historicoAnioActual.valor_5_porciento,
+      reparticiones: historicoAnioActual.reparticiones,
+    }
+  } else if (empleados.length > 0 && Number(utilidadLiquida) > 0) {
     resultado = calcularUtilidades(
       empleados.map(e => ({ id: e.id, nombre: e.nombre, cargasFamiliares: e.cargas_familiares })),
       Number(utilidadLiquida)
@@ -105,12 +124,19 @@ export default function Utilidades() {
           </select>
           <input
             type="number"
-            value={utilidadLiquida}
+            value={anioBloqueado ? historicoAnioActual!.utilidad_liquida : utilidadLiquida}
             onChange={e => setUtilidadLiquida(e.target.value)}
+            disabled={anioBloqueado}
             placeholder="Utilidad líquida de la empresa"
             style={{ ...inputStyle, width: 220 }}
           />
         </div>
+
+        {anioBloqueado && (
+          <div style={{ background: 'rgba(45,106,79,0.1)', border: '1px solid rgba(45,106,79,0.3)', borderRadius: 8, padding: '.75rem 1rem', color: '#2d6a4f', fontSize: 12, marginBottom: 20 }}>
+            🔒 El ejercicio {anio} ya fue calculado y guardado. Se muestra el reparto congelado con los empleados y cargas familiares de ese momento — no se recalcula aunque hoy la nómina activa sea distinta.
+          </div>
+        )}
 
         {!empresaSeleccionada && (
           <div style={{ background: 'white', borderRadius: 8, padding: '2rem', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
@@ -120,13 +146,13 @@ export default function Utilidades() {
 
         {empresaSeleccionada && loading && <div style={{ color: '#6b7280', fontSize: 13 }}>Cargando…</div>}
 
-        {empresaSeleccionada && !loading && empleados.length === 0 && (
+        {empresaSeleccionada && !loading && empleados.length === 0 && !anioBloqueado && (
           <div style={{ background: 'white', borderRadius: 8, padding: '2rem', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
             Esta empresa no tiene empleados activos.
           </div>
         )}
 
-        {empresaSeleccionada && !loading && empleados.length > 0 && (
+        {empresaSeleccionada && !loading && (empleados.length > 0 || anioBloqueado) && (
           <>
             {resultado && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
@@ -153,26 +179,38 @@ export default function Utilidades() {
                   </tr>
                 </thead>
                 <tbody>
-                  {empleados.map((e, i) => {
-                    const rep = resultado?.reparticiones.find(r => r.empleadoId === e.id)
-                    return (
-                      <tr key={e.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{e.nombre}</td>
-                        <td style={{ padding: '.4rem .75rem' }}>
-                          <input
-                            type="number"
-                            defaultValue={e.cargas_familiares}
-                            onBlur={ev => actualizarCargas(e.id, Number(ev.target.value) || 0)}
-                            disabled={guardandoCargaId === e.id}
-                            style={{ ...inputStyle, width: 70 }}
-                          />
-                        </td>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{rep ? money(rep.montoIgual) : '—'}</td>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{rep ? money(rep.montoCargas) : '—'}</td>
-                        <td style={{ padding: '.4rem .75rem', fontSize: 12, fontWeight: 700, color: '#2d6a4f' }}>{rep ? money(rep.total) : '—'}</td>
+                  {anioBloqueado ? (
+                    historicoAnioActual!.reparticiones.map((rep, i) => (
+                      <tr key={rep.empleadoId} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{rep.nombre}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{rep.cargasFamiliares}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{money(rep.montoIgual)}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{money(rep.montoCargas)}</td>
+                        <td style={{ padding: '.4rem .75rem', fontSize: 12, fontWeight: 700, color: '#2d6a4f' }}>{money(rep.total)}</td>
                       </tr>
-                    )
-                  })}
+                    ))
+                  ) : (
+                    empleados.map((e, i) => {
+                      const rep = resultado?.reparticiones.find(r => r.empleadoId === e.id)
+                      return (
+                        <tr key={e.id} style={{ background: i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ padding: '.4rem .75rem', fontSize: 13, fontWeight: 600, color: '#1a2035' }}>{e.nombre}</td>
+                          <td style={{ padding: '.4rem .75rem' }}>
+                            <input
+                              type="number"
+                              defaultValue={e.cargas_familiares}
+                              onBlur={ev => actualizarCargas(e.id, Number(ev.target.value) || 0)}
+                              disabled={guardandoCargaId === e.id}
+                              style={{ ...inputStyle, width: 70 }}
+                            />
+                          </td>
+                          <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{rep ? money(rep.montoIgual) : '—'}</td>
+                          <td style={{ padding: '.4rem .75rem', fontSize: 12, color: '#374151' }}>{rep ? money(rep.montoCargas) : '—'}</td>
+                          <td style={{ padding: '.4rem .75rem', fontSize: 12, fontWeight: 700, color: '#2d6a4f' }}>{rep ? money(rep.total) : '—'}</td>
+                        </tr>
+                      )
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -186,23 +224,40 @@ export default function Utilidades() {
             {resultado && (
               <button
                 onClick={async () => {
-                  setGuardandoUtilidad(true)
                   const empresaNombre = empresas.find(e => e.id === empresaSeleccionada)?.nombre ?? ''
-                  exportarUtilidadesPDF(empresaNombre, anio, Number(utilidadLiquida), resultado)
+                  const utilidadUsada = anioBloqueado ? historicoAnioActual!.utilidad_liquida : Number(utilidadLiquida)
+
+                  if (anioBloqueado) {
+                    // Ya guardado: solo se reexporta el PDF con el snapshot
+                    // congelado, nunca se vuelve a escribir en la BD.
+                    exportarUtilidadesPDF(empresaNombre, anio, utilidadUsada, resultado)
+                    return
+                  }
+
+                  setGuardandoUtilidad(true)
+                  exportarUtilidadesPDF(empresaNombre, anio, utilidadUsada, resultado)
+                  // Snapshot de cargas familiares al momento del cálculo, para
+                  // que consultar este año más adelante no dependa de la
+                  // nómina activa de ese momento futuro.
+                  const reparticionesConCargas: ReparticionGuardada[] = resultado.reparticiones.map(r => ({
+                    ...r,
+                    cargasFamiliares: empleados.find(e => e.id === r.empleadoId)?.cargas_familiares ?? 0,
+                  }))
                   await supabase.from('utilidades_procesadas').upsert({
                     empresa_id: empresaSeleccionada,
                     anio,
-                    utilidad_liquida: Number(utilidadLiquida),
+                    utilidad_liquida: utilidadUsada,
                     valor_10_porciento: resultado.pool10Porciento,
                     valor_5_porciento: resultado.pool5Porciento,
                     total_empleados: resultado.reparticiones.length,
+                    reparticiones: reparticionesConCargas,
                   }, { onConflict: 'empresa_id,anio' })
                   setGuardandoUtilidad(false)
                   cargarHistorial(empresaSeleccionada)
                 }}
                 disabled={guardandoUtilidad}
                 style={{ marginTop: 16, background: '#1a2035', color: 'white', padding: '.6rem 1.5rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
-                {guardandoUtilidad ? 'Guardando…' : 'Exportar PDF y guardar'}
+                {guardandoUtilidad ? 'Guardando…' : anioBloqueado ? '🔒 Exportar PDF (año ya guardado)' : 'Exportar PDF y guardar'}
               </button>
             )}
           </>

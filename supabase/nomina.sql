@@ -34,6 +34,12 @@ create index if not exists empleados_nomina_puesto_idx on empleados_nomina(puest
 -- Seguro de re-ejecutar: no afecta filas existentes (default 0).
 alter table empleados_nomina add column if not exists cargas_familiares int not null default 0;
 
+-- Agregado para congelar roles aprobados/pagados (no se pueden recalcular
+-- desde solo horas_suplementarias/horas_extraordinarias sin conocer el sueldo
+-- vigente al momento del cálculo). Seguro de re-ejecutar.
+alter table nomina_mensual add column if not exists valor_horas_suplementarias numeric not null default 0;
+alter table nomina_mensual add column if not exists valor_horas_extraordinarias numeric not null default 0;
+
 -- 2. Nómina procesada por periodo ------------------------------------------
 create table if not exists nomina_mensual (
   id uuid primary key default gen_random_uuid(),
@@ -168,6 +174,12 @@ create table if not exists utilidades_procesadas (
   created_at timestamptz default now(),
   unique (empresa_id, anio)
 );
+
+-- Snapshot de la nómina y el reparto exactos usados al calcular, para que un
+-- año ya guardado no cambie si después se contrata/despide gente o se editan
+-- cargas familiares. Sin esto, reabrir un año pasado recalculaba con los
+-- empleados activos HOY en vez de los de ese año. Seguro de re-ejecutar.
+alter table utilidades_procesadas add column if not exists reparticiones jsonb not null default '[]'::jsonb;
 
 -- RLS ------------------------------------------------------------------------
 -- Mismo patrón que el resto del ecosistema (ver rls_setup.sql): solo el
