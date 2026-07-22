@@ -206,6 +206,38 @@ export default function FichaPuesto() {
             </table>
           ) : <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 12 }}>[Por completar — ninguna actividad marcada como esencial]</p>}
 
+          {actividades.length > 0 && (
+            <>
+              <div style={{ margin: '20px 0 10px', fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Todas las actividades del puesto ({actividades.length})
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#f0f2f5' }}>
+                    {['N°', 'Actividad', 'F', 'CE', 'CM', 'Total', 'Esencial'].map(h => (
+                      <th key={h} style={{ padding: '6px 8px', textAlign: h === 'N°' || h.length <= 3 || h === 'Esencial' ? 'center' : 'left', fontSize: 11, color: '#0A1A32', fontWeight: 700 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {actividades.map((a, i) => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid #f0f0f0', background: a.es_esencial ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'white' : '#f9fafb' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#374151' }}>{a.orden}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.descripcion}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>{a.frecuencia || '—'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>{a.consecuencia || '—'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>{a.complejidad || '—'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, color: DARK }}>
+                        {a.frecuencia && a.consecuencia && a.complejidad ? calcularTotal(a.frecuencia, a.consecuencia, a.complejidad) : '—'}
+                      </td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>{a.es_esencial ? '★' : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
           {seccion(4, 'INTERFAZ DEL PUESTO')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
             <div><span style={label}>Reporta a</span>{pendiente(puesto.supervisado_por)}</div>
