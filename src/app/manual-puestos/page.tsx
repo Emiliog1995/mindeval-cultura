@@ -311,7 +311,6 @@ type Respuesta = {
   experiencia_anios?: number
   submitted_at?: string
   empresa_id?: string
-  puesto_id?: string | null
 }
 
 function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
@@ -359,12 +358,9 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
                   {r.actividades?.length ?? 0} actividades
                 </span>
                 <button
-                  onClick={e => {
-                    e.stopPropagation()
-                    router.push(r.puesto_id ? `/manual-puestos/${r.puesto_id}/editar` : `/manual-puestos/nuevo?desde=${r.id}`)
-                  }}
+                  onClick={e => { e.stopPropagation(); router.push(`/manual-puestos/nuevo?desde=${r.id}`) }}
                   style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #10b981', background: 'rgba(16,185,129,0.08)', color: '#7a6020', cursor: 'pointer', fontWeight: 600 }}>
-                  {r.puesto_id ? 'Ver → Ficha MDT' : 'Crear → Ficha MDT'}
+                  Editar → Ficha MDT
                 </button>
                 <button
                   onClick={e => { e.stopPropagation(); handleEliminar(r.id, r.nombre ?? '') }}
