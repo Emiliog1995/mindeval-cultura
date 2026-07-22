@@ -38,6 +38,7 @@ export default function EditarPuesto() {
   const [conductualesTexto, setConducualesTexto] = useState('')
   const [instruccionId, setInstruccionId] = useState<string | null>(null)
   const [actividades, setActividades] = useState<{ orden: number; descripcion: string; es_esencial: boolean; frecuencia: number; consecuencia: number; complejidad: number }[]>([])
+  const [indicadores, setIndicadores] = useState<{ orden: number; indicador: string; formula: string; meta: string; cliente: string }[]>([])
   const [respuestaOcupante, setRespuestaOcupante] = useState<{
     nombre?: string; cargo_actual?: string; actividades?: { descripcion: string; frecuencia: string; dificultad: string; consecuencia: string }[];
     herramientas?: string[]; conocimientos?: string[]; nivel_educativo?: string; carrera?: string; experiencia_anios?: number;
@@ -57,7 +58,8 @@ export default function EditarPuesto() {
       supabase.from('competencias_puesto').select('*').eq('puesto_id', id),
       supabase.from('actividades_puesto').select('*').eq('puesto_id', id).order('orden'),
       supabase.from('respuestas_ocupante').select('*').eq('puesto_id', id).order('submitted_at', { ascending: false }).limit(1).maybeSingle(),
-    ]).then(([{ data: p }, { data: inst }, { data: comps }, { data: acts }, { data: resp }]) => {
+      supabase.from('indicadores_puesto').select('*').eq('puesto_id', id),
+    ]).then(([{ data: p }, { data: inst }, { data: comps }, { data: acts }, { data: resp }, { data: inds }]) => {
       if (resp) setRespuestaOcupante(resp)
       if (p) setDatos({
         nombre_puesto: p.nombre_puesto ?? '',
@@ -84,6 +86,20 @@ export default function EditarPuesto() {
         setConducualesTexto(toText(['capacidad']))
       }
       if (acts) setActividades(acts)
+      if (acts && inds) {
+        const ordenPorId = new Map(acts.map((a: { id: string; orden: number }) => [a.id, a.orden]))
+        setIndicadores(
+          inds
+            .map((ind: { actividad_esencial_id: string; indicador: string; formula: string; meta: string; cliente: string }) => ({
+              orden: ordenPorId.get(ind.actividad_esencial_id) ?? 0,
+              indicador: ind.indicador ?? '',
+              formula: ind.formula ?? '',
+              meta: ind.meta ?? '',
+              cliente: ind.cliente ?? '',
+            }))
+            .filter((x: { orden: number }) => x.orden)
+        )
+      }
       setLoading(false)
     })
   }, [id])
@@ -177,15 +193,26 @@ export default function EditarPuesto() {
   }
 
   const actividadesConValores = actividades.filter(a => a.descripcion.trim() && a.frecuencia && a.consecuencia && a.complejidad)
+  const actualizarIndicador = (orden: number, campo: 'indicador' | 'formula' | 'meta' | 'cliente', valor: string) => {
+    setIndicadores(prev => {
+      const idx = prev.findIndex(x => x.orden === orden)
+      if (idx >= 0) return prev.map((x, i) => i === idx ? { ...x, [campo]: valor } : x)
+      return [...prev, { orden, indicador: '', formula: '', meta: '', cliente: '', [campo]: valor }]
+    })
+  }
 
   const guardar = async () => {
     setGuardando(true)
 
     const conValores = actividades.filter(a => a.descripcion.trim() && a.frecuencia && a.consecuencia && a.complejidad)
     const esenciales = new Set(identificarEsenciales(conValores).map(a => a.orden))
+
+    await supabase.from('indicadores_puesto').delete().eq('puesto_id', id)
     await supabase.from('actividades_puesto').delete().eq('puesto_id', id)
+
+    let nuevasActividades: { id: string; orden: number }[] = []
     if (conValores.length > 0) {
-      await supabase.from('actividades_puesto').insert(conValores.map(a => ({
+      const { data: insertadas } = await supabase.from('actividades_puesto').insert(conValores.map(a => ({
         puesto_id: id,
         orden: a.orden,
         descripcion: a.descripcion,
@@ -193,8 +220,23 @@ export default function EditarPuesto() {
         consecuencia: a.consecuencia,
         complejidad: a.complejidad,
         es_esencial: esenciales.has(a.orden),
-      })))
+      }))).select('id, orden')
+      nuevasActividades = insertadas ?? []
     }
+
+    const idPorOrden = new Map(nuevasActividades.map(a => [a.orden, a.id]))
+    const indicadoresValidos = indicadores
+      .filter(ind => ind.indicador.trim() && idPorOrden.has(ind.orden))
+      .map(ind => ({
+        puesto_id: id,
+        actividad_esencial_id: idPorOrden.get(ind.orden),
+        indicador: ind.indicador,
+        formula: ind.formula,
+        meta: ind.meta,
+        cliente: ind.cliente,
+        sugerido_ia: false,
+      }))
+    if (indicadoresValidos.length > 0) await supabase.from('indicadores_puesto').insert(indicadoresValidos)
 
     await supabase.from('puestos').update({
       nombre_puesto: datos.nombre_puesto,
@@ -238,7 +280,7 @@ export default function EditarPuesto() {
     </div>
   )
 
-  const PASOS = ['Datos generales', 'Actividades', 'Instrucción', 'Competencias']
+  const PASOS = ['Datos generales', 'Actividades', 'Esenciales', 'Competencias', 'Instrucción', 'Indicadores']
 
   const th: React.CSSProperties = { padding: '8px 6px', textAlign: 'center', fontWeight: 700, fontSize: 10 }
   const td: React.CSSProperties = { padding: '6px', verticalAlign: 'top' }
@@ -453,8 +495,56 @@ export default function EditarPuesto() {
             </>
           )}
 
-          {/* PASO 3 — Instrucción */}
+          {/* PASO 3 — Esenciales */}
           {paso === 3 && (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: DARK }}>Actividades esenciales</h2>
+                <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>
+                  El algoritmo MDT marca automáticamente las de mayor puntaje. Haz clic para ajustar la selección manualmente.
+                </p>
+              </div>
+
+              {actividadesConValores.length === 0 ? (
+                <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 13 }}>
+                  Completa F/CE/CM de al menos 3 actividades en el paso anterior para identificar esenciales.
+                </p>
+              ) : (
+                [...actividadesConValores]
+                  .sort((a, b) => calcularTotal(b.frecuencia, b.consecuencia, b.complejidad) - calcularTotal(a.frecuencia, a.consecuencia, a.complejidad))
+                  .map(act => {
+                    const total = calcularTotal(act.frecuencia, act.consecuencia, act.complejidad)
+                    return (
+                      <div key={act.orden}
+                        onClick={() => setActividades(prev => prev.map(a => a.orden === act.orden ? { ...a, es_esencial: !a.es_esencial } : a))}
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 14px', borderRadius: 8, marginBottom: 6,
+                          cursor: 'pointer', transition: 'all .15s',
+                          background: act.es_esencial ? 'rgba(16,185,129,0.08)' : '#f9fafb',
+                          border: `2px solid ${act.es_esencial ? GOLD : '#e5e7eb'}`,
+                        }}>
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 4, border: `2px solid ${act.es_esencial ? GOLD : '#d1d5db'}`,
+                          background: act.es_esencial ? GOLD : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0, marginTop: 2,
+                        }}>
+                          {act.es_esencial && <span style={{ color: DARK, fontSize: 12, fontWeight: 700 }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, color: DARK }}>{act.orden}. {act.descripcion}</div>
+                          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                            F={act.frecuencia} CE={act.consecuencia} CM={act.complejidad} → <strong>{total}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+              )}
+            </>
+          )}
+
+          {/* PASO 5 — Instrucción */}
+          {paso === 5 && (
             <>
               <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: '2px solid #f0f2f5' }}>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: DARK }}>Instrucción formal y experiencia</h2>
@@ -559,6 +649,54 @@ export default function EditarPuesto() {
                   placeholder={'Ej: Trabajo en equipo\nOrientación a resultados\nComunicación efectiva...'}
                 />
               </div>
+            </>
+          )}
+
+          {/* PASO 6 — Indicadores de gestión */}
+          {paso === 6 && (
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: DARK }}>Indicadores de gestión</h2>
+                <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>Un indicador por actividad esencial (marcada en el paso &quot;Esenciales&quot;).</p>
+              </div>
+
+              {actividades.filter(a => a.es_esencial).length === 0 ? (
+                <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 13 }}>
+                  No hay actividades marcadas como esenciales todavía. Ve al paso &quot;Esenciales&quot; primero.
+                </p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: NAVY, color: 'white' }}>
+                        {['Actividad esencial', 'Indicador de gestión', 'Fórmula', 'Meta', 'Cliente / Beneficiario'].map(h => (
+                          <th key={h} style={{ ...th, textAlign: 'left' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actividades.filter(a => a.es_esencial).map(act => {
+                        const ind = indicadores.find(x => x.orden === act.orden)
+                        return (
+                          <tr key={act.orden} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                            <td style={{ ...td, fontSize: 11, color: '#6b7280', maxWidth: 160 }}>{act.descripcion}</td>
+                            {(['indicador', 'formula', 'meta', 'cliente'] as const).map(campo => (
+                              <td key={campo} style={td}>
+                                <input
+                                  value={ind?.[campo] ?? ''}
+                                  onChange={e => actualizarIndicador(act.orden, campo, e.target.value)}
+                                  style={{ ...inputStyle, fontSize: 11 }}
+                                  placeholder={campo === 'indicador' ? 'Nombre del indicador...' : ''}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
 
