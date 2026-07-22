@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import { authHeaders } from '@/lib/auth-headers'
+import { calcularTotal, identificarEsenciales } from '@/lib/mdt-formula'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -36,7 +37,7 @@ export default function EditarPuesto() {
   const [destrezasTexto, setDestrezasTexto] = useState('')
   const [conductualesTexto, setConducualesTexto] = useState('')
   const [instruccionId, setInstruccionId] = useState<string | null>(null)
-  const [actividades, setActividades] = useState<{ descripcion: string; es_esencial: boolean; frecuencia: number; consecuencia: number; complejidad: number }[]>([])
+  const [actividades, setActividades] = useState<{ orden: number; descripcion: string; es_esencial: boolean; frecuencia: number; consecuencia: number; complejidad: number }[]>([])
   const [respuestaOcupante, setRespuestaOcupante] = useState<{
     nombre?: string; cargo_actual?: string; actividades?: { descripcion: string; frecuencia: string; dificultad: string; consecuencia: string }[];
     herramientas?: string[]; conocimientos?: string[]; nivel_educativo?: string; carrera?: string; experiencia_anios?: number;
@@ -161,8 +162,40 @@ export default function EditarPuesto() {
     setSugiriendoCompetencias(false)
   }
 
+  const actualizarActividad = (i: number, campo: 'descripcion' | 'frecuencia' | 'consecuencia' | 'complejidad', valor: string) => {
+    setActividades(prev => prev.map((a, idx) => idx === i
+      ? { ...a, [campo]: campo === 'descripcion' ? valor : Number(valor) }
+      : a))
+  }
+
+  const agregarFila = () => {
+    setActividades(prev => [...prev, { orden: prev.length + 1, descripcion: '', es_esencial: false, frecuencia: 0, consecuencia: 0, complejidad: 0 }])
+  }
+
+  const eliminarFila = (i: number) => {
+    setActividades(prev => prev.filter((_, idx) => idx !== i).map((a, idx) => ({ ...a, orden: idx + 1 })))
+  }
+
+  const actividadesConValores = actividades.filter(a => a.descripcion.trim() && a.frecuencia && a.consecuencia && a.complejidad)
+
   const guardar = async () => {
     setGuardando(true)
+
+    const conValores = actividades.filter(a => a.descripcion.trim() && a.frecuencia && a.consecuencia && a.complejidad)
+    const esenciales = new Set(identificarEsenciales(conValores).map(a => a.orden))
+    await supabase.from('actividades_puesto').delete().eq('puesto_id', id)
+    if (conValores.length > 0) {
+      await supabase.from('actividades_puesto').insert(conValores.map(a => ({
+        puesto_id: id,
+        orden: a.orden,
+        descripcion: a.descripcion,
+        frecuencia: a.frecuencia,
+        consecuencia: a.consecuencia,
+        complejidad: a.complejidad,
+        es_esencial: esenciales.has(a.orden),
+      })))
+    }
+
     await supabase.from('puestos').update({
       nombre_puesto: datos.nombre_puesto,
       area: datos.area,
@@ -205,7 +238,10 @@ export default function EditarPuesto() {
     </div>
   )
 
-  const PASOS = ['Datos generales', 'Instrucción', 'Competencias']
+  const PASOS = ['Datos generales', 'Actividades', 'Instrucción', 'Competencias']
+
+  const th: React.CSSProperties = { padding: '8px 6px', textAlign: 'center', fontWeight: 700, fontSize: 10 }
+  const td: React.CSSProperties = { padding: '6px', verticalAlign: 'top' }
 
   const btnIA: React.CSSProperties = {
     background: 'none', border: `1.5px solid ${GOLD}`, color: GOLD,
@@ -343,8 +379,82 @@ export default function EditarPuesto() {
             </>
           )}
 
-          {/* PASO 2 — Instrucción */}
+          {/* PASO 2 — Actividades */}
           {paso === 2 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: DARK }}>Tabla de actividades MDT</h2>
+                  <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>TOTAL = F + (CE × CM) · las 3-4 con mayor puntaje quedan como esenciales.</p>
+                </div>
+                <div style={{ fontSize: 12, color: actividadesConValores.length >= 3 ? '#2d6a4f' : '#9ca3af', whiteSpace: 'nowrap' }}>
+                  {actividadesConValores.length} / {actividades.filter(a => a.descripcion.trim()).length} valoradas
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: NAVY, color: 'white' }}>
+                      <th style={th}>N°</th>
+                      <th style={{ ...th, width: '45%', textAlign: 'left' }}>Descripción de la actividad</th>
+                      <th style={th}><div>F</div><div style={{ fontWeight: 400, fontSize: 9, opacity: 0.7 }}>Frecuencia</div></th>
+                      <th style={th}><div>CE</div><div style={{ fontWeight: 400, fontSize: 9, opacity: 0.7 }}>Consecuencia</div></th>
+                      <th style={th}><div>CM</div><div style={{ fontWeight: 400, fontSize: 9, opacity: 0.7 }}>Complejidad</div></th>
+                      <th style={{ ...th, color: GOLD }}>TOTAL</th>
+                      <th style={th}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {actividades.map((act, i) => {
+                      const total = act.frecuencia && act.consecuencia && act.complejidad
+                        ? calcularTotal(act.frecuencia, act.consecuencia, act.complejidad) : null
+                      return (
+                        <tr key={i} style={{ background: act.es_esencial ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'white' : '#f9fafb', borderBottom: '1px solid #f0f0f0' }}>
+                          <td style={{ ...td, color: '#9ca3af', textAlign: 'center' }}>{i + 1}</td>
+                          <td style={td}>
+                            <textarea
+                              value={act.descripcion}
+                              onChange={e => actualizarActividad(i, 'descripcion', e.target.value)}
+                              rows={2}
+                              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 4, padding: '4px 6px', fontSize: 11, resize: 'vertical', outline: 'none', color: '#111' }}
+                              placeholder='Describe la actividad...'
+                            />
+                          </td>
+                          {(['frecuencia', 'consecuencia', 'complejidad'] as const).map(campo => (
+                            <td key={campo} style={{ ...td, textAlign: 'center' }}>
+                              <select
+                                value={act[campo] || ''}
+                                onChange={e => actualizarActividad(i, campo, e.target.value)}
+                                style={{ width: 50, textAlign: 'center', border: '1px solid #e5e7eb', borderRadius: 4, padding: '4px 2px', fontSize: 12, outline: 'none', color: '#111' }}>
+                                <option value=''>—</option>
+                                {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}</option>)}
+                              </select>
+                            </td>
+                          ))}
+                          <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: total ? DARK : '#d1d5db', fontSize: 14 }}>
+                            {total ?? '—'}
+                          </td>
+                          <td style={{ ...td, textAlign: 'center' }}>
+                            <button onClick={() => eliminarFila(i)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14 }}>✕</button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <button onClick={agregarFila} disabled={actividades.length >= 40}
+                style={{ marginTop: 12, background: 'none', border: `1px dashed ${GOLD}`, color: '#7a6020', padding: '6px 16px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}>
+                + Agregar actividad {actividades.length >= 40 ? '(máx. 40)' : ''}
+              </button>
+            </>
+          )}
+
+          {/* PASO 3 — Instrucción */}
+          {paso === 3 && (
             <>
               <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: '2px solid #f0f2f5' }}>
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: DARK }}>Instrucción formal y experiencia</h2>
@@ -376,8 +486,8 @@ export default function EditarPuesto() {
             </>
           )}
 
-          {/* PASO 3 — Competencias */}
-          {paso === 3 && (
+          {/* PASO 4 — Competencias */}
+          {paso === 4 && (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, paddingBottom: 20, borderBottom: '2px solid #f0f2f5' }}>
                 <div>
@@ -458,7 +568,7 @@ export default function EditarPuesto() {
               style={{ background: 'none', border: '1.5px solid #d1d5db', color: '#374151', padding: '.55rem 1.5rem', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
               {paso === 1 ? 'Cancelar' : '← Anterior'}
             </button>
-            {paso < 3
+            {paso < PASOS.length
               ? <button onClick={() => { setPaso(paso + 1); setMensajeIA('') }}
                   style={{ background: DARK, color: 'white', padding: '.55rem 1.75rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>
                   Siguiente →
