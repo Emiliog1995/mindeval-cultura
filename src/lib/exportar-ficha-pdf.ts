@@ -1,6 +1,30 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+const FUENTE = 'DejaVuSans'
+
+async function arrayBufferABase64(buffer: ArrayBuffer): Promise<string> {
+  const bytes = new Uint8Array(buffer)
+  let binario = ''
+  const tamanioBloque = 0x8000
+  for (let i = 0; i < bytes.length; i += tamanioBloque) {
+    binario += String.fromCharCode(...bytes.subarray(i, i + tamanioBloque))
+  }
+  return btoa(binario)
+}
+
+let fuentesDejaVuPromise: Promise<{ regular: string; bold: string }> | null = null
+
+function cargarFuentesDejaVu() {
+  if (!fuentesDejaVuPromise) {
+    fuentesDejaVuPromise = Promise.all([
+      fetch('/fonts/DejaVuSans.ttf').then(r => r.arrayBuffer()).then(arrayBufferABase64),
+      fetch('/fonts/DejaVuSans-Bold.ttf').then(r => r.arrayBuffer()).then(arrayBufferABase64),
+    ]).then(([regular, bold]) => ({ regular, bold }))
+  }
+  return fuentesDejaVuPromise
+}
+
 interface Actividad {
   descripcion: string
   frecuencia: number
@@ -49,6 +73,12 @@ export async function exportarFichaPDF(
   esBorrador = false,
 ) {
   const doc = new jsPDF()
+  const { regular, bold } = await cargarFuentesDejaVu()
+  doc.addFileToVFS('DejaVuSans.ttf', regular)
+  doc.addFont('DejaVuSans.ttf', FUENTE, 'normal')
+  doc.addFileToVFS('DejaVuSans-Bold.ttf', bold)
+  doc.addFont('DejaVuSans-Bold.ttf', FUENTE, 'bold')
+
   const DARK = [26, 32, 53] as [number, number, number]
   const NAVY = [36, 52, 71] as [number, number, number]
   const GOLD = [201, 168, 76] as [number, number, number]
@@ -57,9 +87,9 @@ export async function exportarFichaPDF(
   doc.setFillColor(...DARK)
   doc.rect(0, 0, 210, 22, 'F')
   doc.setTextColor(255, 255, 255)
-  doc.setFontSize(16); doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16); doc.setFont(FUENTE, 'bold')
   doc.text('MINDTALENT', 14, 12)
-  doc.setFontSize(8); doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8); doc.setFont(FUENTE, 'normal')
   doc.text('Consultoría HR Tech · Quito, Ecuador', 14, 18)
   doc.text('Manual de Puestos por Competencias — Metodología MDT', 196, 12, { align: 'right' })
   doc.text(`Fecha: ${puesto.fecha ?? new Date().toLocaleDateString('es-EC')}`, 196, 18, { align: 'right' })
@@ -71,7 +101,7 @@ export async function exportarFichaPDF(
   // Marca de agua BORRADOR
   if (esBorrador) {
     doc.setTextColor(201, 168, 76)
-    doc.setFontSize(60); doc.setFont('helvetica', 'bold')
+    doc.setFontSize(60); doc.setFont(FUENTE, 'bold')
     doc.setGState(new (doc as unknown as { GState: new (o: { opacity: number }) => unknown }).GState({ opacity: 0.07 }))
     doc.text('BORRADOR', 105, 160, { align: 'center', angle: 45 })
     doc.setGState(new (doc as unknown as { GState: new (o: { opacity: number }) => unknown }).GState({ opacity: 1 }))
@@ -83,10 +113,10 @@ export async function exportarFichaPDF(
     if (y > 260) { doc.addPage(); y = 20 }
     doc.setFillColor(...NAVY)
     doc.rect(14, y, 182, 7, 'F')
-    doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.setFont(FUENTE, 'bold')
     doc.text(`${num}. ${titulo}`, 17, y + 5)
     y += 10
-    doc.setTextColor(28, 43, 58); doc.setFont('helvetica', 'normal')
+    doc.setTextColor(28, 43, 58); doc.setFont(FUENTE, 'normal')
   }
 
   // 1. Identificación
@@ -97,7 +127,7 @@ export async function exportarFichaPDF(
       ['Nombre del puesto:', puesto.nombre_puesto, 'Área / Departamento:', puesto.area],
       ['Supervisado por:', puesto.supervisado_por ?? '[ Por completar ]', 'Supervisa a:', puesto.supervisa_a ?? '[ Por completar ]'],
     ],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font: FUENTE },
     columnStyles: { 0: { fontStyle: 'bold', fillColor: [240, 244, 248], cellWidth: 42 }, 2: { fontStyle: 'bold', fillColor: [240, 244, 248], cellWidth: 42 } },
     theme: 'plain', margin: { left: 14, right: 14 },
   })
@@ -119,8 +149,8 @@ export async function exportarFichaPDF(
       i + 1, a.descripcion, a.frecuencia, a.consecuencia, a.complejidad,
       (a.frecuencia + a.consecuencia * a.complejidad).toFixed(0),
     ]),
-    headStyles: { fillColor: DARK, fontSize: 8 },
-    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: DARK, fontSize: 8, font: FUENTE },
+    styles: { fontSize: 7, cellPadding: 2, font: FUENTE },
     columnStyles: {
       0: { cellWidth: 8 },
       2: { cellWidth: 10, halign: 'center' },
@@ -143,8 +173,8 @@ export async function exportarFichaPDF(
         const esEsencial = esenciales.some(e => e.descripcion === a.descripcion)
         return [i + 1, a.descripcion, a.frecuencia || '—', a.consecuencia || '—', a.complejidad || '—', total || '—', esEsencial ? '✓' : '']
       }),
-      headStyles: { fillColor: DARK, fontSize: 7 },
-      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: DARK, fontSize: 7, font: FUENTE },
+      styles: { fontSize: 7, cellPadding: 1.5, font: FUENTE },
       columnStyles: {
         0: { cellWidth: 8 },
         2: { cellWidth: 10, halign: 'center' },
@@ -165,7 +195,7 @@ export async function exportarFichaPDF(
     autoTable(doc, {
       startY: y,
       body: conocimientos.map(c => [c.descripcion]),
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 2, font: FUENTE },
       theme: 'plain', margin: { left: 14, right: 14 },
     })
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
@@ -182,8 +212,8 @@ export async function exportarFichaPDF(
       startY: y,
       head: [['Herramienta / Programa', 'Nivel requerido']],
       body: filasHerr,
-      headStyles: { fillColor: DARK, fontSize: 8 },
-      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: DARK, fontSize: 8, font: FUENTE },
+      styles: { fontSize: 7, cellPadding: 2, font: FUENTE },
       margin: { left: 14, right: 14 },
     })
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
@@ -200,8 +230,8 @@ export async function exportarFichaPDF(
       startY: y,
       head: [['Destreza', 'Nivel requerido']],
       body: filas,
-      headStyles: { fillColor: DARK, fontSize: 8 },
-      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: DARK, fontSize: 8, font: FUENTE },
+      styles: { fontSize: 7, cellPadding: 2, font: FUENTE },
       margin: { left: 14, right: 14 },
     })
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
@@ -216,7 +246,7 @@ export async function exportarFichaPDF(
     autoTable(doc, {
       startY: y,
       body: capacidades.map(c => [c.descripcion]),
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 2, font: FUENTE },
       theme: 'plain', margin: { left: 14, right: 14 },
     })
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
@@ -233,7 +263,7 @@ export async function exportarFichaPDF(
       ['Área de especialización:', instruccion.area_especializacion ?? '[ Por completar ]', 'Años de experiencia:', instruccion.experiencia_anios != null ? `${instruccion.experiencia_anios} años` : '[ Por completar ]'],
       ['Tipo de experiencia:', instruccion.experiencia_tipo ?? '[ Por completar ]', '', ''],
     ],
-    styles: { fontSize: 8, cellPadding: 2 },
+    styles: { fontSize: 8, cellPadding: 2, font: FUENTE },
     columnStyles: { 0: { fontStyle: 'bold', fillColor: [240, 244, 248], cellWidth: 42 }, 2: { fontStyle: 'bold', fillColor: [240, 244, 248], cellWidth: 42 } },
     theme: 'plain', margin: { left: 14, right: 14 },
   })
@@ -246,8 +276,8 @@ export async function exportarFichaPDF(
       startY: y,
       head: [['Indicador', 'Fórmula', 'Meta', 'Cliente / Beneficiario']],
       body: indicadores.map(ind => [ind.indicador, ind.formula ?? '', ind.meta ?? '', ind.cliente ?? '']),
-      headStyles: { fillColor: DARK, fontSize: 8 },
-      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: DARK, fontSize: 8, font: FUENTE },
+      styles: { fontSize: 7, cellPadding: 2, font: FUENTE },
       margin: { left: 14, right: 14 },
     })
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
@@ -261,7 +291,7 @@ export async function exportarFichaPDF(
     doc.setPage(i)
     doc.setDrawColor(...GOLD)
     doc.line(14, 285, 196, 285)
-    doc.setTextColor(90, 113, 132); doc.setFontSize(7)
+    doc.setTextColor(90, 113, 132); doc.setFontSize(7); doc.setFont(FUENTE, 'normal')
     doc.text('MINDTALENT · Manual de Puestos por Competencias · Metodología MDT — Ministerio de Trabajo Ecuador', 14, 290)
     doc.text(`Pág. ${i} / ${totalPaginas}  ·  Generado: ${new Date().toLocaleDateString('es-EC')}`, 196, 290, { align: 'right' })
   }
