@@ -367,6 +367,14 @@ function RespuestasOcupantes({ empresaId }: { empresaId: string }) {
                   {r.puesto_id ? 'Ver → Ficha MDT' : 'Crear → Ficha MDT'}
                 </button>
                 <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    router.push(r.puesto_id ? `/manual-puestos/${r.puesto_id}/editar` : `/manual-puestos/nuevo?desde=${r.id}`)
+                  }}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.15)', color: '#7a6020', cursor: 'pointer', fontWeight: 600 }}>
+                  Editar
+                </button>
+                <button
                   onClick={e => { e.stopPropagation(); handleEliminar(r.id, r.nombre ?? '') }}
                   style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid rgba(220,38,38,0.3)', background: 'rgba(220,38,38,0.07)', color: '#b91c1c', cursor: 'pointer', fontWeight: 600 }}>
                   Eliminar
