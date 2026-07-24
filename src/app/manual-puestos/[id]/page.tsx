@@ -251,21 +251,28 @@ export default function FichaPuesto() {
             </ul>
             : <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 12 }}>[Por completar]</p>}
 
-          {seccion(6, 'DESTREZAS Y HABILIDADES')}
-          {competencias.filter(c => c.tipo === 'destreza_general' || c.tipo === 'destreza_especifica').length > 0
+          {seccion(6, 'HERRAMIENTAS Y PROGRAMAS')}
+          {competencias.filter(c => c.tipo === 'herramienta' || c.tipo === 'destreza_especifica').length > 0
             ? <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 2, color: '#111' }}>
-              {competencias.filter(c => c.tipo === 'destreza_general' || c.tipo === 'destreza_especifica').map(c => <li key={c.id}>{c.descripcion}{c.requerimiento && ` — ${c.requerimiento}`}</li>)}
+              {competencias.filter(c => c.tipo === 'herramienta' || c.tipo === 'destreza_especifica').map(c => <li key={c.id}>{c.descripcion}{c.requerimiento && ` — ${c.requerimiento}`}</li>)}
             </ul>
             : <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 12 }}>[Por completar]</p>}
 
-          {seccion(7, 'COMPETENCIAS CONDUCTUALES')}
+          {seccion(7, 'DESTREZAS Y HABILIDADES')}
+          {competencias.filter(c => c.tipo === 'destreza_general').length > 0
+            ? <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 2, color: '#111' }}>
+              {competencias.filter(c => c.tipo === 'destreza_general').map(c => <li key={c.id}>{c.descripcion}{c.requerimiento && ` — ${c.requerimiento}`}</li>)}
+            </ul>
+            : <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 12 }}>[Por completar]</p>}
+
+          {seccion(8, 'COMPETENCIAS CONDUCTUALES')}
           {competencias.filter(c => c.tipo === 'capacidad').length > 0
             ? <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 2, color: '#111' }}>
               {competencias.filter(c => c.tipo === 'capacidad').map(c => <li key={c.id}>{c.descripcion}</li>)}
             </ul>
             : <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 12 }}>[Por completar]</p>}
 
-          {seccion(8, 'INSTRUCCIÓN FORMAL Y EXPERIENCIA')}
+          {seccion(9, 'INSTRUCCIÓN FORMAL Y EXPERIENCIA')}
           {instruccion.nivel_educativo ? (
             <div style={{ fontSize: 13, lineHeight: 1.8 }}>
               <div><span style={label}>Nivel educativo</span>{instruccion.nivel_educativo}</div>
@@ -283,7 +290,7 @@ export default function FichaPuesto() {
             </div>
           ) : <p style={{ color: GOLD, fontStyle: 'italic', fontSize: 12 }}>[Por completar]</p>}
 
-          {seccion(9, 'INDICADORES DE GESTIÓN')}
+          {seccion(10, 'INDICADORES DE GESTIÓN')}
           {indicadores.length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>

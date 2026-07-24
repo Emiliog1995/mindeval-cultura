@@ -173,11 +173,28 @@ export async function exportarFichaPDF(
     doc.setFontSize(8); doc.text('[ Por completar ]', 14, y); y += 10
   }
 
-  // 6. Destrezas y habilidades
-  seccion(6, 'DESTREZAS Y HABILIDADES')
+  // 6. Herramientas y programas
+  seccion(6, 'HERRAMIENTAS Y PROGRAMAS')
+  const herramientas = competencias.filter(c => c.tipo === 'herramienta' || c.tipo === 'destreza_especifica')
+  const filasHerr = herramientas.map(c => [c.descripcion, c.requerimiento ?? ''])
+  if (filasHerr.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      head: [['Herramienta / Programa', 'Nivel requerido']],
+      body: filasHerr,
+      headStyles: { fillColor: DARK, fontSize: 8 },
+      styles: { fontSize: 7, cellPadding: 2 },
+      margin: { left: 14, right: 14 },
+    })
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+  } else {
+    doc.setFontSize(8); doc.text('[ Por completar ]', 14, y); y += 10
+  }
+
+  // 7. Destrezas y habilidades
+  seccion(7, 'DESTREZAS Y HABILIDADES')
   const destrezasG = competencias.filter(c => c.tipo === 'destreza_general')
-  const destrezasE = competencias.filter(c => c.tipo === 'destreza_especifica')
-  const filas = [...destrezasG, ...destrezasE].map(c => [c.descripcion, c.requerimiento ?? ''])
+  const filas = destrezasG.map(c => [c.descripcion, c.requerimiento ?? ''])
   if (filas.length > 0) {
     autoTable(doc, {
       startY: y,
@@ -192,9 +209,9 @@ export async function exportarFichaPDF(
     doc.setFontSize(8); doc.text('[ Por completar ]', 14, y); y += 10
   }
 
-  // 7. Competencias conductuales
+  // 8. Competencias conductuales
   const capacidades = competencias.filter(c => c.tipo === 'capacidad')
-  seccion(7, 'COMPETENCIAS CONDUCTUALES Y VALORES')
+  seccion(8, 'COMPETENCIAS CONDUCTUALES Y VALORES')
   if (capacidades.length > 0) {
     autoTable(doc, {
       startY: y,
@@ -207,8 +224,8 @@ export async function exportarFichaPDF(
     doc.setFontSize(8); doc.text('[ Por completar ]', 14, y); y += 10
   }
 
-  // 8. Instrucción y experiencia
-  seccion(8, 'INSTRUCCIÓN FORMAL Y EXPERIENCIA LABORAL')
+  // 9. Instrucción y experiencia
+  seccion(9, 'INSTRUCCIÓN FORMAL Y EXPERIENCIA LABORAL')
   autoTable(doc, {
     startY: y,
     body: [
@@ -222,8 +239,8 @@ export async function exportarFichaPDF(
   })
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
 
-  // 9. Indicadores de gestión
-  seccion(9, 'INDICADORES DE GESTIÓN')
+  // 10. Indicadores de gestión
+  seccion(10, 'INDICADORES DE GESTIÓN')
   if (indicadores.length > 0) {
     autoTable(doc, {
       startY: y,

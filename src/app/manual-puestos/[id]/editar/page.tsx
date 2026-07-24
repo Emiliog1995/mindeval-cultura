@@ -34,6 +34,7 @@ export default function EditarPuesto() {
     experiencia_tipo: '', experiencia_anios: '',
   })
   const [conocimientosTexto, setConocimientosTexto] = useState('')
+  const [herramientasTexto, setHerramientasTexto] = useState('')
   const [destrezasTexto, setDestrezasTexto] = useState('')
   const [conductualesTexto, setConducualesTexto] = useState('')
   const [instruccionId, setInstruccionId] = useState<string | null>(null)
@@ -82,7 +83,8 @@ export default function EditarPuesto() {
       if (comps && comps.length > 0) {
         const toText = (tipos: string[]) => comps.filter((c: { tipo: string; descripcion: string }) => tipos.includes(c.tipo)).map((c: { descripcion: string }) => c.descripcion).join('\n')
         setConocimientosTexto(toText(['conocimiento']))
-        setDestrezasTexto(toText(['destreza_general', 'destreza_especifica']))
+        setHerramientasTexto(toText(['herramienta', 'destreza_especifica']))
+        setDestrezasTexto(toText(['destreza_general']))
         setConducualesTexto(toText(['capacidad']))
       }
       if (acts) setActividades(acts)
@@ -168,9 +170,10 @@ export default function EditarPuesto() {
       const conductuales = (data.capacidades ?? []).map((c: { descripcion: string }) => c.descripcion)
 
       setConocimientosTexto(conocimientos.join('\n'))
-      setDestrezasTexto([...destrezasGen, ...destrezasEsp].join('\n'))
+      setHerramientasTexto(destrezasEsp.join('\n'))
+      setDestrezasTexto(destrezasGen.join('\n'))
       setConducualesTexto(conductuales.join('\n'))
-      setMensajeIA(`IA sugirió ${conocimientos.length} conocimientos, ${destrezasGen.length + destrezasEsp.length} destrezas y ${conductuales.length} conductuales — puedes editarlos.`)
+      setMensajeIA(`IA sugirió ${conocimientos.length} conocimientos, ${destrezasEsp.length} herramientas, ${destrezasGen.length} destrezas y ${conductuales.length} conductuales — puedes editarlos.`)
     } catch (e) {
       setMensajeIA(`Error: ${e instanceof Error ? e.message : 'Error desconocido'}`)
       setMensajeError(true)
@@ -263,7 +266,8 @@ export default function EditarPuesto() {
     await supabase.from('competencias_puesto').delete().eq('puesto_id', id)
     const nuevas = [
       ...conocimientosTexto.split('\n').filter(l => l.trim()).map(l => ({ puesto_id: id, tipo: 'conocimiento', descripcion: l.trim(), sugerida_ia: false })),
-      ...destrezasTexto.split('\n').filter(l => l.trim()).map(l => ({ puesto_id: id, tipo: 'destreza_especifica', descripcion: l.trim(), sugerida_ia: false })),
+      ...herramientasTexto.split('\n').filter(l => l.trim()).map(l => ({ puesto_id: id, tipo: 'herramienta', descripcion: l.trim(), sugerida_ia: false })),
+      ...destrezasTexto.split('\n').filter(l => l.trim()).map(l => ({ puesto_id: id, tipo: 'destreza_general', descripcion: l.trim(), sugerida_ia: false })),
       ...conductualesTexto.split('\n').filter(l => l.trim()).map(l => ({ puesto_id: id, tipo: 'capacidad', descripcion: l.trim(), sugerida_ia: false })),
     ]
     if (nuevas.length > 0) await supabase.from('competencias_puesto').insert(nuevas)
@@ -627,8 +631,20 @@ export default function EditarPuesto() {
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <label style={labelStyle}>🛠️ Sección 6 — Destrezas y habilidades</label>
-                <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 6px' }}>Habilidades técnicas y cognitivas específicas del puesto...</p>
+                <label style={labelStyle}>🧰 Sección 6 — Herramientas y programas</label>
+                <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 6px' }}>Software, plataformas, equipos y programas que usa el puesto...</p>
+                <textarea
+                  value={herramientasTexto}
+                  onChange={e => setHerramientasTexto(e.target.value)}
+                  rows={5}
+                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.8 }}
+                  placeholder={'Ej: Office\nTeams\nSistema contable...'}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>🛠️ Sección 7 — Destrezas y habilidades (MDT)</label>
+                <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 6px' }}>Habilidades técnicas y cognitivas específicas del puesto, del diccionario MDT...</p>
                 <textarea
                   value={destrezasTexto}
                   onChange={e => setDestrezasTexto(e.target.value)}
@@ -639,7 +655,7 @@ export default function EditarPuesto() {
               </div>
 
               <div>
-                <label style={labelStyle}>🤝 Sección 7 — Competencias conductuales</label>
+                <label style={labelStyle}>🤝 Sección 8 — Competencias conductuales</label>
                 <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 6px' }}>Actitudes, valores y comportamientos esperados...</p>
                 <textarea
                   value={conductualesTexto}

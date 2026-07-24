@@ -106,7 +106,7 @@ export default function ImportarManual() {
       // Competencias separadas por tipo
       const todasCompetencias = [
         ...(puesto.conocimientos ?? []).map(d => ({ puesto_id: pData.id, tipo: 'conocimiento', descripcion: d, sugerida_ia: true })),
-        ...(puesto.destrezas ?? []).map(d => ({ puesto_id: pData.id, tipo: 'destreza_especifica', descripcion: d, sugerida_ia: true })),
+        ...(puesto.destrezas ?? []).map(d => ({ puesto_id: pData.id, tipo: 'destreza_general', descripcion: d, sugerida_ia: true })),
         ...(puesto.competencias_conductuales ?? []).map(d => ({ puesto_id: pData.id, tipo: 'capacidad', descripcion: d, sugerida_ia: true })),
         // compatibilidad con respuesta legacy
         ...(puesto.competencias_mencionadas ?? []).map(d => ({ puesto_id: pData.id, tipo: 'conocimiento', descripcion: d, sugerida_ia: true })),

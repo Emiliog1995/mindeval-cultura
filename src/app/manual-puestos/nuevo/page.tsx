@@ -137,7 +137,7 @@ function NuevoPuestoInner() {
           _key: `oc_con_${i}`,
         }))
         const herramComp: Competencia[] = (data.herramientas ?? []).map((h: string, i: number) => ({
-          tipo: 'destreza_general' as const,
+          tipo: 'herramienta' as const,
           descripcion: h,
           sugerida_ia: false,
           _key: `oc_her_${i}`,
@@ -234,6 +234,11 @@ function NuevoPuestoInner() {
       const nuevas: Competencia[] = [
         ...(data.conocimientos ?? []).map((c: { descripcion: string }, i: number) => ({ tipo: 'conocimiento', descripcion: c.descripcion, sugerida_ia: true, _key: `c${i}` })),
         ...(data.destrezas_generales ?? []).map((d: { nombre: string; codigo: string; descripcion: string }, i: number) => ({ tipo: 'destreza_general', descripcion: `${d.codigo} — ${d.nombre}: ${d.descripcion}`, sugerida_ia: true, _key: `dg${i}` })),
+        ...[
+          ...(data.destrezas_especificas?.informaticos ?? []),
+          ...(data.destrezas_especificas?.idiomas ?? []),
+          ...(data.destrezas_especificas?.equipos ?? []),
+        ].map((h: string, i: number) => ({ tipo: 'herramienta', descripcion: h, sugerida_ia: true, _key: `he${i}` })),
         ...(data.capacidades ?? []).map((c: { descripcion: string }, i: number) => ({ tipo: 'capacidad', descripcion: c.descripcion, sugerida_ia: true, _key: `cap${i}` })),
       ]
       setCompetencias(prev => [...prev.filter(c => !c.sugerida_ia), ...nuevas])
@@ -683,8 +688,8 @@ function NuevoPuestoInner() {
 
             {competencias.length > 0 && (
               <div>
-                {(['conocimiento', 'destreza_general', 'capacidad'] as const).map(tipo => {
-                  const labels: Record<string, string> = { conocimiento: 'Conocimientos', destreza_general: 'Destrezas generales MDT', capacidad: 'Competencias conductuales' }
+                {(['conocimiento', 'herramienta', 'destreza_general', 'capacidad'] as const).map(tipo => {
+                  const labels: Record<string, string> = { conocimiento: 'Conocimientos', herramienta: 'Herramientas y Programas', destreza_general: 'Destrezas generales MDT', capacidad: 'Competencias conductuales' }
                   const items = competencias.filter(c => c.tipo === tipo)
                   if (items.length === 0) return null
                   return (
