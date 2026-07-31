@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 import { authHeaders } from '@/lib/auth-headers'
-import { calcularTotal, identificarEsenciales } from '@/lib/mdt-formula'
+import { calcularTotal } from '@/lib/mdt-formula'
 
 const DARK = '#0A1A32'
 const GOLD = '#10b981'
@@ -208,7 +208,6 @@ export default function EditarPuesto() {
     setGuardando(true)
 
     const conValores = actividades.filter(a => a.descripcion.trim() && a.frecuencia && a.consecuencia && a.complejidad)
-    const esenciales = new Set(identificarEsenciales(conValores).map(a => a.orden))
 
     await supabase.from('indicadores_puesto').delete().eq('puesto_id', id)
     await supabase.from('actividades_puesto').delete().eq('puesto_id', id)
@@ -222,7 +221,7 @@ export default function EditarPuesto() {
         frecuencia: a.frecuencia,
         consecuencia: a.consecuencia,
         complejidad: a.complejidad,
-        es_esencial: esenciales.has(a.orden),
+        es_esencial: a.es_esencial,
       }))).select('id, orden')
       nuevasActividades = insertadas ?? []
     }
