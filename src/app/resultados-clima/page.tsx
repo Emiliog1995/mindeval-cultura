@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
 import {
@@ -10,22 +10,22 @@ import {
 } from "recharts";
 import { obtenerClima, type ClimaRespuesta } from "@/lib/supabase";
 import { getClimaLevelColor, interpretacionClima, type ClimaResult } from "@/lib/clima-scoring";
-import { isAdmin } from "@/lib/auth";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 function ResultadosClimaContent() {
   const params   = useSearchParams();
-  const router   = useRouter();
+  const { verificando } = useAuthGuard();
   const id       = params.get("id");
   const [rec, setRec]     = useState<ClimaRespuesta | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isAdmin()) { router.replace("/admin"); return; }
+    if (verificando) return;
     if (!id) { setError("No se encontró el ID del registro."); return; }
     obtenerClima(id)
       .then(setRec)
       .catch(() => setError("No se pudo cargar el registro de clima."));
-  }, [id, router]);
+  }, [id, verificando]);
 
   async function descargarPDF() {
     if (!rec) return;
@@ -114,6 +114,8 @@ function ResultadosClimaContent() {
 
     doc.save(`Clima_${(rec.nombre ?? "participante").replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
   }
+
+  if (verificando) return null;
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>

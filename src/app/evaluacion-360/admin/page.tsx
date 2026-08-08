@@ -12,11 +12,12 @@ import {
   calcularBrechas,
 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
-import { isAdmin } from "@/lib/auth";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 import NineBoxMatrix from "@/components/360/NineBoxMatrix";
 
 export default function Admin360Page() {
   const router = useRouter();
+  const { verificando } = useAuthGuard();
   const [resultados, setResultados] = useState<ResultadoConsolidado360[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtroDpto, setFiltroDpto] = useState("");
@@ -24,7 +25,7 @@ export default function Admin360Page() {
   const [filtroNivel, setFiltroNivel] = useState("");
 
   useEffect(() => {
-    if (!isAdmin()) { router.replace("/admin"); return; }
+    if (verificando) return;
 
     async function cargar() {
       try {
@@ -65,7 +66,7 @@ export default function Admin360Page() {
       }
     }
     cargar();
-  }, [router]);
+  }, [verificando]);
 
   const dptos   = [...new Set(resultados.map((r) => r.evaluado.departamento))].sort();
   const periodos = [...new Set(resultados.map((r) => r.periodo))].sort();
@@ -116,6 +117,8 @@ export default function Admin360Page() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  if (verificando) return null;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
 import {
@@ -10,23 +10,23 @@ import {
 } from "recharts";
 import { obtenerEvaluacion, type Evaluacion } from "@/lib/supabase";
 import { getLevelColor, interpretacion } from "@/lib/scoring";
-import { isAdmin } from "@/lib/auth";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 import type { ScoringResult } from "@/lib/scoring";
 
 function ResultadosContent() {
   const params = useSearchParams();
-  const router = useRouter();
+  const { verificando } = useAuthGuard();
   const id = params.get("id");
   const [ev, setEv] = useState<Evaluacion | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isAdmin()) { router.replace("/admin"); return; }
+    if (verificando) return;
     if (!id) { setError("No se encontró el ID de evaluación."); return; }
     obtenerEvaluacion(id)
       .then(setEv)
       .catch(() => setError("No se pudo cargar la evaluación."));
-  }, [id, router]);
+  }, [id, verificando]);
 
   async function descargarPDF() {
     if (!ev) return;
@@ -129,6 +129,8 @@ function ResultadosContent() {
 
     doc.save(`DOCS_${ev.nombre.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`);
   }
+
+  if (verificando) return null;
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f0f4f8" }}>

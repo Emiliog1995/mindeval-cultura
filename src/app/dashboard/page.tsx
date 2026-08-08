@@ -13,7 +13,7 @@ import {
 } from "@/lib/supabase";
 import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
 import { getLevelColor } from "@/lib/scoring";
-import { isAdmin, logout } from "@/lib/auth";
+import { useAuthGuard, cerrarSesion } from "@/lib/useAuthGuard";
 import type { ScoringResult } from "@/lib/scoring";
 import { CLIMA_DIMENSIONS, type ClimaDimension } from "@/lib/clima-items";
 import { getClimaLevelColor, type ClimaResult } from "@/lib/clima-scoring";
@@ -37,6 +37,7 @@ export default function Dashboard() {
 function DashboardInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { verificando } = useAuthGuard();
 
   // ─── Tab ─────────────────────────────────────────────────────────────────
   const tabInicial = TABS_VALIDOS.includes(searchParams.get("tab") as Tab) ? (searchParams.get("tab") as Tab) : "docs";
@@ -76,7 +77,7 @@ function DashboardInner() {
   const [errorClima, setErrorClima]       = useState("");
 
   useEffect(() => {
-    if (!isAdmin()) { router.replace("/admin"); return; }
+    if (verificando) return;
 
     listarEvaluaciones()
       .then(setEvaluaciones)
@@ -90,7 +91,7 @@ function DashboardInner() {
 
     listarSesiones().then(setSesiones).catch(() => {});
     listarEmpresas().then(setEmpresas).catch(() => {});
-  }, [router]);
+  }, [verificando]);
 
   async function handleCrearSesion() {
     if (nuevaTipo === "360") return handleGenerar360();
@@ -353,6 +354,8 @@ function DashboardInner() {
   const radarData      = promedioOrg();
   const radarDataClima = promedioOrgClima();
 
+  if (verificando) return null;
+
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
@@ -380,7 +383,7 @@ function DashboardInner() {
               </select>
             </div>
             <button
-              onClick={async () => { await logout(); router.push("/admin"); }}
+              onClick={async () => { await cerrarSesion(); router.push("/"); }}
               className="px-4 py-2 rounded-lg text-sm font-semibold text-white border border-white border-opacity-30 hover:border-opacity-60 transition"
             >
               Cerrar sesión
