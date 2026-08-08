@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 
@@ -35,11 +35,20 @@ function periodoActual() {
 }
 
 export default function DashboardNomina() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardNominaInner />
+    </Suspense>
+  )
+}
+
+function DashboardNominaInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { verificando } = useAuthGuard()
 
   const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [empresaSeleccionada, setEmpresaSeleccionada] = useState('')
+  const [empresaSeleccionada, setEmpresaSeleccionada] = useState(searchParams.get('empresa') ?? '')
   const [periodo, setPeriodo] = useState(periodoActual())
   const [filas, setFilas] = useState<NominaMensual[]>([])
   const [empleadosCount, setEmpleadosCount] = useState(0)

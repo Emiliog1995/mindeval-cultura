@@ -330,3 +330,166 @@ export async function listarTokens360(
 
 // El flujo público de completar un token 360° vive en /api/token/360/[token]
 // (server-side, con service_role) — ver src/app/api/token/360/[token]/route.ts
+
+// ── Panel de clientes: empresas, módulos activos, personas ─────────────────
+
+export const MODULOS_ECOSISTEMA = [
+  {
+    key: "cultura", label: "Cultura", href: "/dashboard", preseleccionaEmpresa: false,
+    captura: "Cuestionario de 60 ítems por evaluado — se levanta con cada empresa.",
+  },
+  {
+    key: "clima", label: "Clima", href: "/dashboard", preseleccionaEmpresa: false,
+    captura: "Encuesta de clima (anónima) — se levanta con cada empresa.",
+  },
+  {
+    key: "salud_organizacional", label: "Salud Organizacional", href: "/dashboard", preseleccionaEmpresa: false,
+    captura: "Sesión de diagnóstico de salud organizacional propia de esta empresa.",
+  },
+  {
+    key: "evaluacion_360", label: "Evaluación 360°", href: "/dashboard", preseleccionaEmpresa: false,
+    captura: "Evaluados, evaluadores y período — específico de esta empresa.",
+  },
+  {
+    key: "manual_puestos", label: "Manual de Puestos", href: "/manual-puestos", preseleccionaEmpresa: true,
+    captura: "Catálogo de puestos con actividades, competencias e indicadores — trabajo entregable único.",
+  },
+  {
+    key: "nomina", label: "Nómina", href: "/nomina", preseleccionaEmpresa: true,
+    captura: "Empleados de nómina, parámetros legales y períodos — se levanta con cada empresa.",
+  },
+  {
+    key: "seleccion", label: "Selección (MindEval)", href: "/seleccion", preseleccionaEmpresa: false,
+    captura: "Vacantes y candidatos del proceso de selección de esta empresa.",
+  },
+] as const;
+
+export type ModuloKey = (typeof MODULOS_ECOSISTEMA)[number]["key"];
+
+export interface Empresa {
+  id: string;
+  nombre: string;
+  sector: string | null;
+  ruc: string | null;
+  contacto: string | null;
+  fecha_creacion: string;
+  logo_url: string | null;
+}
+
+export interface ModuloActivo {
+  id: string;
+  empresa_id: string;
+  modulo: ModuloKey;
+  estado: "activo" | "inactivo" | "pausado";
+  fecha_activacion: string;
+  fecha_desactivacion: string | null;
+  notas: string | null;
+}
+
+export interface Persona {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  cedula: string | null;
+  email: string | null;
+  puesto_id: string | null;
+}
+
+export async function listarEmpresas(): Promise<Empresa[]> {
+  const { data, error } = await supabase
+    .from("empresas_mdt")
+    .select("*")
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Empresa[];
+}
+
+export async function obtenerEmpresa(id: string): Promise<Empresa> {
+  const { data, error } = await supabase
+    .from("empresas_mdt")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Empresa;
+}
+
+export async function crearEmpresa(input: {
+  nombre: string;
+  sector?: string;
+  ruc?: string;
+  contacto?: string;
+}): Promise<Empresa> {
+  const { data, error } = await supabase
+    .from("empresas_mdt")
+    .insert({
+      nombre: input.nombre.trim(),
+      sector: input.sector?.trim() || null,
+      ruc: input.ruc?.trim() || null,
+      contacto: input.contacto?.trim() || null,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as Empresa;
+}
+
+export async function actualizarEmpresa(
+  id: string,
+  input: { nombre?: string; sector?: string; ruc?: string; contacto?: string }
+): Promise<void> {
+  const { error } = await supabase.from("empresas_mdt").update(input).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function listarModulosActivos(): Promise<ModuloActivo[]> {
+  const { data, error } = await supabase.from("modulos_activos").select("*");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ModuloActivo[];
+}
+
+export async function listarModulosActivosPorEmpresa(empresaId: string): Promise<ModuloActivo[]> {
+  const { data, error } = await supabase
+    .from("modulos_activos")
+    .select("*")
+    .eq("empresa_id", empresaId);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ModuloActivo[];
+}
+
+export async function activarModulo(empresaId: string, modulo: ModuloKey): Promise<ModuloActivo> {
+  const { data, error } = await supabase
+    .from("modulos_activos")
+    .upsert(
+      { empresa_id: empresaId, modulo, estado: "activo", fecha_activacion: new Date().toISOString().slice(0, 10), fecha_desactivacion: null },
+      { onConflict: "empresa_id,modulo" }
+    )
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ModuloActivo;
+}
+
+export async function cambiarEstadoModulo(
+  id: string,
+  estado: "activo" | "inactivo" | "pausado"
+): Promise<void> {
+  const { error } = await supabase
+    .from("modulos_activos")
+    .update({
+      estado,
+      fecha_desactivacion: estado === "inactivo" ? new Date().toISOString().slice(0, 10) : null,
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function listarPersonasPorEmpresa(empresaId: string): Promise<Persona[]> {
+  const { data, error } = await supabase
+    .from("personas")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Persona[];
+}

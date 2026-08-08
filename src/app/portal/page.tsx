@@ -158,6 +158,34 @@ export default function Portal() {
           </div>
         </Link>
 
+        {/* MindEval Selección */}
+        <Link href="/seleccion" className="group block">
+          <div
+            className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: "rgba(245,184,0,0.15)", border: "2px solid rgba(245,184,0,0.4)" }}
+            >
+              <svg className="w-8 h-8" fill="none" stroke="#F5B800" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">MindEval Selección</h2>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: "1.5" }}>
+              Selección de talento con 7 etapas e IA — CVs, SENESCYT, psicométricas, técnica, assessment y entrevista
+            </p>
+            <div
+              className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
+              style={{ background: "#F5B800", color: "#1B2A5B" }}
+            >
+              Gestionar selección →
+            </div>
+          </div>
+        </Link>
+
         {/* Nómina */}
         <Link href="/nomina" className="group block">
           <div
@@ -182,6 +210,34 @@ export default function Portal() {
               style={{ background: "#c9a84c", color: "#1a2035" }}
             >
               Gestionar nómina →
+            </div>
+          </div>
+        </Link>
+
+        {/* Panel de clientes */}
+        <Link href="/admin/clientes" className="group block">
+          <div
+            className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+              style={{ background: "rgba(201,168,76,0.15)", border: "2px solid rgba(201,168,76,0.4)" }}
+            >
+              <svg className="w-8 h-8" fill="none" stroke="#c9a84c" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2M19 21H5m0 0H3m4-14h2m-2 4h2m-2 4h2m6-8h2m-2 4h2m-2 4h2" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Panel de Clientes</h2>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: "1.5" }}>
+              Empresas registradas y módulos activos por cliente — activar, pausar, ir al módulo
+            </p>
+            <div
+              className="mt-6 inline-block px-5 py-2 rounded-full text-sm font-semibold"
+              style={{ background: "#c9a84c", color: "#1a2035" }}
+            >
+              Ver clientes →
             </div>
           </div>
         </Link>

@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 
@@ -25,11 +25,20 @@ type Empresa = {
 }
 
 export default function PanelManualPuestos() {
+  return (
+    <Suspense fallback={null}>
+      <PanelManualPuestosInner />
+    </Suspense>
+  )
+}
+
+function PanelManualPuestosInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { verificando } = useAuthGuard()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [puestos, setPuestos] = useState<Puesto[]>([])
-  const [empresaSeleccionada, setEmpresaSeleccionada] = useState('')
+  const [empresaSeleccionada, setEmpresaSeleccionada] = useState(searchParams.get('empresa') ?? '')
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [enlaceCopiad, setEnlaceCopiad] = useState<string | null>(null)
