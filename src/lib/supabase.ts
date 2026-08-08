@@ -376,10 +376,6 @@ export const MODULOS_ECOSISTEMA = [
     key: "nomina", label: "Nómina", href: "/nomina", preseleccionaEmpresa: true,
     captura: "Empleados de nómina, parámetros legales y períodos — se levanta con cada empresa.",
   },
-  {
-    key: "seleccion", label: "Selección (MindEval)", href: "/seleccion", preseleccionaEmpresa: false,
-    captura: "Vacantes y candidatos del proceso de selección de esta empresa.",
-  },
 ] as const;
 
 export type ModuloKey = (typeof MODULOS_ECOSISTEMA)[number]["key"];
