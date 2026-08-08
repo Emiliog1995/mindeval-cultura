@@ -16,7 +16,7 @@ export default function PanelClientes() {
   const [loading, setLoading] = useState(true)
 
   const [nuevaEmpresa, setNuevaEmpresa] = useState(false)
-  const [form, setForm] = useState({ nombre: '', sector: '', ruc: '', contacto: '' })
+  const [form, setForm] = useState({ nombre: '', sector: '', ruc: '', contacto: '', tamanoEstimado: '' })
   const [creando, setCreando] = useState(false)
   const [errorForm, setErrorForm] = useState('')
 
@@ -35,9 +35,12 @@ export default function PanelClientes() {
     setCreando(true)
     setErrorForm('')
     try {
-      const empresa = await crearEmpresa(form)
+      const empresa = await crearEmpresa({
+        ...form,
+        tamano_estimado: form.tamanoEstimado.trim() ? Number(form.tamanoEstimado) : null,
+      })
       setNuevaEmpresa(false)
-      setForm({ nombre: '', sector: '', ruc: '', contacto: '' })
+      setForm({ nombre: '', sector: '', ruc: '', contacto: '', tamanoEstimado: '' })
       router.push(`/admin/clientes/${empresa.id}`)
     } catch (e) {
       setErrorForm(e instanceof Error ? e.message : 'No se pudo crear la empresa')
@@ -89,6 +92,9 @@ export default function PanelClientes() {
               <input value={form.contacto} onChange={e => setForm(f => ({ ...f, contacto: e.target.value }))}
                 placeholder="Contacto (nombre, tel o email)"
                 style={{ padding: '.5rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }} />
+              <input value={form.tamanoEstimado} onChange={e => setForm(f => ({ ...f, tamanoEstimado: e.target.value.replace(/\D/g, '') }))}
+                placeholder="Empleados estimados (opcional)" inputMode="numeric"
+                style={{ padding: '.5rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }} />
             </div>
             {errorForm && <div style={{ color: '#b91c1c', fontSize: 12, marginTop: 8 }}>{errorForm}</div>}
             <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
@@ -127,7 +133,10 @@ export default function PanelClientes() {
                   }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: '#1a2035' }}>{emp.nombre}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{emp.sector || 'Sector no especificado'}</div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                      {emp.sector || 'Sector no especificado'}
+                      {emp.tamano_estimado ? ` · ~${emp.tamano_estimado} empleados` : ''}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <span style={{

@@ -22,7 +22,7 @@ export default function FichaEmpresa({ params }: { params: Promise<{ id: string 
   const [loading, setLoading] = useState(true)
 
   const [editando, setEditando] = useState(false)
-  const [form, setForm] = useState({ nombre: '', sector: '', ruc: '', contacto: '' })
+  const [form, setForm] = useState({ nombre: '', sector: '', ruc: '', contacto: '', tamanoEstimado: '' })
   const [guardando, setGuardando] = useState(false)
 
   const [confirmando, setConfirmando] = useState<ModuloKey | null>(null)
@@ -41,14 +41,20 @@ export default function FichaEmpresa({ params }: { params: Promise<{ id: string 
     setEmpresa(emp)
     setModulos(mods)
     setPersonasCount(personas.length)
-    setForm({ nombre: emp.nombre, sector: emp.sector ?? '', ruc: emp.ruc ?? '', contacto: emp.contacto ?? '' })
+    setForm({
+      nombre: emp.nombre, sector: emp.sector ?? '', ruc: emp.ruc ?? '', contacto: emp.contacto ?? '',
+      tamanoEstimado: emp.tamano_estimado != null ? String(emp.tamano_estimado) : '',
+    })
     setLoading(false)
   }
 
   async function guardarDatos() {
     setGuardando(true)
     try {
-      await actualizarEmpresa(id, form)
+      await actualizarEmpresa(id, {
+        nombre: form.nombre, sector: form.sector, ruc: form.ruc, contacto: form.contacto,
+        tamano_estimado: form.tamanoEstimado.trim() ? Number(form.tamanoEstimado) : null,
+      })
       await cargar()
       setEditando(false)
     } finally {
@@ -122,6 +128,9 @@ export default function FichaEmpresa({ params }: { params: Promise<{ id: string 
                   style={{ padding: '.5rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }} />
                 <input value={form.contacto} onChange={e => setForm(f => ({ ...f, contacto: e.target.value }))} placeholder="Contacto"
                   style={{ padding: '.5rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }} />
+                <input value={form.tamanoEstimado} onChange={e => setForm(f => ({ ...f, tamanoEstimado: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="Empleados estimados" inputMode="numeric"
+                  style={{ padding: '.5rem .6rem', border: '1.5px solid #d1d5db', borderRadius: 6, fontSize: 13, outline: 'none', color: '#111' }} />
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                 <button onClick={guardarDatos} disabled={guardando}
@@ -138,6 +147,7 @@ export default function FichaEmpresa({ params }: { params: Promise<{ id: string 
               <div><span style={{ color: '#9ca3af' }}>Sector: </span><span style={{ color: '#111' }}>{empresa.sector || '—'}</span></div>
               <div><span style={{ color: '#9ca3af' }}>RUC: </span><span style={{ color: '#111' }}>{empresa.ruc || '—'}</span></div>
               <div><span style={{ color: '#9ca3af' }}>Contacto: </span><span style={{ color: '#111' }}>{empresa.contacto || '—'}</span></div>
+              <div><span style={{ color: '#9ca3af' }}>Empleados estimados: </span><span style={{ color: '#111' }}>{empresa.tamano_estimado ?? '—'}</span></div>
               <div><span style={{ color: '#9ca3af' }}>Personas registradas: </span><span style={{ color: '#111' }}>{personasCount}</span></div>
             </div>
           )}

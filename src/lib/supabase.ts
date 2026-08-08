@@ -386,6 +386,7 @@ export interface Empresa {
   sector: string | null;
   ruc: string | null;
   contacto: string | null;
+  tamano_estimado: number | null;
   fecha_creacion: string;
   logo_url: string | null;
 }
@@ -433,6 +434,7 @@ export async function crearEmpresa(input: {
   sector?: string;
   ruc?: string;
   contacto?: string;
+  tamano_estimado?: number | null;
 }): Promise<Empresa> {
   const { data, error } = await supabase
     .from("empresas_mdt")
@@ -441,6 +443,7 @@ export async function crearEmpresa(input: {
       sector: input.sector?.trim() || null,
       ruc: input.ruc?.trim() || null,
       contacto: input.contacto?.trim() || null,
+      tamano_estimado: input.tamano_estimado ?? null,
     })
     .select("*")
     .single();
@@ -450,7 +453,7 @@ export async function crearEmpresa(input: {
 
 export async function actualizarEmpresa(
   id: string,
-  input: { nombre?: string; sector?: string; ruc?: string; contacto?: string }
+  input: { nombre?: string; sector?: string; ruc?: string; contacto?: string; tamano_estimado?: number | null }
 ): Promise<void> {
   const { error } = await supabase.from("empresas_mdt").update(input).eq("id", id);
   if (error) throw new Error(error.message);
