@@ -8,12 +8,13 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 export const supabase = createClient(url, key);
 
 export interface EvaluadoInput {
-  nombre:    string;
-  cargo:     string;
-  area:      string;
-  empresa:   string;
-  respuestas: Record<string, number>;
-  scores:    ScoringResult;
+  nombre:      string;
+  cargo:       string;
+  area:        string;
+  empresa:     string;
+  empresa_id?: string | null;
+  respuestas:  Record<string, number>;
+  scores:      ScoringResult;
 }
 
 export interface Evaluacion extends EvaluadoInput {
@@ -21,6 +22,7 @@ export interface Evaluacion extends EvaluadoInput {
   created_at:   string;
   score_global: number;
   nivel:        string;
+  empresa_id?:  string | null;
 }
 
 export async function guardarEvaluacion(data: EvaluadoInput): Promise<string> {
@@ -31,6 +33,7 @@ export async function guardarEvaluacion(data: EvaluadoInput): Promise<string> {
       cargo:        data.cargo,
       area:         data.area,
       empresa:      data.empresa,
+      empresa_id:   data.empresa_id ?? null,
       respuestas:   data.respuestas,
       scores:       data.scores,
       score_global: data.scores.global,
@@ -67,12 +70,13 @@ export async function listarEvaluaciones(): Promise<Evaluacion[]> {
 // ─── Clima Laboral ───────────────────────────────────────────────────────────
 
 export interface ClimaInput {
-  respuestas: Record<string, number>;
-  scores:     ClimaResult;
-  nombre?:    string;
-  cargo?:     string;
-  area?:      string;
-  empresa?:   string;
+  respuestas:  Record<string, number>;
+  scores:      ClimaResult;
+  nombre?:     string;
+  cargo?:      string;
+  area?:       string;
+  empresa?:    string;
+  empresa_id?: string | null;
 }
 
 export interface ClimaRespuesta {
@@ -85,6 +89,7 @@ export interface ClimaRespuesta {
   cargo?:       string;
   area?:        string;
   empresa?:     string;
+  empresa_id?:  string | null;
   nivel:        string;
 }
 
@@ -100,6 +105,7 @@ export async function guardarClima(data: ClimaInput): Promise<string> {
       cargo:        data.cargo  ?? null,
       area:         data.area   ?? null,
       empresa:      data.empresa ?? null,
+      empresa_id:   data.empresa_id ?? null,
     })
     .select("id")
     .single();
@@ -173,6 +179,16 @@ export async function listarSesiones(): Promise<Sesion[]> {
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as Sesion[];
+}
+
+export async function obtenerSesion(id: string): Promise<Sesion | null> {
+  const { data, error } = await supabase
+    .from("sesiones")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as Sesion | null;
 }
 
 export async function completarSesion(id: string): Promise<void> {
@@ -337,11 +353,11 @@ export async function listarTokens360(
 
 export const MODULOS_ECOSISTEMA = [
   {
-    key: "cultura", label: "Cultura", href: "/dashboard", tab: "sesiones", preseleccionaEmpresa: true,
+    key: "cultura", label: "Cultura", href: "/dashboard", tab: "docs", preseleccionaEmpresa: true,
     captura: "Cuestionario de 60 ítems por evaluado — se levanta con cada empresa.",
   },
   {
-    key: "clima", label: "Clima", href: "/dashboard", tab: "sesiones", preseleccionaEmpresa: true,
+    key: "clima", label: "Clima", href: "/dashboard", tab: "clima", preseleccionaEmpresa: true,
     captura: "Encuesta de clima (anónima) — se levanta con cada empresa.",
   },
   {
@@ -349,7 +365,7 @@ export const MODULOS_ECOSISTEMA = [
     captura: "Se calcula a partir de Cultura y Clima ya cargados de esta empresa — no requiere captura propia.",
   },
   {
-    key: "evaluacion_360", label: "Evaluación 360°", href: "/dashboard", tab: "sesiones", preseleccionaEmpresa: true,
+    key: "evaluacion_360", label: "Evaluación 360°", href: "/dashboard", tab: "eval360", preseleccionaEmpresa: true,
     captura: "Evaluados, evaluadores y período — específico de esta empresa.",
   },
   {

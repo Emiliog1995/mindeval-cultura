@@ -221,10 +221,11 @@ function DashboardInner() {
   }
 
   // ─── DOCS helpers ────────────────────────────────────────────────────────
-  const areas  = [...new Set(evaluaciones.map((e) => e.area).filter(Boolean))].sort();
-  const cargos = [...new Set(evaluaciones.map((e) => e.cargo).filter(Boolean))].sort();
+  const evaluacionesEmpresa = nuevaEmpresaId ? evaluaciones.filter((e) => e.empresa_id === nuevaEmpresaId) : evaluaciones;
+  const areas  = [...new Set(evaluacionesEmpresa.map((e) => e.area).filter(Boolean))].sort();
+  const cargos = [...new Set(evaluacionesEmpresa.map((e) => e.cargo).filter(Boolean))].sort();
 
-  const filtradas = evaluaciones.filter((e) => {
+  const filtradas = evaluacionesEmpresa.filter((e) => {
     if (filtroArea  && e.area  !== filtroArea)  return false;
     if (filtroCargo && e.cargo !== filtroCargo) return false;
     return true;
@@ -301,10 +302,11 @@ function DashboardInner() {
   const [filtroAreaClima,  setFiltroAreaClima]  = useState("");
   const [filtroCargoClima, setFiltroCargoClima] = useState("");
 
-  const areasClima  = [...new Set(climaData.map((r) => r.area).filter(Boolean))].sort() as string[];
-  const cargosClima = [...new Set(climaData.map((r) => r.cargo).filter(Boolean))].sort() as string[];
+  const climaDataEmpresa = nuevaEmpresaId ? climaData.filter((r) => r.empresa_id === nuevaEmpresaId) : climaData;
+  const areasClima  = [...new Set(climaDataEmpresa.map((r) => r.area).filter(Boolean))].sort() as string[];
+  const cargosClima = [...new Set(climaDataEmpresa.map((r) => r.cargo).filter(Boolean))].sort() as string[];
 
-  const climaFiltrada = climaData.filter((r) => {
+  const climaFiltrada = climaDataEmpresa.filter((r) => {
     if (filtroAreaClima  && r.area  !== filtroAreaClima)  return false;
     if (filtroCargoClima && r.cargo !== filtroCargoClima) return false;
     return true;
@@ -362,12 +364,28 @@ function DashboardInner() {
             <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
             <p className="text-white text-xs mt-0.5 opacity-70">Dashboard de Consultor</p>
           </div>
-          <button
-            onClick={async () => { await logout(); router.push("/admin"); }}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white border border-white border-opacity-30 hover:border-opacity-60 transition"
-          >
-            Cerrar sesión
-          </button>
+          <div className="flex items-center gap-3">
+            <div>
+              <label className="block text-white opacity-60" style={{ fontSize: 10, fontWeight: 600, marginBottom: 2 }}>Empresa</label>
+              <select
+                value={nuevaEmpresaId}
+                onChange={(e) => setNuevaEmpresaId(e.target.value)}
+                className="rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ background: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.2)" }}
+              >
+                <option value="" style={{ color: "#111" }}>Todas las empresas</option>
+                {empresas.map((emp) => (
+                  <option key={emp.id} value={emp.id} style={{ color: "#111" }}>{emp.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={async () => { await logout(); router.push("/admin"); }}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white border border-white border-opacity-30 hover:border-opacity-60 transition"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
       </header>
 
@@ -412,9 +430,9 @@ function DashboardInner() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 { label: "Evaluados (muestra)", value: filtradas.length.toString() },
-                { label: "Total en BD",         value: evaluaciones.length.toString() },
+                { label: "Total en BD",         value: evaluacionesEmpresa.length.toString() },
                 { label: "Promedio Global",     value: globalProm },
-                { label: "Último ingreso",      value: evaluaciones[0] ? new Date(evaluaciones[0].created_at).toLocaleDateString("es-EC") : "-" },
+                { label: "Último ingreso",      value: evaluacionesEmpresa[0] ? new Date(evaluacionesEmpresa[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
                   <p className="text-2xl font-bold" style={{ color: "#0A1A32" }}>{value}</p>
@@ -488,7 +506,7 @@ function DashboardInner() {
             {/* Tabla de evaluados */}
             <div className="bg-white rounded-2xl shadow p-6">
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
-                Listado de Evaluados{filtradas.length !== evaluaciones.length && ` (${filtradas.length} de ${evaluaciones.length})`}
+                Listado de Evaluados{filtradas.length !== evaluacionesEmpresa.length && ` (${filtradas.length} de ${evaluacionesEmpresa.length})`}
               </h2>
 
               {cargando ? (
@@ -569,9 +587,9 @@ function DashboardInner() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 { label: "Evaluados (muestra)", value: climaFiltrada.length.toString() },
-                { label: "Total en BD",         value: climaData.length.toString() },
+                { label: "Total en BD",         value: climaDataEmpresa.length.toString() },
                 { label: "Promedio Global",     value: globalClima },
-                { label: "Último ingreso",      value: climaData[0] ? new Date(climaData[0].created_at).toLocaleDateString("es-EC") : "-" },
+                { label: "Último ingreso",      value: climaDataEmpresa[0] ? new Date(climaDataEmpresa[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
                   <p className="text-2xl font-bold" style={{ color: "#0A1A32" }}>{value}</p>
@@ -645,7 +663,7 @@ function DashboardInner() {
             {/* Tabla evaluados clima */}
             <div className="bg-white rounded-2xl shadow p-6">
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
-                Listado de Evaluados{climaFiltrada.length !== climaData.length && ` (${climaFiltrada.length} de ${climaData.length})`}
+                Listado de Evaluados{climaFiltrada.length !== climaDataEmpresa.length && ` (${climaFiltrada.length} de ${climaDataEmpresa.length})`}
               </h2>
 
               {cargandoClima ? (
@@ -719,16 +737,16 @@ function DashboardInner() {
 
         {/* ══════════════════ TAB: SALUD ORGANIZACIONAL ═══════════════════════ */}
         {activeTab === "salud" && (
-          <SaludOrganizacionalTab evaluaciones={evaluaciones} climaData={climaData} />
+          <SaludOrganizacionalTab evaluaciones={evaluacionesEmpresa} climaData={climaDataEmpresa} />
         )}
 
         {/* ══════════════════ TAB: RADAR DE RIESGO ════════════════════════════ */}
         {activeTab === "alertas" && (
-          <RadarRiesgoTab evaluaciones={evaluaciones} climaData={climaData} />
+          <RadarRiesgoTab evaluaciones={evaluacionesEmpresa} climaData={climaDataEmpresa} />
         )}
 
         {/* ══════════════════ TAB: EVALUACIÓN 360° ════════════════════════════ */}
-        {activeTab === "eval360" && <Eval360DashboardPreview />}
+        {activeTab === "eval360" && <Eval360DashboardPreview empresaId={nuevaEmpresaId || undefined} />}
 
         {/* ══════════════════ TAB: PROGRAMAR EVALUACIONES ═════════════════════ */}
         {activeTab === "sesiones" && (
@@ -751,16 +769,9 @@ function DashboardInner() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Empresa</label>
-                  <select
-                    value={nuevaEmpresaId}
-                    onChange={(e) => setNuevaEmpresaId(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900 w-56"
-                  >
-                    <option value="">Sin empresa</option>
-                    {empresas.map((emp) => (
-                      <option key={emp.id} value={emp.id}>{emp.nombre}</option>
-                    ))}
-                  </select>
+                  <div className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 w-56 bg-gray-50">
+                    {nombreEmpresaSeleccionada ?? "Sin empresa (elige arriba)"}
+                  </div>
                 </div>
 
                 {nuevaTipo === "360" && (

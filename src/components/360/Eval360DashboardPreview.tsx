@@ -8,17 +8,18 @@ import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import { COMPETENCIAS_360 } from "@/lib/360-types";
 import NineBoxMatrix from "./NineBoxMatrix";
 
-export default function Eval360DashboardPreview() {
+export default function Eval360DashboardPreview({ empresaId }: { empresaId?: string }) {
   const [resultados, setResultados] = useState<ResultadoConsolidado360[]>([]);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     async function cargar() {
       try {
-        const [evaluados, todasEval] = await Promise.all([
+        const [todosEvaluados, todasEval] = await Promise.all([
           listar360Evaluados(),
           listarTodas360Evaluaciones(),
         ]);
+        const evaluados = empresaId ? todosEvaluados.filter((e) => e.empresa_id === empresaId) : todosEvaluados;
 
         const res: ResultadoConsolidado360[] = [];
         for (const ev of evaluados) {
@@ -57,7 +58,7 @@ export default function Eval360DashboardPreview() {
       }
     }
     cargar();
-  }, []);
+  }, [empresaId]);
 
   const zonaVerde = resultados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
   const zonaRoja  = resultados.filter((r) => [1, 2].includes(r.cuadrante)).length;

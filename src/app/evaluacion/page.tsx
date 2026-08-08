@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ITEMS, DIMENSIONS, SUBSCALES } from "@/lib/items";
 import { calcularScores } from "@/lib/scoring";
-import { guardarEvaluacion } from "@/lib/supabase";
+import { guardarEvaluacion, obtenerSesion } from "@/lib/supabase";
 
 type Respuestas = Record<string, number>;
 type Paso = "datos" | "items" | "enviando" | "completado";
@@ -20,14 +20,35 @@ const OPCIONES = [
 const DIMS = ["I", "II", "III", "IV"] as const;
 
 export default function Cuestionario() {
+  return (
+    <Suspense fallback={null}>
+      <CuestionarioInner />
+    </Suspense>
+  );
+}
+
+function CuestionarioInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [paso, setPaso] = useState<Paso>("datos");
-  const [datos, setDatos] = useState({ nombre: "", cargo: "", area: "", empresa: "MINDTALENT" });
+  const [datos, setDatos] = useState({ nombre: "", cargo: "", area: "", empresa: "" });
+  const [empresaId, setEmpresaId] = useState<string | undefined>(undefined);
+  const [empresaBloqueada, setEmpresaBloqueada] = useState(false);
   const [consentimiento, setConsentimiento] = useState(false);
   const [respuestas, setRespuestas] = useState<Respuestas>({});
   const [dimActual, setDimActual] = useState(0);
   const [error, setError] = useState("");
   const submittedRef = useRef(false);
+
+  useEffect(() => {
+    const sesionId = searchParams.get("sesion");
+    if (!sesionId) return;
+    obtenerSesion(sesionId).then((sesion) => {
+      if (!sesion) return;
+      if (sesion.empresa) setDatos((p) => ({ ...p, empresa: sesion.empresa as string }));
+      if (sesion.empresa_id) { setEmpresaId(sesion.empresa_id); setEmpresaBloqueada(true); }
+    }).catch(() => {});
+  }, [searchParams]);
 
   // ── Datos del evaluado ──────────────────────────────────
   function handleDatos(e: React.FormEvent) {
@@ -98,7 +119,7 @@ export default function Cuestionario() {
     setPaso("enviando");
     try {
       const scores = calcularScores(respuestas);
-      await guardarEvaluacion({ ...datos, respuestas, scores });
+      await guardarEvaluacion({ ...datos, empresa_id: empresaId, respuestas, scores });
       sessionStorage.setItem("clima_datos_heredados", JSON.stringify({
         nombre:  datos.nombre,
         cargo:   datos.cargo,
@@ -148,18 +169,24 @@ export default function Cuestionario() {
                 { field: "nombre", label: "Nombre completo", placeholder: "Ej. María García López" },
                 { field: "cargo", label: "Cargo", placeholder: "Ej. Gerente de Operaciones" },
                 { field: "area", label: "Área / Departamento", placeholder: "Ej. Recursos Humanos" },
-                { field: "empresa", label: "Empresa", placeholder: "MINDTALENT" },
+                { field: "empresa", label: "Empresa", placeholder: "Nombre de tu empresa" },
               ].map(({ field, label, placeholder }) => (
                 <div key={field}>
                   <label className="block text-sm font-semibold text-gray-800 mb-1">{label}</label>
-                  <input
-                    type="text"
-                    placeholder={placeholder}
-                    value={datos[field as keyof typeof datos]}
-                    onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
-                    maxLength={120}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  />
+                  {field === "empresa" && empresaBloqueada ? (
+                    <div className="w-full border border-gray-200 bg-gray-50 rounded-lg px-4 py-2.5 text-sm text-gray-700">
+                      {datos.empresa}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder={placeholder}
+                      value={datos[field as keyof typeof datos]}
+                      onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
+                      maxLength={120}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    />
+                  )}
                 </div>
               ))}
               <div

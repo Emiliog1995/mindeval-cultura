@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CLIMA_ITEMS, CLIMA_DIMENSIONS, type ClimaDimension } from "@/lib/clima-items";
 import { calcularClimaScores } from "@/lib/clima-scoring";
-import { guardarClima } from "@/lib/supabase";
+import { guardarClima, obtenerSesion } from "@/lib/supabase";
 
 const STEP_DIMS: ClimaDimension[][] = [
   ["A", "B"],
@@ -21,8 +21,19 @@ const STEP_LABELS = [
 type DatosClima = { nombre: string; cargo: string; area: string; empresa: string };
 
 export default function ClimaPage() {
+  return (
+    <Suspense fallback={null}>
+      <ClimaPageInner />
+    </Suspense>
+  );
+}
+
+function ClimaPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [datos, setDatos] = useState<DatosClima>({ nombre: "", cargo: "", area: "", empresa: "" });
+  const [empresaId, setEmpresaId] = useState<string | undefined>(undefined);
+  const [empresaBloqueada, setEmpresaBloqueada] = useState(false);
   const [heredado, setHeredado] = useState(false);
   const [consentimiento, setConsentimiento] = useState(false);
   const [paso, setPaso] = useState<"datos" | "items">("datos");
@@ -45,6 +56,16 @@ export default function ClimaPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const sesionId = searchParams.get("sesion");
+    if (!sesionId) return;
+    obtenerSesion(sesionId).then((sesion) => {
+      if (!sesion) return;
+      if (sesion.empresa) setDatos((p) => ({ ...p, empresa: sesion.empresa as string }));
+      if (sesion.empresa_id) { setEmpresaId(sesion.empresa_id); setEmpresaBloqueada(true); }
+    }).catch(() => {});
+  }, [searchParams]);
 
   const dimsEnStep = STEP_DIMS[step];
   const itemsEnStep = CLIMA_ITEMS.filter((i) => dimsEnStep.includes(i.dimension));
@@ -86,7 +107,7 @@ export default function ClimaPage() {
     setError("");
     try {
       const scores = calcularClimaScores(respuestas);
-      await guardarClima({ respuestas, scores, ...datos });
+      await guardarClima({ respuestas, scores, ...datos, empresa_id: empresaId });
       const sesionId = new URLSearchParams(window.location.search).get("sesion");
       router.push(sesionId ? `/clima/gracias?sesion=${sesionId}` : "/clima/gracias");
     } catch {
@@ -148,13 +169,19 @@ export default function ClimaPage() {
               ].map(({ field, label, placeholder }) => (
                 <div key={field}>
                   <label className="block text-sm font-semibold text-gray-800 mb-1">{label}</label>
-                  <input
-                    type="text"
-                    placeholder={placeholder}
-                    value={datos[field as keyof DatosClima]}
-                    onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
-                  />
+                  {field === "empresa" && empresaBloqueada ? (
+                    <div className="w-full border border-gray-200 bg-gray-50 rounded-lg px-4 py-2.5 text-sm text-gray-700">
+                      {datos.empresa}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder={placeholder}
+                      value={datos[field as keyof DatosClima]}
+                      onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
+                    />
+                  )}
                 </div>
               ))}
               <div
