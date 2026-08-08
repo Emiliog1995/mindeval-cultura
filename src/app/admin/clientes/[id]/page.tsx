@@ -69,7 +69,8 @@ export default function FichaEmpresa({ params }: { params: Promise<{ id: string 
 
   function irAlModulo(mod: typeof MODULOS_ECOSISTEMA[number]) {
     if (mod.preseleccionaEmpresa) {
-      router.push(`${mod.href}?empresa=${id}`)
+      const tab = 'tab' in mod ? mod.tab : undefined
+      router.push(`${mod.href}?empresa=${id}${tab ? `&tab=${tab}` : ''}`)
     } else {
       router.push(mod.href)
     }

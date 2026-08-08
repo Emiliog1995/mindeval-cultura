@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
 } from "recharts";
 import {
   listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion,
-  crear360Evaluado, crearTokens360,
-  type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360,
+  crear360Evaluado, crearTokens360, listarEmpresas,
+  type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360, type Empresa,
 } from "@/lib/supabase";
 import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
 import { getLevelColor } from "@/lib/scoring";
@@ -22,14 +22,25 @@ import RadarRiesgoTab from "@/components/RadarRiesgoTab";
 import Eval360DashboardPreview from "@/components/360/Eval360DashboardPreview";
 
 type Tab = "docs" | "clima" | "salud" | "alertas" | "sesiones" | "eval360";
+const TABS_VALIDOS: Tab[] = ["docs", "clima", "salud", "alertas", "sesiones", "eval360"];
 
 const CLIMA_DIM_CODES: ClimaDimension[] = ["A", "B", "C", "D", "E", "F"];
 
 export default function Dashboard() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardInner />
+    </Suspense>
+  );
+}
+
+function DashboardInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // ─── Tab ─────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<Tab>("docs");
+  const tabInicial = TABS_VALIDOS.includes(searchParams.get("tab") as Tab) ? (searchParams.get("tab") as Tab) : "docs";
+  const [activeTab, setActiveTab] = useState<Tab>(tabInicial);
 
   // ─── DOCS ────────────────────────────────────────────────────────────────
   const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([]);
@@ -38,12 +49,17 @@ export default function Dashboard() {
   const [cargando, setCargando]         = useState(true);
   const [error, setError]               = useState("");
 
+  // ─── Empresas (para el selector del panel de clientes) ────────────────────
+  const [empresas, setEmpresas]   = useState<Empresa[]>([]);
+
   // ─── Sesiones ────────────────────────────────────────────────────────────
   const [sesiones, setSesiones]               = useState<Sesion[]>([]);
   const [nuevaTipo, setNuevaTipo]             = useState<'cultura' | 'clima' | '360'>("cultura");
-  const [nuevaEmpresa, setNuevaEmpresa]       = useState("");
+  const [nuevaEmpresaId, setNuevaEmpresaId]   = useState(searchParams.get("empresa") ?? "");
   const [creandoSesion, setCreandoSesion]     = useState(false);
   const [linkCopiado, setLinkCopiado]         = useState<string | null>(null);
+
+  const nombreEmpresaSeleccionada = empresas.find((e) => e.id === nuevaEmpresaId)?.nombre;
 
   // ─── 360° (generación de links desde el dashboard) ─────────────────────
   const [modo360, setModo360] = useState<'individual' | 'masivo'>("individual");
@@ -73,15 +89,15 @@ export default function Dashboard() {
       .finally(() => setCargandoClima(false));
 
     listarSesiones().then(setSesiones).catch(() => {});
+    listarEmpresas().then(setEmpresas).catch(() => {});
   }, [router]);
 
   async function handleCrearSesion() {
     if (nuevaTipo === "360") return handleGenerar360();
     setCreandoSesion(true);
     try {
-      const s = await crearSesion({ tipo: nuevaTipo, empresa: nuevaEmpresa || undefined });
+      const s = await crearSesion({ tipo: nuevaTipo, empresa: nombreEmpresaSeleccionada, empresa_id: nuevaEmpresaId || undefined });
       setSesiones((prev) => [s, ...prev]);
-      setNuevaEmpresa("");
     } finally {
       setCreandoSesion(false);
     }
@@ -99,7 +115,8 @@ export default function Dashboard() {
         nombre: datos360.nombre,
         cargo: datos360.cargo,
         departamento: datos360.departamento,
-        empresa: nuevaEmpresa || undefined,
+        empresa: nombreEmpresaSeleccionada,
+        empresa_id: nuevaEmpresaId || undefined,
         jefe: datos360.jefe || undefined,
       });
       const fuentes: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
@@ -107,10 +124,9 @@ export default function Dashboard() {
       const base = typeof window !== "undefined" ? window.location.origin : "";
       const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
 
-      setEvaluados360((prev) => [{ evaluado, empresa: nuevaEmpresa || undefined, links }, ...prev]);
+      setEvaluados360((prev) => [{ evaluado, empresa: nombreEmpresaSeleccionada, links }, ...prev]);
       setExpandido360(evaluado.id);
       setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
-      setNuevaEmpresa("");
     } catch (e) {
       setError360(e instanceof Error ? e.message : "Error al generar los links de evaluación 360°");
     } finally {
@@ -154,10 +170,10 @@ export default function Dashboard() {
 
     try {
       for (const [nombre, cargo, departamento, jefe] of filas) {
-        const evaluado = await crear360Evaluado({ nombre, cargo, departamento, empresa: nuevaEmpresa || undefined, jefe: jefe || undefined });
+        const evaluado = await crear360Evaluado({ nombre, cargo, departamento, empresa: nombreEmpresaSeleccionada, empresa_id: nuevaEmpresaId || undefined, jefe: jefe || undefined });
         const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
         const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
-        nuevos.push({ evaluado, empresa: nuevaEmpresa || undefined, links });
+        nuevos.push({ evaluado, empresa: nombreEmpresaSeleccionada, links });
         setProgresoMasivo360((p) => p ? { ...p, hecho: p.hecho + 1 } : p);
       }
       setEvaluados360((prev) => [...nuevos, ...prev]);
@@ -734,14 +750,17 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Empresa (opcional)</label>
-                  <input
-                    type="text"
-                    value={nuevaEmpresa}
-                    onChange={(e) => setNuevaEmpresa(e.target.value)}
-                    placeholder="Nombre de la empresa"
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-56"
-                  />
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Empresa</label>
+                  <select
+                    value={nuevaEmpresaId}
+                    onChange={(e) => setNuevaEmpresaId(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900 w-56"
+                  >
+                    <option value="">Sin empresa</option>
+                    {empresas.map((emp) => (
+                      <option key={emp.id} value={emp.id}>{emp.nombre}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {nuevaTipo === "360" && (

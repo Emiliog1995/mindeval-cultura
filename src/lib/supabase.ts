@@ -145,19 +145,21 @@ export interface Sesion {
   id:         string;
   tipo:       'cultura' | 'clima' | 'salud';
   empresa:    string | null;
+  empresa_id: string | null;
   estado:     'pendiente' | 'completada';
   created_at: string;
 }
 
 export interface SesionInput {
-  tipo:     'cultura' | 'clima' | 'salud';
-  empresa?: string;
+  tipo:        'cultura' | 'clima' | 'salud';
+  empresa?:    string;
+  empresa_id?: string;
 }
 
 export async function crearSesion(data: SesionInput): Promise<Sesion> {
   const { data: row, error } = await supabase
     .from("sesiones")
-    .insert({ tipo: data.tipo, empresa: data.empresa ?? null })
+    .insert({ tipo: data.tipo, empresa: data.empresa ?? null, empresa_id: data.empresa_id ?? null })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
@@ -335,19 +337,19 @@ export async function listarTokens360(
 
 export const MODULOS_ECOSISTEMA = [
   {
-    key: "cultura", label: "Cultura", href: "/dashboard", preseleccionaEmpresa: false,
+    key: "cultura", label: "Cultura", href: "/dashboard", tab: "sesiones", preseleccionaEmpresa: true,
     captura: "Cuestionario de 60 ítems por evaluado — se levanta con cada empresa.",
   },
   {
-    key: "clima", label: "Clima", href: "/dashboard", preseleccionaEmpresa: false,
+    key: "clima", label: "Clima", href: "/dashboard", tab: "sesiones", preseleccionaEmpresa: true,
     captura: "Encuesta de clima (anónima) — se levanta con cada empresa.",
   },
   {
-    key: "salud_organizacional", label: "Salud Organizacional", href: "/dashboard", preseleccionaEmpresa: false,
-    captura: "Sesión de diagnóstico de salud organizacional propia de esta empresa.",
+    key: "salud_organizacional", label: "Salud Organizacional", href: "/dashboard", tab: "salud", preseleccionaEmpresa: true,
+    captura: "Se calcula a partir de Cultura y Clima ya cargados de esta empresa — no requiere captura propia.",
   },
   {
-    key: "evaluacion_360", label: "Evaluación 360°", href: "/dashboard", preseleccionaEmpresa: false,
+    key: "evaluacion_360", label: "Evaluación 360°", href: "/dashboard", tab: "sesiones", preseleccionaEmpresa: true,
     captura: "Evaluados, evaluadores y período — específico de esta empresa.",
   },
   {
