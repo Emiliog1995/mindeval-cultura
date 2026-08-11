@@ -5,7 +5,15 @@ import type { TipoSesionPrueba } from "./mindeval-types";
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// El SDK de Resend lanza una excepción en su propio constructor si no hay
+// API key — instanciarlo a nivel de módulo tumbaría el build entero (o
+// cualquier ruta que importe este archivo) en un entorno sin
+// RESEND_API_KEY configurada. Cada función abajo ya maneja la ausencia de
+// la key como fallback amigable, así que la instancia se crea de forma
+// perezosa, solo cuando sabemos que la key existe.
+function getResend(): Resend {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 const LABEL_TIPO: Record<TipoSesionPrueba, string> = {
   psicometrica: "prueba psicométrica",
@@ -60,7 +68,7 @@ export async function enviarInvitacionPrueba(params: {
   `;
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: process.env.RESEND_FROM ?? "MindEval <onboarding@resend.dev>",
       to: params.to,
       subject: `Invitación a tu ${label} — ${params.tituloVacante}`,
@@ -112,7 +120,7 @@ export async function enviarNoSeleccionado(params: {
   `;
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: process.env.RESEND_FROM ?? "MindEval <onboarding@resend.dev>",
       to: params.to,
       subject: `Resultado de tu postulación — ${params.tituloVacante}`,
