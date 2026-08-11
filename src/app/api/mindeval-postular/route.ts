@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import { calcularMatchCv } from "@/lib/mindeval-ia";
-import type { Vacante } from "@/lib/mindeval-types";
+import { evaluarDescarteCv } from "@/lib/mindeval-scoring";
+import { extraerTextoCv } from "@/lib/mindeval-cv-extract";
+import { vacanteAceptaPostulaciones, type Vacante } from "@/lib/mindeval-types";
 
 /**
  * Ruta pública (sin login) para el formulario de postulación. Sigue el mismo
@@ -32,9 +32,13 @@ export async function POST(req: NextRequest) {
     const aniosRaw = formData.get("anios_experiencia") as string;
     const educacion = (formData.get("educacion") as string) || null;
     const file = formData.get("cv_file") as File | null;
+    const consentimientoLopdp = formData.get("consentimiento_lopdp") === "true";
 
     if (!vacanteId || !nombreCompleto) {
       return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
+    }
+    if (!consentimientoLopdp) {
+      return NextResponse.json({ error: "Debes aceptar el Aviso de Privacidad para postular" }, { status: 400 });
     }
 
     const { data: vacante, error: vErr } = await supabaseAdmin
@@ -42,12 +46,14 @@ export async function POST(req: NextRequest) {
       .select("*")
       .eq("id", vacanteId)
       .single();
-    if (vErr || !vacante || (vacante as Vacante).estado !== "abierta") {
+    if (vErr || !vacante || !vacanteAceptaPostulaciones(vacante as Vacante)) {
       return NextResponse.json({ error: "Esta vacante ya no está disponible para postulaciones" }, { status: 404 });
     }
 
     // 1. Extraer texto del CV (best-effort — un CV en formato no soportado
-    // no debe bloquear la postulación, solo se guarda sin cv_texto)
+    // o que falle al extraerse no debe bloquear la postulación, solo se
+    // guarda sin cv_texto; el reclutador puede reintentar la extracción
+    // desde el ranking con "Recalcular candidatos sin match")
     let cvTexto = "";
     let cvBuffer: Buffer | null = null;
     let cvNombreArchivo = "";
@@ -55,20 +61,7 @@ export async function POST(req: NextRequest) {
       const bytes = await file.arrayBuffer();
       cvBuffer = Buffer.from(bytes);
       cvNombreArchivo = file.name;
-      try {
-        if (file.name.toLowerCase().endsWith(".docx")) {
-          const result = await mammoth.extractRawText({ buffer: cvBuffer });
-          cvTexto = result.value;
-        } else if (file.name.toLowerCase().endsWith(".pdf")) {
-          const parser = new PDFParse({ data: new Uint8Array(cvBuffer) });
-          const result = await parser.getText();
-          cvTexto = result.text;
-        }
-      } catch {
-        // Fallback amigable: si falla la extracción, la postulación sigue
-        // guardándose; el reclutador puede pegar el texto manualmente después.
-        cvTexto = "";
-      }
+      cvTexto = await extraerTextoCv(cvBuffer, cvNombreArchivo);
     }
 
     // 2. Insertar candidato
@@ -110,7 +103,16 @@ export async function POST(req: NextRequest) {
           match_pct: resultado.match_pct,
           razones: resultado.razones,
         });
-        await supabaseAdmin.from("mindeval_candidatos").update({ etapa_actual: "filtro_cv" }).eq("id", candidato.id);
+
+        const { descartar, motivo } = evaluarDescarteCv(resultado, (vacante as Vacante).corte_match_cv);
+        await supabaseAdmin
+          .from("mindeval_candidatos")
+          .update(
+            descartar
+              ? { etapa_actual: "descartado", estado: "descartado", motivo_descarte: motivo }
+              : { etapa_actual: "filtro_cv" }
+          )
+          .eq("id", candidato.id);
       } catch {
         // El match con IA es un plus, no un requisito para postular.
       }

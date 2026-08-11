@@ -5,11 +5,15 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
-import { calcularIdoneidadGlobal, categoriaSten, promedio } from "@/lib/mindeval-scoring";
+import { NOMBRES_ESCALA_16PF5, type Escala16PF5 } from "@/lib/mindeval-16pf5";
+import { NOMBRES_FACTOR_KOSTICK, type FactorKostick } from "@/lib/mindeval-kostick";
+import { NOMBRES_RASGO_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, NOMBRES_CATEGORIA_TEXTO_DISC } from "@/lib/mindeval-disc";
+import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
-import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type SesionPrueba, type TipoSesionPrueba, type Vacante } from "@/lib/mindeval-types";
+import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type PreguntaBanco, type RespuestaBancoDetalle, type SesionPrueba, type TipoSesionPrueba, type Vacante } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
@@ -20,6 +24,13 @@ const btnGold: React.CSSProperties = { background: GOLD, color: NAVY, border: "n
 const inputStyle: React.CSSProperties = { padding: "8px 10px", border: "1.5px solid #D5DCEB", borderRadius: 7, fontSize: 12.5, boxSizing: "border-box" };
 
 interface PsicoRow { bateria: string; sten: number | null; percentil: number | null }
+interface DatoBarra { clave: string; nombre: string; valor: number }
+
+const NOMBRE_TEST_PSICOMETRICO: Record<"16pf5" | "kostick" | "disc", string> = {
+  "16pf5": "16PF-5",
+  kostick: "KOSTICK",
+  disc: "DISC",
+};
 interface AssessRow { id: string; ejercicio: string; competencia: string; puntaje: number; evaluador: string | null }
 interface EntrevistaRow { fecha: string | null; entrevistadores: string | null; resultado: string | null; notas: string | null }
 
@@ -47,6 +58,7 @@ export default function PerfilCandidatoPage() {
   const [guardandoTecnica, setGuardandoTecnica] = useState(false);
   const [tecnicaGuardada, setTecnicaGuardada] = useState<number | null>(null);
   const [mostrarFraudeTecnica, setMostrarFraudeTecnica] = useState(false);
+  const [resultadoBanco, setResultadoBanco] = useState<{ preguntas: PreguntaBanco[]; respuestas: RespuestaBancoDetalle[] } | null>(null);
 
   const [assessRows, setAssessRows] = useState<AssessRow[]>([]);
   const [nuevoEjercicio, setNuevoEjercicio] = useState("");
@@ -59,12 +71,16 @@ export default function PerfilCandidatoPage() {
 
   const [informeIA, setInformeIA] = useState<string | null>(null);
   const [generandoInforme, setGenerandoInforme] = useState(false);
+  const [enviandoRechazo, setEnviandoRechazo] = useState(false);
+  const [resultadoRechazo, setResultadoRechazo] = useState("");
   const [errorGlobal, setErrorGlobal] = useState("");
+  const [avisoGlobal, setAvisoGlobal] = useState("");
 
   const [sesiones, setSesiones] = useState<SesionPrueba[]>([]);
-  const [fechaAgendar, setFechaAgendar] = useState<Record<TipoSesionPrueba, string>>({ psicometrica: "", tecnica: "" });
-  const [agendando, setAgendando] = useState<Record<TipoSesionPrueba, boolean>>({ psicometrica: false, tecnica: false });
+  const [fechaAgendar, setFechaAgendar] = useState<Record<TipoSesionPrueba, string>>({ psicometrica: "", tecnica: "", assessment: "" });
+  const [agendando, setAgendando] = useState<Record<TipoSesionPrueba, boolean>>({ psicometrica: false, tecnica: false, assessment: false });
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  const [resultadoAgendamiento, setResultadoAgendamiento] = useState<Record<TipoSesionPrueba, string>>({ psicometrica: "", tecnica: "", assessment: "" });
 
   useEffect(() => {
     if (verificando) return;
@@ -84,14 +100,19 @@ export default function PerfilCandidatoPage() {
     const [{ data: match }, { data: ps }, { data: tec }, { data: asse }, { data: entr }] = await Promise.all([
       supabase.from("mindeval_cv_matches").select("match_pct, razones").eq("candidato_id", params.id).order("generado_en", { ascending: false }).limit(1),
       supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id),
-      supabase.from("mindeval_pruebas_tecnicas").select("puntaje_total").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
+      supabase.from("mindeval_pruebas_tecnicas").select("puntaje_total, modo, preguntas_snapshot, respuestas_banco").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
       supabase.from("mindeval_assessment_evaluaciones").select("id, ejercicio, competencia, puntaje, evaluador").eq("candidato_id", params.id),
       supabase.from("mindeval_entrevistas").select("fecha, entrevistadores, resultado, notas").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
     ]);
 
     if (match?.[0]) setMatchCv(match[0]);
     setPsicoGuardados(ps ?? []);
-    if (tec?.[0]) setTecnicaGuardada(tec[0].puntaje_total);
+    if (tec?.[0]) {
+      setTecnicaGuardada(tec[0].puntaje_total);
+      if (tec[0].modo === "banco" && tec[0].respuestas_banco) {
+        setResultadoBanco({ preguntas: tec[0].preguntas_snapshot ?? [], respuestas: tec[0].respuestas_banco });
+      }
+    }
     setAssessRows(asse ?? []);
     if (entr?.[0]) setEntrevista(entr[0]);
 
@@ -110,24 +131,50 @@ export default function PerfilCandidatoPage() {
     // solo el resultado guardado por /api/mindeval-prueba/[token]).
     const [{ data: ps2 }, { data: tec2 }] = await Promise.all([
       supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id),
-      supabase.from("mindeval_pruebas_tecnicas").select("puntaje_total").eq("candidato_id", params.id).not("respuesta_candidato", "is", null).order("created_at", { ascending: false }).limit(1),
+      supabase
+        .from("mindeval_pruebas_tecnicas")
+        .select("puntaje_total, modo, preguntas_snapshot, respuestas_banco")
+        .eq("candidato_id", params.id)
+        .or("respuesta_candidato.not.is.null,respuestas_banco.not.is.null")
+        .order("created_at", { ascending: false })
+        .limit(1),
     ]);
     if (ps2?.length) setPsicoGuardados(ps2);
-    if (tec2?.[0]) setTecnicaGuardada(tec2[0].puntaje_total);
+    if (tec2?.[0]) {
+      setTecnicaGuardada(tec2[0].puntaje_total);
+      if (tec2[0].modo === "banco" && tec2[0].respuestas_banco) {
+        setResultadoBanco({ preguntas: tec2[0].preguntas_snapshot ?? [], respuestas: tec2[0].respuestas_banco });
+      }
+    }
   }
 
   async function agendarPrueba(tipo: TipoSesionPrueba) {
     const fecha = fechaAgendar[tipo];
     if (!fecha) return;
     setAgendando((prev) => ({ ...prev, [tipo]: true }));
+    setResultadoAgendamiento((prev) => ({ ...prev, [tipo]: "" }));
     try {
-      const { data } = await supabase
-        .from("mindeval_sesiones_prueba")
-        .insert({ candidato_id: params.id, vacante_id: params.vacanteId, tipo, fecha_programada: new Date(fecha).toISOString() })
-        .select()
-        .single();
-      if (data) setSesiones((prev) => [data, ...prev]);
+      const res = await fetch("/api/mindeval-agendar-prueba", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          vacante_id: params.vacanteId,
+          tipo,
+          fecha_programada: new Date(fecha).toISOString(),
+          candidato_ids: [params.id],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const resultado = data.resultados?.[0];
+      if (resultado?.sesion) setSesiones((prev) => [resultado.sesion, ...prev]);
+      setResultadoAgendamiento((prev) => ({
+        ...prev,
+        [tipo]: resultado?.ok ? "Correo enviado al candidato." : (resultado?.motivo ?? "No se pudo agendar la prueba."),
+      }));
       setFechaAgendar((prev) => ({ ...prev, [tipo]: "" }));
+    } catch (e) {
+      setResultadoAgendamiento((prev) => ({ ...prev, [tipo]: e instanceof Error ? e.message : "No se pudo agendar la prueba." }));
     } finally {
       setAgendando((prev) => ({ ...prev, [tipo]: false }));
     }
@@ -142,6 +189,31 @@ export default function PerfilCandidatoPage() {
   async function moverEtapa(nueva: EtapaCandidato) {
     await supabase.from("mindeval_candidatos").update({ etapa_actual: nueva }).eq("id", params.id);
     setCandidato((prev) => (prev ? { ...prev, etapa_actual: nueva } : prev));
+  }
+
+  async function toggleTestPsicometrico(test: "16pf5" | "kostick" | "disc") {
+    if (!vacante) return;
+    const activos = vacante.tests_psicometricos.includes(test)
+      ? vacante.tests_psicometricos.filter((t) => t !== test)
+      : [...vacante.tests_psicometricos, test];
+    await supabase.from("mindeval_vacantes").update({ tests_psicometricos: activos }).eq("id", vacante.id);
+    setVacante({ ...vacante, tests_psicometricos: activos });
+  }
+
+  function nombreBateria(bateria: string): string {
+    if (bateria.startsWith("16pf5_")) {
+      const escala = bateria.replace("16pf5_", "") as keyof typeof NOMBRES_ESCALA_16PF5;
+      return `16PF-5 · ${NOMBRES_ESCALA_16PF5[escala] ?? escala}`;
+    }
+    if (bateria.startsWith("kostick_")) {
+      const factor = bateria.replace("kostick_", "") as keyof typeof NOMBRES_FACTOR_KOSTICK;
+      return `KOSTICK · ${NOMBRES_FACTOR_KOSTICK[factor] ?? factor}`;
+    }
+    if (bateria.startsWith("disc_")) {
+      const rasgo = bateria.replace("disc_", "") as keyof typeof NOMBRES_RASGO_DISC;
+      return `DISC · ${NOMBRES_RASGO_DISC[rasgo] ?? rasgo}`;
+    }
+    return BATERIAS_EJEMPLO.find((b) => b.key === bateria)?.nombre ?? bateria;
   }
 
   async function calcularMatch() {
@@ -160,6 +232,13 @@ export default function PerfilCandidatoPage() {
       setMatchCv(data);
       await supabase.from("mindeval_candidatos").update({ cv_texto: cvTexto }).eq("id", params.id);
       await supabase.from("mindeval_cv_matches").insert({ candidato_id: params.id, match_pct: data.match_pct, razones: data.razones });
+
+      const { descartar, motivo } = evaluarDescarteCv(data, vacante.corte_match_cv);
+      await supabase
+        .from("mindeval_candidatos")
+        .update(descartar ? { etapa_actual: "descartado", estado: "descartado", motivo_descarte: motivo } : { etapa_actual: "filtro_cv" })
+        .eq("id", params.id);
+      setCandidato((prev) => (prev ? { ...prev, etapa_actual: descartar ? "descartado" : "filtro_cv", motivo_descarte: motivo ?? null } : prev));
     } catch (e) {
       setErrorGlobal(e instanceof Error ? e.message : "Error al calcular el match de CV");
     } finally {
@@ -182,8 +261,18 @@ export default function PerfilCandidatoPage() {
       const { data: ps } = await supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id);
       setPsicoGuardados(ps ?? []);
       setPsico({});
+      await revisarAvanceSenescyt();
     } finally {
       setGuardandoPsico(false);
+    }
+  }
+
+  async function revisarAvanceSenescyt() {
+    if (!vacante) return;
+    const avanzo = await avanzarASenescytSiAplica(supabase, params.id, vacante);
+    if (avanzo) {
+      setCandidato((prev) => (prev ? { ...prev, etapa_actual: "verificacion_titulo" } : prev));
+      setAvisoGlobal("Aprobó psicométricas y técnica por encima del corte — avanzó automáticamente a Verificación SENESCYT.");
     }
   }
 
@@ -249,6 +338,7 @@ export default function PerfilCandidatoPage() {
         .select("puntaje_total")
         .single();
       setTecnicaGuardada(data?.puntaje_total ?? null);
+      await revisarAvanceSenescyt();
     } finally {
       setGuardandoTecnica(false);
     }
@@ -302,6 +392,11 @@ export default function PerfilCandidatoPage() {
           tecnicaTotal: tecnicaGuardada ?? undefined,
           assessmentPromedio,
           idoneidadGlobal,
+          datos16pf5: datos16pf5.length ? datos16pf5.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
+          datosKostick: datosKostick.length ? datosKostick.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
+          datosDisc: datosDisc.length ? datosDisc.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
+          patronDisc,
+          textosPatronDisc,
         }),
       });
       const data = await res.json();
@@ -315,9 +410,68 @@ export default function PerfilCandidatoPage() {
     }
   }
 
+  async function enviarCorreoRechazo() {
+    if (!candidato || !vacante) return;
+    setEnviandoRechazo(true);
+    setResultadoRechazo("");
+    try {
+      const res = await fetch("/api/mindeval-enviar-rechazo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ candidato_id: params.id, titulo_vacante: vacante.titulo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setResultadoRechazo("Correo enviado.");
+    } catch (e) {
+      setResultadoRechazo(e instanceof Error ? e.message : "No se pudo enviar el correo.");
+    } finally {
+      setEnviandoRechazo(false);
+    }
+  }
+
   if (verificando || !candidato || !vacante) return null;
 
-  const stenPromedio = promedio(psicoGuardados.filter((p) => p.sten !== null).map((p) => p.sten as number));
+  // el conteo ipsativo de KOSTICK (0-9) y el segmento de DISC (1-7) no son un STEN normado, se excluyen del promedio.
+  const stenPromedio = promedio(
+    psicoGuardados.filter((p) => p.sten !== null && !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_")).map((p) => p.sten as number)
+  );
+
+  // orden canónico de las claves (el de NOMBRES_*, no el de llegada de la DB) para que el gráfico se lea igual siempre.
+  const datos16pf5: DatoBarra[] = (Object.keys(NOMBRES_ESCALA_16PF5) as Escala16PF5[])
+    .map((escala) => {
+      const fila = psicoGuardados.find((p) => p.bateria === `16pf5_${escala}`);
+      return fila ? { clave: escala as string, nombre: NOMBRES_ESCALA_16PF5[escala], valor: fila.sten ?? 0 } : null;
+    })
+    .filter((d): d is DatoBarra => d !== null);
+
+  const datosKostick: DatoBarra[] = (Object.keys(NOMBRES_FACTOR_KOSTICK) as FactorKostick[])
+    .map((factor) => {
+      const fila = psicoGuardados.find((p) => p.bateria === `kostick_${factor}`);
+      return fila ? { clave: factor as string, nombre: NOMBRES_FACTOR_KOSTICK[factor], valor: fila.sten ?? 0 } : null;
+    })
+    .filter((d): d is DatoBarra => d !== null);
+
+  const datosDisc: DatoBarra[] = (Object.keys(NOMBRES_RASGO_DISC) as ("D" | "I" | "S" | "C")[])
+    .map((rasgo) => {
+      const fila = psicoGuardados.find((p) => p.bateria === `disc_${rasgo}`);
+      return fila ? { clave: rasgo as string, nombre: NOMBRES_RASGO_DISC[rasgo], valor: fila.sten ?? 0 } : null;
+    })
+    .filter((d): d is DatoBarra => d !== null);
+
+  // el patrón DISC no se guarda en la DB — se deriva aquí de los 4 segmentos ya
+  // guardados, igual que el resto de nombres se derivan de la clave guardada.
+  const codigoSegmentoDisc = datosDisc.length === 4 ? datosDisc.map((d) => d.valor).join("") : null;
+  const patronDisc = codigoSegmentoDisc ? PATRONES_DISC[codigoSegmentoDisc] : undefined;
+  const textosPatronDisc = patronDisc ? TEXTOS_PATRON_DISC[patronDisc] : undefined;
+
+  function colorPorDecatipo(decatipo: number): string {
+    if (decatipo >= 9) return "#12805C";
+    if (decatipo >= 7) return "#4E9E7B";
+    if (decatipo >= 5) return GOLD;
+    if (decatipo >= 3) return "#E08A3C";
+    return "#C4402F";
+  }
   const assessmentPromedio = promedio(assessRows.map((a) => a.puntaje));
   const idoneidadGlobal = calcularIdoneidadGlobal({
     matchCv: matchCv?.match_pct,
@@ -338,7 +492,7 @@ export default function PerfilCandidatoPage() {
     return (
       <div style={{ background: "#F7F9FD", borderRadius: 10, padding: 14, marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>
-          Agendar prueba — el candidato la rinde por su cuenta en su enlace
+          Agendar prueba — se envía automáticamente por correo al candidato
         </div>
         {propias.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
@@ -370,12 +524,18 @@ export default function PerfilCandidatoPage() {
             onChange={(e) => setFechaAgendar((prev) => ({ ...prev, [tipo]: e.target.value }))}
           />
           <button onClick={() => agendarPrueba(tipo)} disabled={agendando[tipo] || !fechaAgendar[tipo]} style={btnPrimario}>
-            {agendando[tipo] ? "Agendando…" : "Agendar y generar enlace"}
+            {agendando[tipo] ? "Agendando y enviando…" : "Agendar y enviar por correo"}
           </button>
         </div>
-        <div style={{ fontSize: 11, color: "#7C89A8", marginTop: 8 }}>
-          Copia el enlace y envíaselo al candidato (envío de correo automático pendiente de conectar un proveedor de email).
-        </div>
+        {resultadoAgendamiento[tipo] ? (
+          <div style={{ fontSize: 11.5, color: resultadoAgendamiento[tipo].startsWith("Correo enviado") ? "#12805C" : "#C4402F", marginTop: 8, fontWeight: 600 }}>
+            {resultadoAgendamiento[tipo]}
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: "#7C89A8", marginTop: 8 }}>
+            {candidato?.email ? `Se enviará a ${candidato.email}. Si falla, usa "Copiar enlace" arriba.` : 'Este candidato no tiene correo registrado — usa "Copiar enlace" para enviarlo tú mismo.'}
+          </div>
+        )}
       </div>
     );
   }
@@ -388,7 +548,44 @@ export default function PerfilCandidatoPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>{candidato.nombre_completo}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 }}>
+              {candidato.nombre_completo}
+              {candidato.etapa_actual === "descartado" && (
+                <span style={{ background: "#FDEDEA", color: "#C4402F", fontWeight: 700, fontSize: 11, padding: "3px 10px", borderRadius: 20 }}>
+                  DESCARTADO
+                </span>
+              )}
+            </div>
+            {candidato.etapa_actual === "descartado" && candidato.motivo_descarte && (
+              <div style={{ fontSize: 12, color: "#FF8A78", marginTop: 4 }}>{candidato.motivo_descarte}</div>
+            )}
+            {candidato.etapa_actual === "descartado" && (
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  onClick={enviarCorreoRechazo}
+                  disabled={enviandoRechazo || !candidato.email}
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${GOLD}`,
+                    color: GOLD,
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: enviandoRechazo || !candidato.email ? "not-allowed" : "pointer",
+                    opacity: enviandoRechazo || !candidato.email ? 0.5 : 1,
+                  }}
+                >
+                  {enviandoRechazo ? "Enviando…" : "Enviar correo de no seleccionado"}
+                </button>
+                {resultadoRechazo && (
+                  <span style={{ fontSize: 11.5, color: resultadoRechazo === "Correo enviado." ? "#0FA85F" : "#FF8A78", fontWeight: 600 }}>
+                    {resultadoRechazo}
+                  </span>
+                )}
+                {!candidato.email && <span style={{ fontSize: 11, color: "#A9B6D8" }}>Sin correo registrado</span>}
+              </div>
+            )}
             <div style={{ fontSize: 12.5, color: "#A9B6D8", marginTop: 4 }}>
               {[candidato.ciudad, candidato.anios_experiencia ? `${candidato.anios_experiencia} años exp.` : null, candidato.educacion].filter(Boolean).join(" · ") || "Sin datos adicionales"}
             </div>
@@ -411,6 +608,7 @@ export default function PerfilCandidatoPage() {
 
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "1.75rem 1.5rem" }}>
         {errorGlobal && <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{errorGlobal}</div>}
+        {avisoGlobal && <div style={{ background: "#EAF7F1", color: "#12805C", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>{avisoGlobal}</div>}
 
         {/* Etapa 2 — Filtro CV */}
         <section style={card}>
@@ -439,59 +637,212 @@ export default function PerfilCandidatoPage() {
         {/* Etapa 3 — Psicométricas */}
         <section style={card}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 3 — Pruebas Psicométricas</h3>
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>
-            <span style={{ background: "#FFF6DE", color: "#8A6400", padding: "2px 8px", borderRadius: 10, fontWeight: 700, fontSize: 10.5 }}>BATERÍA DE EJEMPLO</span>{" "}
-            pendiente banco real — registra el STEN (1–10) obtenido en cada batería.
-          </p>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {(["16pf5", "kostick", "disc"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => toggleTestPsicometrico(t)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: vacante.tests_psicometricos.includes(t) ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                  background: vacante.tests_psicometricos.includes(t) ? "#FFFBEF" : "#FFFFFF",
+                  color: NAVY,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {vacante.tests_psicometricos.includes(t) ? "✓ " : ""}
+                {NOMBRE_TEST_PSICOMETRICO[t]}
+              </button>
+            ))}
+          </div>
+
+          {vacante.tests_psicometricos.length > 0 ? (
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>
+              El candidato responde{" "}
+              {vacante.tests_psicometricos.map((t) => NOMBRE_TEST_PSICOMETRICO[t as keyof typeof NOMBRE_TEST_PSICOMETRICO] ?? t).join(" y ")}{" "}
+              desde su propio link — la calificación es automática, no hay nada que registrar aquí manualmente.
+            </p>
+          ) : (
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>
+              <span style={{ background: "#FFF6DE", color: "#8A6400", padding: "2px 8px", borderRadius: 10, fontWeight: 700, fontSize: 10.5 }}>BATERÍA DE EJEMPLO</span>{" "}
+              activa 16PF-5, KOSTICK o DISC arriba, o registra el STEN (1–10) manualmente abajo.
+            </p>
+          )}
+
           {renderAgendamiento("psicometrica")}
+
+          {datos16pf5.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>16PF-5 · decatipo por escala (1–10)</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={datos16pf5} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F7" />
+                  <XAxis dataKey="clave" tick={{ fontSize: 10.5, fill: "#41507A" }} />
+                  <YAxis domain={[0, 10]} tick={{ fontSize: 10.5, fill: "#41507A" }} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(valor) => [`Decatipo ${valor} · ${categoriaSten(Number(valor))}`, ""]}
+                    labelFormatter={(clave) => datos16pf5.find((d) => d.clave === clave)?.nombre ?? String(clave)}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+                    {datos16pf5.map((d) => (
+                      <Cell key={d.clave} fill={colorPorDecatipo(d.valor)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {datosKostick.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>KOSTICK · conteo por factor (0–9, ipsativo)</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={datosKostick} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F7" />
+                  <XAxis dataKey="clave" tick={{ fontSize: 10.5, fill: "#41507A" }} />
+                  <YAxis domain={[0, 9]} tick={{ fontSize: 10.5, fill: "#41507A" }} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(valor) => [`Conteo ${valor}/9`, ""]}
+                    labelFormatter={(clave) => datosKostick.find((d) => d.clave === clave)?.nombre ?? String(clave)}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]} fill={NAVY} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {datosDisc.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>DISC · segmento por rasgo (1–7)</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={datosDisc} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F7" />
+                  <XAxis dataKey="clave" tick={{ fontSize: 10.5, fill: "#41507A" }} />
+                  <YAxis domain={[0, 7]} tick={{ fontSize: 10.5, fill: "#41507A" }} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(valor) => [`Segmento ${valor}/7`, ""]}
+                    labelFormatter={(clave) => datosDisc.find((d) => d.clave === clave)?.nombre ?? String(clave)}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]} fill={GOLD} />
+                </BarChart>
+              </ResponsiveContainer>
+              {patronDisc && (
+                <div style={{ marginTop: 10, padding: 12, background: "#F7F9FD", borderRadius: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: textosPatronDisc ? 8 : 0 }}>
+                    Patrón: {patronDisc}
+                  </div>
+                  {textosPatronDisc && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))", gap: 8, fontSize: 11.5, color: "#41507A" }}>
+                      {(Object.keys(NOMBRES_CATEGORIA_TEXTO_DISC) as (keyof typeof NOMBRES_CATEGORIA_TEXTO_DISC)[]).map((cat) => (
+                        <div key={cat}>
+                          <div style={{ fontWeight: 700, color: NAVY }}>{NOMBRES_CATEGORIA_TEXTO_DISC[cat]}</div>
+                          <div>{textosPatronDisc[cat]}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {psicoGuardados.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
               {psicoGuardados.map((p, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "6px 0", borderBottom: "1px solid #EEF1F7" }}>
-                  <span>{BATERIAS_EJEMPLO.find((b) => b.key === p.bateria)?.nombre ?? p.bateria}</span>
-                  <span style={{ fontWeight: 700 }}>STEN {p.sten} · {categoriaSten(p.sten ?? 0)}</span>
+                  <span>{nombreBateria(p.bateria)}</span>
+                  <span style={{ fontWeight: 700 }}>
+                    {p.bateria.startsWith("kostick_")
+                      ? `Conteo ${p.sten}/9`
+                      : p.bateria.startsWith("disc_")
+                        ? `Segmento ${p.sten}/7`
+                        : `STEN ${p.sten} · ${categoriaSten(p.sten ?? 0)}`}
+                  </span>
                 </div>
               ))}
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 10, marginBottom: 12 }}>
-            {BATERIAS_EJEMPLO.filter((b) => !psicoGuardados.some((p) => p.bateria === b.key)).map((b) => (
-              <div key={b.key}>
-                <label style={{ fontSize: 11.5, color: "#41507A" }}>{b.nombre}</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  placeholder="STEN"
-                  style={{ ...inputStyle, width: "100%" }}
-                  value={psico[b.key] ?? ""}
-                  onChange={(e) => setPsico((prev) => ({ ...prev, [b.key]: Number(e.target.value) }))}
-                />
+
+          {vacante.tests_psicometricos.length === 0 && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 10, marginBottom: 12 }}>
+                {BATERIAS_EJEMPLO.filter((b) => !psicoGuardados.some((p) => p.bateria === b.key)).map((b) => (
+                  <div key={b.key}>
+                    <label style={{ fontSize: 11.5, color: "#41507A" }}>{b.nombre}</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      placeholder="STEN"
+                      style={{ ...inputStyle, width: "100%" }}
+                      value={psico[b.key] ?? ""}
+                      onChange={(e) => setPsico((prev) => ({ ...prev, [b.key]: Number(e.target.value) }))}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={guardarPsicometricas} disabled={guardandoPsico} style={btnPrimario}>
-              {guardandoPsico ? "Guardando…" : "Guardar resultados"}
-            </button>
-            <button onClick={() => setMostrarFraudePsico((v) => !v)} style={{ ...btnPrimario, background: "transparent", color: NAVY, border: `1px solid ${NAVY}` }}>
-              {mostrarFraudePsico ? "Ocultar" : "Activar"} monitor anti-fraude
-            </button>
-          </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={guardarPsicometricas} disabled={guardandoPsico} style={btnPrimario}>
+                  {guardandoPsico ? "Guardando…" : "Guardar resultados"}
+                </button>
+                <button onClick={() => setMostrarFraudePsico((v) => !v)} style={{ ...btnPrimario, background: "transparent", color: NAVY, border: `1px solid ${NAVY}` }}>
+                  {mostrarFraudePsico ? "Ocultar" : "Activar"} monitor anti-fraude
+                </button>
+              </div>
+            </>
+          )}
           {mostrarFraudePsico && <div style={{ marginTop: 12 }}><AntiFraudeMonitor candidatoId={params.id} sesionTipo="psicometricas" /></div>}
         </section>
 
         {/* Etapa 4 — Técnica */}
         <section style={card}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 4 — Pruebas Técnicas</h3>
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>Caso generado por IA a partir del Manual de Puestos, corregido por IA + reclutador.</p>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>
+            {vacante.modo_tecnica === "banco"
+              ? "Banco de preguntas de opción múltiple, calificado objetivamente (sin interpretación de IA)."
+              : "Caso generado por IA a partir del Manual de Puestos, corregido por IA + reclutador."}
+          </p>
           {renderAgendamiento("tecnica")}
           {tecnicaGuardada !== null && (
             <div style={{ marginBottom: 12, fontSize: 16, fontWeight: 800, color: tecnicaGuardada >= vacante.corte_tecnica ? "#12805C" : "#C4402F" }}>
               Puntaje guardado: {tecnicaGuardada}/100 {tecnicaGuardada >= vacante.corte_tecnica ? "· Aprueba" : "· Bajo el corte"}
             </div>
           )}
-          {!caso ? (
+
+          {vacante.modo_tecnica === "banco" ? (
+            resultadoBanco ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {resultadoBanco.preguntas.map((p) => {
+                  const r = resultadoBanco.respuestas.find((x) => x.pregunta_id === p.id);
+                  return (
+                    <div key={p.id} style={{ background: "#F7F9FD", padding: 12, borderRadius: 8, fontSize: 12.5 }}>
+                      <div style={{ fontWeight: 700, color: NAVY, marginBottom: 6 }}>{p.enunciado}</div>
+                      <div style={{ color: "#41507A" }}>
+                        Respuesta del candidato: <strong>{p.opciones.find((o) => o.id === r?.opcion_elegida)?.texto ?? "—"}</strong>
+                      </div>
+                      {!r?.correcta && (
+                        <div style={{ color: "#41507A" }}>
+                          Respuesta correcta: <strong>{p.opciones.find((o) => o.id === p.respuesta_correcta)?.texto}</strong>
+                        </div>
+                      )}
+                      <div style={{ marginTop: 4, fontWeight: 700, color: r?.correcta ? "#12805C" : "#C4402F" }}>
+                        {r?.correcta ? "✓ Correcta" : "✗ Incorrecta"} · {r?.puntos_obtenidos ?? 0}/{p.puntos} pts
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: "#7C89A8" }}>El candidato todavía no completa la prueba técnica agendada.</div>
+            )
+          ) : !caso ? (
             <button onClick={generarCaso} disabled={generandoCaso} style={btnPrimario}>
               {generandoCaso ? "Generando…" : "Generar caso con IA"}
             </button>
@@ -541,7 +892,14 @@ export default function PerfilCandidatoPage() {
         {/* Etapa 6 — Assessment */}
         <section style={card}>
           <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 6 — Assessment Center</h3>
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>Registro de evaluación por ejercicio y competencia (escala 0–10).</p>
+          <p style={{ margin: "0 0 4px", fontSize: 12, color: "#7C89A8" }}>Registro de evaluación por ejercicio y competencia (escala 0–10).</p>
+          <button
+            onClick={() => router.push(`/seleccion/${params.vacanteId}/banco-ejercicios`)}
+            style={{ background: "none", border: "none", color: NAVY, fontWeight: 700, fontSize: 12, padding: 0, marginBottom: 12, cursor: "pointer" }}
+          >
+            Gestionar banco de ejercicios →
+          </button>
+          {renderAgendamiento("assessment")}
           {assessRows.length > 0 && (
             <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 4 }}>
               {assessRows.map((a) => (

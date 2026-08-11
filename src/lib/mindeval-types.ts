@@ -48,10 +48,22 @@ export interface Vacante {
   empresa: string;
   codigo_proceso?: string | null;
   estado: "abierta" | "pausada" | "cerrada";
+  fecha_limite_postulacion?: string | null;
   corte_match_cv: number;
   corte_sten: number;
   corte_tecnica: number;
+  modo_tecnica: "caso_abierto" | "banco";
+  tests_psicometricos: ("16pf5" | "kostick" | "disc" | "valanti")[];
   created_at: string;
+}
+
+// Cierre por fecha límite sin necesitar un cron: se evalúa en el momento en
+// que llega cada solicitud (postulación pública, formulario de postulación,
+// vista del embudo) comparando contra la hora actual del servidor/cliente.
+export function vacanteAceptaPostulaciones(vacante: Pick<Vacante, "estado" | "fecha_limite_postulacion">): boolean {
+  if (vacante.estado !== "abierta") return false;
+  if (!vacante.fecha_limite_postulacion) return true;
+  return new Date() <= new Date(vacante.fecha_limite_postulacion);
 }
 
 export interface Candidato {
@@ -101,16 +113,46 @@ export interface PruebaPsicometrica {
   aplicada_en: string;
 }
 
+export interface OpcionPregunta {
+  id: string;
+  texto: string;
+}
+
+export interface PreguntaBanco {
+  id: string;
+  vacante_id: string;
+  enunciado: string;
+  opciones: OpcionPregunta[];
+  respuesta_correcta: string;
+  puntos: number;
+  origen: "ia" | "manual";
+  estado: "borrador" | "activa";
+  orden: number;
+  created_at: string;
+}
+
+export interface RespuestaBancoDetalle {
+  pregunta_id: string;
+  opcion_elegida: string;
+  respuesta_correcta: string;
+  correcta: boolean;
+  puntos_obtenidos: number;
+}
+
 export interface PruebaTecnica {
   id: string;
   candidato_id: string;
-  caso_generado: string;
-  criterios: { analisis: number; estrategia: number; kpis: number; claridad: number };
+  modo: "caso_abierto" | "banco";
+  caso_generado?: string | null;
+  criterios?: { analisis: number; estrategia: number; kpis: number; claridad: number } | null;
   respuesta_candidato?: string | null;
   puntaje_analisis?: number | null;
   puntaje_estrategia?: number | null;
   puntaje_kpis?: number | null;
   puntaje_claridad?: number | null;
+  preguntas_snapshot?: PreguntaBanco[] | null;
+  respuestas_banco?: RespuestaBancoDetalle[] | null;
+  puntaje_objetivo?: number | null;
   puntaje_total?: number | null;
   corregido_por: "ia" | "reclutador";
   created_at: string;
@@ -124,6 +166,19 @@ export interface AssessmentEvaluacion {
   puntaje: number;
   evaluador?: string | null;
   notas?: string | null;
+  sesion_id?: string | null;
+}
+
+export interface EjercicioBanco {
+  id: string;
+  vacante_id: string;
+  competencia: string;
+  enunciado: string;
+  criterios_evaluacion: string;
+  origen: "ia" | "manual";
+  estado: "borrador" | "activa";
+  orden: number;
+  created_at: string;
 }
 
 export interface Entrevista {
@@ -147,7 +202,7 @@ export interface AlertaFraude {
   creado_en: string;
 }
 
-export type TipoSesionPrueba = "psicometrica" | "tecnica";
+export type TipoSesionPrueba = "psicometrica" | "tecnica" | "assessment";
 export type EstadoSesionPrueba = "programada" | "en_curso" | "completada" | "expirada";
 
 export interface SesionPrueba {
@@ -159,6 +214,7 @@ export interface SesionPrueba {
   fecha_programada: string;
   estado: EstadoSesionPrueba;
   completada_en?: string | null;
+  ejercicios_snapshot?: EjercicioBanco[] | null;
   created_at: string;
 }
 

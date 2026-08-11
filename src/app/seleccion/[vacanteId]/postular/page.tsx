@@ -9,7 +9,7 @@ const inputStyle: React.CSSProperties = { padding: "10px 12px", border: "1.5px s
 
 export default function PostularPage() {
   const params = useParams<{ vacanteId: string }>();
-  const [vacante, setVacante] = useState<{ titulo: string; empresa: string; estado: string } | null>(null);
+  const [vacante, setVacante] = useState<{ titulo: string; empresa: string; acepta_postulaciones: boolean } | null>(null);
   const [cargando, setCargando] = useState(true);
 
   const [nombre, setNombre] = useState("");
@@ -19,6 +19,7 @@ export default function PostularPage() {
   const [anios, setAnios] = useState<number | "">("");
   const [educacion, setEducacion] = useState("");
   const [archivo, setArchivo] = useState<File | null>(null);
+  const [consentimiento, setConsentimiento] = useState(false);
 
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -38,11 +39,16 @@ export default function PostularPage() {
       setError("Escribe tu nombre completo.");
       return;
     }
+    if (!consentimiento) {
+      setError("Debes aceptar el Aviso de Privacidad para continuar.");
+      return;
+    }
     setEnviando(true);
     try {
       const formData = new FormData();
       formData.append("vacante_id", params.vacanteId);
       formData.append("nombre_completo", nombre);
+      formData.append("consentimiento_lopdp", "true");
       if (email) formData.append("email", email);
       if (telefono) formData.append("telefono", telefono);
       if (ciudad) formData.append("ciudad", ciudad);
@@ -65,7 +71,7 @@ export default function PostularPage() {
 
   if (cargando) return null;
 
-  if (!vacante || vacante.estado !== "abierta") {
+  if (!vacante || !vacante.acepta_postulaciones) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FA" }}>
         <div style={{ textAlign: "center", color: "#7C89A8" }}>Esta vacante ya no está disponible para postulaciones.</div>
@@ -131,10 +137,32 @@ export default function PostularPage() {
             </div>
           </div>
 
+          <div style={{ background: "#F7F9FD", borderLeft: "3px solid #F5B800", borderRadius: 6, padding: "10px 12px", marginTop: 4 }}>
+            <p style={{ fontSize: 11.5, color: NAVY, margin: 0, lineHeight: 1.6 }}>
+              Tus datos y tu hoja de vida se usan <strong>exclusivamente</strong> para evaluar tu postulación a esta vacante.
+              Solo el equipo de {vacante.empresa} y el consultor de MINDTALENT tendrán acceso.
+            </p>
+          </div>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={consentimiento}
+              onChange={(e) => setConsentimiento(e.target.checked)}
+              style={{ marginTop: 3, width: 16, height: 16, accentColor: GOLD, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 11.5, color: "#374151", lineHeight: 1.6 }}>
+              He leído y acepto el{" "}
+              <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+                Aviso de Privacidad
+              </a>{" "}
+              y autorizo el tratamiento de mis datos personales conforme a la Ley Orgánica de Protección de Datos Personales del Ecuador (LOPDP), incluyendo la verificación de mi(s) título(s) académico(s) declarado(s) en el registro público de la SENESCYT.
+            </span>
+          </label>
+
           <button
             onClick={enviar}
-            disabled={enviando}
-            style={{ background: GOLD, color: NAVY, border: "none", padding: "12px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1, marginTop: 8 }}
+            disabled={enviando || !consentimiento}
+            style={{ background: GOLD, color: NAVY, border: "none", padding: "12px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: enviando || !consentimiento ? "not-allowed" : "pointer", opacity: enviando || !consentimiento ? 0.6 : 1, marginTop: 4 }}
           >
             {enviando ? "Enviando…" : "Enviar postulación"}
           </button>

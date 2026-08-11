@@ -36,13 +36,16 @@ export default function NuevaVacante() {
   const [puestos, setPuestos] = useState<Puesto[]>([]);
   const [origenPerfil, setOrigenPerfil] = useState<"puesto" | "manual">("puesto");
   const [puestoId, setPuestoId] = useState("");
+  const [verTodasLasEmpresas, setVerTodasLasEmpresas] = useState(false);
 
   const [titulo, setTitulo] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [codigoProceso, setCodigoProceso] = useState("");
+  const [fechaLimitePostulacion, setFechaLimitePostulacion] = useState("");
   const [corteMatchCv, setCorteMatchCv] = useState(72);
   const [corteSten, setCorteSten] = useState(6);
   const [corteTecnica, setCorteTecnica] = useState(70);
+  const [testsPsicometricos, setTestsPsicometricos] = useState<("16pf5" | "kostick" | "disc")[]>([]);
 
   const [mision, setMision] = useState("");
   const [area, setArea] = useState("");
@@ -51,6 +54,7 @@ export default function NuevaVacante() {
 
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
+  const [confirmarOtraEmpresa, setConfirmarOtraEmpresa] = useState(false);
 
   useEffect(() => {
     if (verificando) return;
@@ -63,6 +67,17 @@ export default function NuevaVacante() {
 
   const puestoSeleccionado = puestos.find((p) => p.id === puestoId);
 
+  function mismaEmpresa(nombrePuesto?: string | null): boolean {
+    const a = empresa.trim().toLowerCase();
+    const b = (nombrePuesto ?? "").trim().toLowerCase();
+    if (!a || !b) return false;
+    return a.includes(b) || b.includes(a);
+  }
+
+  const puestosDeLaEmpresa = puestos.filter((p) => mismaEmpresa(p.empresas_mdt?.nombre));
+  const puestosMostrados = verTodasLasEmpresas || !empresa.trim() || puestosDeLaEmpresa.length === 0 ? puestos : puestosDeLaEmpresa;
+  const puestoDeOtraEmpresa = origenPerfil === "puesto" && !!puestoSeleccionado && !!empresa.trim() && !mismaEmpresa(puestoSeleccionado.empresas_mdt?.nombre);
+
   async function guardar() {
     setError("");
     if (!titulo.trim() || !empresa.trim()) {
@@ -73,6 +88,10 @@ export default function NuevaVacante() {
       setError("Selecciona un puesto del Manual de Puestos, o cambia a perfil manual.");
       return;
     }
+    if (puestoDeOtraEmpresa && !confirmarOtraEmpresa) {
+      setError("El puesto seleccionado pertenece a otra empresa. Confirma abajo que quieres usarlo igual, o elige un puesto de esta empresa.");
+      return;
+    }
 
     setGuardando(true);
     try {
@@ -80,9 +99,11 @@ export default function NuevaVacante() {
         titulo,
         empresa,
         codigo_proceso: codigoProceso || null,
+        fecha_limite_postulacion: fechaLimitePostulacion ? new Date(fechaLimitePostulacion).toISOString() : null,
         corte_match_cv: corteMatchCv,
         corte_sten: corteSten,
         corte_tecnica: corteTecnica,
+        tests_psicometricos: testsPsicometricos,
       };
 
       if (origenPerfil === "puesto") {
@@ -138,9 +159,16 @@ export default function NuevaVacante() {
               <input style={inputStyle} value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Corporación Andina S.A." />
             </div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Código de proceso (opcional)</label>
-            <input style={inputStyle} value={codigoProceso} onChange={(e) => setCodigoProceso(e.target.value)} placeholder="EC-2026-041" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={labelStyle}>Código de proceso (opcional)</label>
+              <input style={inputStyle} value={codigoProceso} onChange={(e) => setCodigoProceso(e.target.value)} placeholder="EC-2026-041" />
+            </div>
+            <div>
+              <label style={labelStyle}>Fecha límite de postulación (opcional)</label>
+              <input type="datetime-local" style={inputStyle} value={fechaLimitePostulacion} onChange={(e) => setFechaLimitePostulacion(e.target.value)} />
+              <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 4 }}>Pasada esta fecha, el link de postulación deja de aceptar CVs solo.</div>
+            </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             <div>
@@ -154,6 +182,45 @@ export default function NuevaVacante() {
             <div>
               <label style={labelStyle}>Corte técnica (/100)</label>
               <input type="number" style={inputStyle} value={corteTecnica} onChange={(e) => setCorteTecnica(Number(e.target.value))} />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <label style={labelStyle}>Pruebas psicométricas de este proceso</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {(["16pf5", "kostick", "disc"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    setTestsPsicometricos((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+                  }
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 20,
+                    border: testsPsicometricos.includes(t) ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                    background: testsPsicometricos.includes(t) ? "#FFFBEF" : "#FFFFFF",
+                    color: NAVY,
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {testsPsicometricos.includes(t) ? "✓ " : ""}
+                  {t === "16pf5" ? "16PF-5" : t === "kostick" ? "KOSTICK" : "DISC"}
+                </button>
+              ))}
+              <span
+                title="Todavía no disponible: falta la clave de calificación real."
+                style={{ padding: "6px 14px", borderRadius: 20, border: "1.5px dashed #D5DCEB", color: "#B3BCD1", fontSize: 11.5, fontWeight: 700 }}
+              >
+                VALANTI (próximamente)
+              </span>
+            </div>
+            <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 4 }}>
+              {testsPsicometricos.length > 0
+                ? "El candidato responderá esto desde su link de prueba, con calificación automática."
+                : "Sin ninguna seleccionada, se usa la batería de ejemplo (registro manual del STEN). Puedes cambiar esto después desde la ficha de cualquier candidato."}
             </div>
           </div>
         </section>
@@ -210,18 +277,47 @@ export default function NuevaVacante() {
                   o cambia a &quot;perfil manual&quot; arriba.
                 </div>
               ) : (
-                <select style={inputStyle} value={puestoId} onChange={(e) => setPuestoId(e.target.value)}>
-                  <option value="">Selecciona un puesto…</option>
-                  {puestos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre_puesto} — {p.area} {p.empresas_mdt?.nombre ? `(${p.empresas_mdt.nombre})` : ""}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  {empresa.trim() && puestosDeLaEmpresa.length === 0 && !verTodasLasEmpresas ? (
+                    <div style={{ fontSize: 12.5, color: "#7C89A8", marginBottom: 8 }}>
+                      No hay puestos de &quot;{empresa}&quot; en el Manual de Puestos.{" "}
+                      <button type="button" onClick={() => setVerTodasLasEmpresas(true)} style={{ color: NAVY, fontWeight: 700, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", fontSize: 12.5 }}>
+                        Ver puestos de otras empresas
+                      </button>{" "}
+                      o cambia a &quot;perfil manual&quot; arriba.
+                    </div>
+                  ) : null}
+                  <select
+                    style={inputStyle}
+                    value={puestoId}
+                    onChange={(e) => {
+                      setPuestoId(e.target.value);
+                      setConfirmarOtraEmpresa(false);
+                    }}
+                  >
+                    <option value="">Selecciona un puesto…</option>
+                    {puestosMostrados.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre_puesto} — {p.area} {p.empresas_mdt?.nombre ? `(${p.empresas_mdt.nombre})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </>
               )}
               {puestoSeleccionado?.mision && (
                 <div style={{ marginTop: 12, padding: 12, background: "#F7F9FD", borderRadius: 8, fontSize: 12.5, color: "#41507A" }}>
                   <strong>Misión:</strong> {puestoSeleccionado.mision}
+                </div>
+              )}
+              {puestoDeOtraEmpresa && (
+                <div style={{ marginTop: 12, padding: 12, background: "#FDEDEA", border: "1px solid #F3C2B8", borderRadius: 8, fontSize: 12.5, color: "#C4402F" }}>
+                  <div style={{ marginBottom: 8 }}>
+                    ⚠️ Este puesto pertenece a <strong>{puestoSeleccionado?.empresas_mdt?.nombre}</strong>, no a &quot;{empresa}&quot;. Comparar el CV contra los requisitos de otra empresa dará un % de match sin sentido.
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, cursor: "pointer" }}>
+                    <input type="checkbox" checked={confirmarOtraEmpresa} onChange={(e) => setConfirmarOtraEmpresa(e.target.checked)} />
+                    Sé lo que hago, usar este puesto igual
+                  </label>
                 </div>
               )}
             </div>

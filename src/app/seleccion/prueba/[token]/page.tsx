@@ -4,24 +4,66 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
+import type { OpcionPregunta } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
 
-const DURACION_MIN: Record<string, number> = { tecnica: 90, psicometrica: 30 };
-
-interface DatosTecnica {
+interface DatosTecnicaCasoAbierto {
   tipo: "tecnica";
+  modo: "caso_abierto";
   candidato_id: string;
   candidato_nombre: string;
   caso_generado: string;
   criterios: { analisis: number; estrategia: number; kpis: number; claridad: number };
 }
-interface DatosPsicometrica {
+interface DatosTecnicaBanco {
+  tipo: "tecnica";
+  modo: "banco";
+  candidato_id: string;
+  candidato_nombre: string;
+  preguntas: { id: string; enunciado: string; opciones: OpcionPregunta[] }[];
+}
+type DatosTecnica = DatosTecnicaCasoAbierto | DatosTecnicaBanco;
+interface DatosPsicometricaPlaceholder {
   tipo: "psicometrica";
+  modo: "placeholder";
   candidato_id: string;
   candidato_nombre: string;
   items: Record<string, string[]>;
+}
+interface DatosPsicometricaReal {
+  tipo: "psicometrica";
+  modo: "real";
+  candidato_id: string;
+  candidato_nombre: string;
+  tests: {
+    "16pf5"?: { num: number; texto: string; opciones: { letra: "a" | "b" | "c"; texto: string }[] }[];
+    kostick?: { num: number; a: string; b: string }[];
+    disc?: { num: number; palabras: string[] }[];
+  };
+}
+type DatosPsicometrica = DatosPsicometricaPlaceholder | DatosPsicometricaReal;
+interface DatosAssessment {
+  tipo: "assessment";
+  candidato_id: string;
+  candidato_nombre: string;
+  ejercicios: { id: string; competencia: string; enunciado: string }[];
+}
+
+function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessment): number {
+  if (datos.tipo === "psicometrica") {
+    if (datos.modo === "real") {
+      const tiene16pf5 = !!datos.tests["16pf5"];
+      const tieneKostick = !!datos.tests.kostick;
+      const tieneDisc = !!datos.tests.disc;
+      const minutos = (tiene16pf5 ? 45 : 0) + (tieneKostick ? 15 : 0) + (tieneDisc ? 15 : 0);
+      return minutos || 30;
+    }
+    return 30;
+  }
+  if (datos.tipo === "assessment") return 45;
+  return datos.modo === "banco" ? 40 : 90;
 }
 
 function useCuentaRegresiva(minutos: number, activo: boolean, onAgotado: () => void) {
@@ -52,12 +94,18 @@ export default function PruebaTokenPage() {
   const { token } = useParams<{ token: string }>();
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
-  const [datos, setDatos] = useState<DatosTecnica | DatosPsicometrica | null>(null);
+  const [datos, setDatos] = useState<DatosTecnica | DatosPsicometrica | DatosAssessment | null>(null);
   const [enviado, setEnviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   const [respuestaTecnica, setRespuestaTecnica] = useState("");
+  const [respuestasBanco, setRespuestasBanco] = useState<Record<string, string>>({});
   const [respuestasPsico, setRespuestasPsico] = useState<Record<string, number[]>>({});
+  const [respuestasAssessment, setRespuestasAssessment] = useState<Record<string, string>>({});
+  const [sexo16pf5, setSexo16pf5] = useState<"H" | "F" | "">("");
+  const [respuestas16pf5, setRespuestas16pf5] = useState<Record<number, "a" | "b" | "c">>({});
+  const [respuestasKostick, setRespuestasKostick] = useState<Record<number, "a" | "b">>({});
+  const [respuestasDisc, setRespuestasDisc] = useState<Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>>({});
 
   useEffect(() => {
     fetch(`/api/mindeval-prueba/${token}`)
@@ -70,7 +118,7 @@ export default function PruebaTokenPage() {
       })
       .then((d) => {
         setDatos(d);
-        if (d.tipo === "psicometrica") {
+        if (d.tipo === "psicometrica" && d.modo === "placeholder") {
           const iniciales: Record<string, number[]> = {};
           Object.keys(d.items).forEach((k) => {
             iniciales[k] = d.items[k].map(() => 3);
@@ -88,7 +136,26 @@ export default function PruebaTokenPage() {
     setError("");
     try {
       const body =
-        datos.tipo === "tecnica" ? { respuesta_candidato: respuestaTecnica } : { respuestas: respuestasPsico };
+        datos.tipo === "tecnica"
+          ? datos.modo === "banco"
+            ? { respuestas: Object.entries(respuestasBanco).map(([pregunta_id, opcion_elegida]) => ({ pregunta_id, opcion_elegida })) }
+            : { respuesta_candidato: respuestaTecnica }
+          : datos.tipo === "assessment"
+            ? { respuestas: Object.entries(respuestasAssessment).map(([ejercicio_id, respuesta]) => ({ ejercicio_id, respuesta })) }
+            : datos.modo === "real"
+              ? {
+                  sexo: sexo16pf5 || undefined,
+                  respuestas16pf5: datos.tests["16pf5"]
+                    ? Object.entries(respuestas16pf5).map(([num, letra]) => ({ num: Number(num), letra }))
+                    : undefined,
+                  respuestasKostick: datos.tests.kostick
+                    ? Object.entries(respuestasKostick).map(([num, eleccion]) => ({ num: Number(num), eleccion }))
+                    : undefined,
+                  respuestasDisc: datos.tests.disc
+                    ? Object.entries(respuestasDisc).map(([num, r]) => ({ num: Number(num), mas: r.mas, menos: r.menos }))
+                    : undefined,
+                }
+              : { respuestas: respuestasPsico };
       const res = await fetch(`/api/mindeval-prueba/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -104,7 +171,7 @@ export default function PruebaTokenPage() {
     }
   }
 
-  const duracion = datos ? DURACION_MIN[datos.tipo] : 30;
+  const duracion = datos ? duracionMinutos(datos) : 30;
   const tiempo = useCuentaRegresiva(duracion, !!datos && !enviado, () => enviar());
 
   if (cargando) return null;
@@ -139,7 +206,9 @@ export default function PruebaTokenPage() {
       <div style={{ background: NAVY, color: "#FFFFFF", padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: 16 }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 1.2, color: GOLD, fontWeight: 700 }}>MINDEVAL · BY MINDTALENT</div>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>{datos.tipo === "tecnica" ? "Prueba Técnica" : "Prueba Psicométrica"}</div>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>
+            {datos.tipo === "tecnica" ? "Prueba Técnica" : datos.tipo === "assessment" ? "Assessment Center" : "Prueba Psicométrica"}
+          </div>
         </div>
         <div style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", padding: "8px 16px", borderRadius: 8, fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
           ⏱ {tiempo}
@@ -149,11 +218,60 @@ export default function PruebaTokenPage() {
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem" }}>
         {error && <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
 
-        <div style={{ marginBottom: 16 }}>
-          <AntiFraudeMonitor candidatoId={datos.candidato_id} sesionTipo={datos.tipo === "tecnica" ? "tecnica" : "psicometricas"} />
+        <div style={{ fontSize: 11, color: "#A9B6D8", marginBottom: 16 }}>
+          Tus respuestas se tratan conforme a nuestro{" "}
+          <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+            Aviso de Privacidad
+          </a>.
         </div>
 
-        {datos.tipo === "tecnica" ? (
+        <div style={{ marginBottom: 16 }}>
+          <AntiFraudeMonitor candidatoId={datos.candidato_id} sesionTipo={datos.tipo === "tecnica" ? "tecnica" : datos.tipo === "assessment" ? "assessment" : "psicometricas"} />
+        </div>
+
+        {datos.tipo === "tecnica" && datos.modo === "banco" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {datos.preguntas.map((p, i) => (
+              <div key={p.id} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {p.enunciado}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {p.opciones.map((o) => (
+                    <label
+                      key={o.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: respuestasBanco[p.id] === o.id ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                        background: respuestasBanco[p.id] === o.id ? "#FFFBEF" : "#FFFFFF",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        color: "#41507A",
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name={p.id}
+                        checked={respuestasBanco[p.id] === o.id}
+                        onChange={() => setRespuestasBanco((prev) => ({ ...prev, [p.id]: o.id }))}
+                      />
+                      {o.texto}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={enviar}
+              disabled={enviando || Object.keys(respuestasBanco).length < datos.preguntas.length}
+              style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
+            >
+              {enviando ? "Enviando…" : "Enviar respuestas"}
+            </button>
+          </div>
+        ) : datos.tipo === "tecnica" ? (
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 22 }}>
             <div style={{ background: NAVY, color: "#FFFFFF", borderRadius: 10, padding: 18, marginBottom: 16, fontSize: 14, lineHeight: 1.6 }}>
               {datos.caso_generado}
@@ -175,6 +293,231 @@ export default function PruebaTokenPage() {
             >
               {enviando ? "Enviando…" : "Enviar respuesta"}
             </button>
+          </div>
+        ) : datos.tipo === "assessment" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {datos.ejercicios.map((e, i) => (
+              <div key={e.id} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                <div style={{ fontSize: 11, color: GOLD, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{e.competencia}</div>
+                <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {e.enunciado}</div>
+                <textarea
+                  value={respuestasAssessment[e.id] ?? ""}
+                  onChange={(ev) => setRespuestasAssessment((prev) => ({ ...prev, [e.id]: ev.target.value }))}
+                  placeholder="Escribe tu respuesta aquí…"
+                  style={{ width: "100%", minHeight: 140, padding: 14, border: "1.5px solid #D5DCEB", borderRadius: 10, fontSize: 13.5, boxSizing: "border-box" }}
+                />
+              </div>
+            ))}
+            <button
+              onClick={enviar}
+              disabled={enviando || Object.values(respuestasAssessment).filter((r) => r.trim()).length < datos.ejercicios.length}
+              style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
+            >
+              {enviando ? "Enviando…" : "Enviar respuestas"}
+            </button>
+          </div>
+        ) : datos.tipo === "psicometrica" && datos.modo === "real" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {datos.tests["16pf5"] && (
+              <>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                  <h3 style={{ margin: "0 0 12px", fontSize: 14, color: NAVY }}>Antes de empezar</h3>
+                  <div style={{ fontSize: 12.5, color: "#41507A", marginBottom: 8 }}>Sexo</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {(["H", "F"] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setSexo16pf5(s)}
+                        style={{
+                          padding: "8px 20px",
+                          borderRadius: 8,
+                          border: sexo16pf5 === s ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                          background: sexo16pf5 === s ? "#FFFBEF" : "#FFFFFF",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: NAVY,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {s === "H" ? "Hombre" : "Mujer"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {datos.tests["16pf5"]!.map((it, i) => (
+                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                    <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {it.texto}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {it.opciones.map((o) => (
+                        <label
+                          key={o.letra}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            border: respuestas16pf5[it.num] === o.letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                            background: respuestas16pf5[it.num] === o.letra ? "#FFFBEF" : "#FFFFFF",
+                            cursor: "pointer",
+                            fontSize: 13,
+                            color: "#41507A",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={`p16pf5-${it.num}`}
+                            checked={respuestas16pf5[it.num] === o.letra}
+                            onChange={() => setRespuestas16pf5((prev) => ({ ...prev, [it.num]: o.letra }))}
+                          />
+                          {o.texto}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {datos.tests.kostick && (
+              <>
+                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                  Elige, de cada par, la frase que más se parezca a tu forma de ser.
+                </div>
+                {datos.tests.kostick.map((it, i) => (
+                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                    <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {([["a", it.a], ["b", it.b]] as const).map(([letra, texto]) => (
+                        <label
+                          key={letra}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            border: respuestasKostick[it.num] === letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                            background: respuestasKostick[it.num] === letra ? "#FFFBEF" : "#FFFFFF",
+                            cursor: "pointer",
+                            fontSize: 13,
+                            color: "#41507A",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={`kostick-${it.num}`}
+                            checked={respuestasKostick[it.num] === letra}
+                            onChange={() => setRespuestasKostick((prev) => ({ ...prev, [it.num]: letra }))}
+                          />
+                          {texto}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {datos.tests.disc && (
+              <>
+                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                  En cada uno de los 28 grupos de 4 palabras, marca la que MÁS te representa y la que MENOS te representa.
+                </div>
+                {datos.tests.disc.map((it, i) => (
+                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                    <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>Grupo {i + 1}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {it.palabras.map((palabra, idx) => {
+                        const pos = (idx + 1) as 1 | 2 | 3 | 4;
+                        const actual = respuestasDisc[it.num] ?? {};
+                        const esMas = actual.mas === pos;
+                        const esMenos = actual.menos === pos;
+                        return (
+                          <div
+                            key={pos}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "8px 12px",
+                              borderRadius: 8,
+                              border: esMas || esMenos ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                              background: esMas || esMenos ? "#FFFBEF" : "#FFFFFF",
+                              fontSize: 13,
+                              color: "#41507A",
+                            }}
+                          >
+                            <span style={{ flex: 1 }}>{palabra}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRespuestasDisc((prev) => {
+                                  const item = prev[it.num] ?? {};
+                                  return { ...prev, [it.num]: { ...item, mas: pos, menos: item.menos === pos ? undefined : item.menos } };
+                                })
+                              }
+                              style={{
+                                padding: "5px 10px",
+                                borderRadius: 6,
+                                border: esMas ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                background: esMas ? GOLD : "#FFFFFF",
+                                color: NAVY,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              MÁS
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setRespuestasDisc((prev) => {
+                                  const item = prev[it.num] ?? {};
+                                  return { ...prev, [it.num]: { ...item, menos: pos, mas: item.mas === pos ? undefined : item.mas } };
+                                })
+                              }
+                              style={{
+                                padding: "5px 10px",
+                                borderRadius: 6,
+                                border: esMenos ? `1.5px solid ${NAVY}` : "1.5px solid #D5DCEB",
+                                background: esMenos ? NAVY : "#FFFFFF",
+                                color: esMenos ? "#FFFFFF" : NAVY,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              MENOS
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {(() => {
+              const total16pf5 = datos.tests["16pf5"]?.length ?? 0;
+              const totalKostick = datos.tests.kostick?.length ?? 0;
+              const totalDisc = datos.tests.disc?.length ?? 0;
+              const faltaSexo = total16pf5 > 0 && !sexo16pf5;
+              const falta16pf5 = Object.keys(respuestas16pf5).length < total16pf5;
+              const faltaKostick = Object.keys(respuestasKostick).length < totalKostick;
+              const faltaDisc = Object.values(respuestasDisc).filter((r) => r.mas && r.menos).length < totalDisc;
+              return (
+                <button
+                  onClick={enviar}
+                  disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc}
+                  style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
+                >
+                  {enviando ? "Enviando…" : "Enviar respuestas"}
+                </button>
+              );
+            })()}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
