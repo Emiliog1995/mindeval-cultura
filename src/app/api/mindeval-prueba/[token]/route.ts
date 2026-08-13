@@ -3,11 +3,12 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import { generarCasoTecnico, corregirCasoTecnico, corregirEjercicioAssessment } from "@/lib/mindeval-ia";
-import { calificarBanco, avanzarASenescytSiAplica, calificar16PF5, calificarKostick, calificarDISC } from "@/lib/mindeval-scoring";
+import { calificarBanco, avanzarASenescytSiAplica, calificar16PF5, calificarKostick, calificarDISC, calificarVALANTI } from "@/lib/mindeval-scoring";
 import { ITEMS_EJEMPLO } from "@/lib/mindeval-baterias";
 import { ITEMS_16PF5 } from "@/lib/mindeval-16pf5";
 import { ITEMS_KOSTICK } from "@/lib/mindeval-kostick";
 import { ITEMS_DISC } from "@/lib/mindeval-disc";
+import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
 import type { EjercicioBanco, PreguntaBanco, SesionPrueba, Vacante } from "@/lib/mindeval-types";
 
 // El enlace de una prueba agendada no vive para siempre: si el candidato no
@@ -223,6 +224,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (testsActivos.includes("disc")) {
       tests["disc"] = ITEMS_DISC.map((it) => ({ num: it.num, palabras: it.palabras.map((p) => p.texto) }));
     }
+    if (testsActivos.includes("valanti")) {
+      tests["valanti"] = ITEMS_VALANTI.map((it) => ({ num: it.num, fraseA: it.fraseA, fraseB: it.fraseB }));
+    }
 
     return NextResponse.json({
       tipo: "psicometrica",
@@ -251,7 +255,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const { data: sesion, error } = await supabaseAdmin
     .from("mindeval_sesiones_prueba")
-    .select("*")
+    .select("*, mindeval_candidatos(nombre_completo)")
     .eq("token", token)
     .maybeSingle();
 
@@ -269,6 +273,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const s = sesion as SesionPrueba;
+  const nombreCandidato = (sesion as unknown as { mindeval_candidatos?: { nombre_completo?: string } }).mindeval_candidatos?.nombre_completo ?? "el candidato";
 
   const { data: vacanteCortes } = await supabaseAdmin
     .from("mindeval_vacantes")
@@ -349,11 +354,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     await supabaseAdmin.from("mindeval_assessment_evaluaciones").insert(filas);
   } else if ((vacanteCortes?.tests_psicometricos ?? []).length > 0) {
     const testsActivos: string[] = vacanteCortes!.tests_psicometricos;
-    const { sexo, respuestas16pf5, respuestasKostick, respuestasDisc }: {
+    const { sexo, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti }: {
       sexo?: "H" | "F";
       respuestas16pf5?: { num: number; letra: "a" | "b" | "c" }[];
       respuestasKostick?: { num: number; eleccion: "a" | "b" }[];
       respuestasDisc?: { num: number; mas: 1 | 2 | 3 | 4; menos: 1 | 2 | 3 | 4 }[];
+      respuestasValanti?: { num: number; puntosFraseA: 0 | 1 | 2 | 3 }[];
     } = body;
 
     const filas: { candidato_id: string; bateria: string; sten: number; percentil: number | null; respuestas: unknown }[] = [];
@@ -403,6 +409,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
           sten: p.segmento,
           percentil: null,
           respuestas: { puntoBruto: p.puntoBruto, patron: resultado.patron, respuestas: respuestasDisc },
+        });
+      }
+    }
+
+    if (testsActivos.includes("valanti")) {
+      if (!respuestasValanti?.length) {
+        return NextResponse.json({ error: "Faltan las respuestas del VALANTI" }, { status: 400 });
+      }
+      const resultado = calificarVALANTI(respuestasValanti, nombreCandidato);
+      for (const p of resultado.puntajes) {
+        filas.push({
+          candidato_id: s.candidato_id,
+          bateria: `valanti_${p.escala}`,
+          sten: p.puntajeEstandar,
+          percentil: null,
+          respuestas: {
+            puntoBruto: p.puntoBruto,
+            nivel: p.nivel,
+            distanciaOrganizacion: p.distanciaOrganizacion,
+            areaMasImportante: resultado.areaMasImportante,
+            areaMenosImportante: resultado.areaMenosImportante,
+            respuestas: respuestasValanti,
+          },
         });
       }
     }

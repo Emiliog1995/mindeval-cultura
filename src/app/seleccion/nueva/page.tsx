@@ -45,7 +45,7 @@ export default function NuevaVacante() {
   const [corteMatchCv, setCorteMatchCv] = useState(72);
   const [corteSten, setCorteSten] = useState(6);
   const [corteTecnica, setCorteTecnica] = useState(70);
-  const [testsPsicometricos, setTestsPsicometricos] = useState<("16pf5" | "kostick" | "disc")[]>([]);
+  const [testsPsicometricos, setTestsPsicometricos] = useState<("16pf5" | "kostick" | "disc" | "valanti")[]>([]);
 
   const [mision, setMision] = useState("");
   const [area, setArea] = useState("");
@@ -188,7 +188,7 @@ export default function NuevaVacante() {
           <div style={{ marginTop: 14 }}>
             <label style={labelStyle}>Pruebas psicométricas de este proceso</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {(["16pf5", "kostick", "disc"] as const).map((t) => (
+              {(["16pf5", "kostick", "disc", "valanti"] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -207,15 +207,9 @@ export default function NuevaVacante() {
                   }}
                 >
                   {testsPsicometricos.includes(t) ? "✓ " : ""}
-                  {t === "16pf5" ? "16PF-5" : t === "kostick" ? "KOSTICK" : "DISC"}
+                  {t === "16pf5" ? "16PF-5" : t === "kostick" ? "KOSTICK" : t === "disc" ? "DISC" : "VALANTI"}
                 </button>
               ))}
-              <span
-                title="Todavía no disponible: falta la clave de calificación real."
-                style={{ padding: "6px 14px", borderRadius: 20, border: "1.5px dashed #D5DCEB", color: "#B3BCD1", fontSize: 11.5, fontWeight: 700 }}
-              >
-                VALANTI (próximamente)
-              </span>
             </div>
             <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 4 }}>
               {testsPsicometricos.length > 0

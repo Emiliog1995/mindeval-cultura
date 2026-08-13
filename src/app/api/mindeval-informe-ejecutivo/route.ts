@@ -23,6 +23,7 @@ interface InformeInput {
   datosDisc?: DatoEscala[];
   patronDisc?: string;
   textosPatronDisc?: Partial<Record<CategoriaTextoDISC, string>>;
+  datosValanti?: DatoEscala[];
 }
 
 export async function POST(req: NextRequest) {
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     const input: InformeInput = await req.json();
     const {
       candidato, titulo_vacante, matchCv, stenPromedio, tecnicaTotal, assessmentPromedio, idoneidadGlobal,
-      datos16pf5, datosKostick, datosDisc, patronDisc, textosPatronDisc,
+      datos16pf5, datosKostick, datosDisc, patronDisc, textosPatronDisc, datosValanti,
     } = input;
 
     const lineas: string[] = [];
@@ -65,6 +66,10 @@ export async function POST(req: NextRequest) {
           detallePsicometrico.push(`    · ${nombreCategoria}: ${texto}`);
         }
       }
+    }
+    if (datosValanti?.length) {
+      detallePsicometrico.push(`VALANTI (5 Valores Humanos — Verdad, Rectitud, Paz, Amor, No violencia; puntaje estándar tipo T, media 50/DE 10, no es un decatipo):`);
+      datosValanti.forEach((d) => detallePsicometrico.push(`  - ${d.nombre}: ${d.valor}`));
     }
 
     if (!lineas.length && !detallePsicometrico.length) {

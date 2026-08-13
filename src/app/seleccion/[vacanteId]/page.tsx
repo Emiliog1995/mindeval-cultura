@@ -90,12 +90,17 @@ export default function ProcesoVacante() {
       const matchCv = matchesC.length ? matchesC[matchesC.length - 1].match_pct : undefined;
 
       const stenValores = (psico.data ?? [])
-        // el conteo ipsativo de KOSTICK (0-9) y el segmento de DISC (1-7) no
-        // son un STEN normado — mezclarlos en este promedio daría un número
-        // sin sentido, se excluyen del cálculo.
+        // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
+        // puntaje estándar de VALANTI (media 50/DE 10) no son un STEN normado
+        // — mezclarlos en este promedio daría un número sin sentido, se
+        // excluyen del cálculo.
         .filter(
           (p: { candidato_id: string; bateria: string; sten: number | null }) =>
-            p.candidato_id === c.id && p.sten !== null && !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_")
+            p.candidato_id === c.id &&
+            p.sten !== null &&
+            !p.bateria.startsWith("kostick_") &&
+            !p.bateria.startsWith("disc_") &&
+            !p.bateria.startsWith("valanti_")
         )
         .map((p: { sten: number }) => p.sten);
       const stenPromedio = promedio(stenValores);

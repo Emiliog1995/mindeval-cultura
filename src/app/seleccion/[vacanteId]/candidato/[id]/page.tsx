@@ -11,6 +11,7 @@ import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
 import { NOMBRES_ESCALA_16PF5, type Escala16PF5 } from "@/lib/mindeval-16pf5";
 import { NOMBRES_FACTOR_KOSTICK, type FactorKostick } from "@/lib/mindeval-kostick";
 import { NOMBRES_RASGO_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, NOMBRES_CATEGORIA_TEXTO_DISC } from "@/lib/mindeval-disc";
+import { NOMBRES_ESCALA_VALANTI, type EscalaVALANTI } from "@/lib/mindeval-valanti";
 import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type PreguntaBanco, type RespuestaBancoDetalle, type SesionPrueba, type TipoSesionPrueba, type Vacante } from "@/lib/mindeval-types";
@@ -26,10 +27,11 @@ const inputStyle: React.CSSProperties = { padding: "8px 10px", border: "1.5px so
 interface PsicoRow { bateria: string; sten: number | null; percentil: number | null }
 interface DatoBarra { clave: string; nombre: string; valor: number }
 
-const NOMBRE_TEST_PSICOMETRICO: Record<"16pf5" | "kostick" | "disc", string> = {
+const NOMBRE_TEST_PSICOMETRICO: Record<"16pf5" | "kostick" | "disc" | "valanti", string> = {
   "16pf5": "16PF-5",
   kostick: "KOSTICK",
   disc: "DISC",
+  valanti: "VALANTI",
 };
 interface AssessRow { id: string; ejercicio: string; competencia: string; puntaje: number; evaluador: string | null }
 interface EntrevistaRow { fecha: string | null; entrevistadores: string | null; resultado: string | null; notas: string | null }
@@ -191,7 +193,7 @@ export default function PerfilCandidatoPage() {
     setCandidato((prev) => (prev ? { ...prev, etapa_actual: nueva } : prev));
   }
 
-  async function toggleTestPsicometrico(test: "16pf5" | "kostick" | "disc") {
+  async function toggleTestPsicometrico(test: "16pf5" | "kostick" | "disc" | "valanti") {
     if (!vacante) return;
     const activos = vacante.tests_psicometricos.includes(test)
       ? vacante.tests_psicometricos.filter((t) => t !== test)
@@ -212,6 +214,10 @@ export default function PerfilCandidatoPage() {
     if (bateria.startsWith("disc_")) {
       const rasgo = bateria.replace("disc_", "") as keyof typeof NOMBRES_RASGO_DISC;
       return `DISC · ${NOMBRES_RASGO_DISC[rasgo] ?? rasgo}`;
+    }
+    if (bateria.startsWith("valanti_")) {
+      const escala = bateria.replace("valanti_", "") as keyof typeof NOMBRES_ESCALA_VALANTI;
+      return `VALANTI · ${NOMBRES_ESCALA_VALANTI[escala] ?? escala}`;
     }
     return BATERIAS_EJEMPLO.find((b) => b.key === bateria)?.nombre ?? bateria;
   }
@@ -397,6 +403,7 @@ export default function PerfilCandidatoPage() {
           datosDisc: datosDisc.length ? datosDisc.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
           patronDisc,
           textosPatronDisc,
+          datosValanti: datosValanti.length ? datosValanti.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
         }),
       });
       const data = await res.json();
@@ -432,9 +439,13 @@ export default function PerfilCandidatoPage() {
 
   if (verificando || !candidato || !vacante) return null;
 
-  // el conteo ipsativo de KOSTICK (0-9) y el segmento de DISC (1-7) no son un STEN normado, se excluyen del promedio.
+  // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
+  // puntaje estándar de VALANTI (media 50/DE 10) no son un STEN normado, se
+  // excluyen del promedio.
   const stenPromedio = promedio(
-    psicoGuardados.filter((p) => p.sten !== null && !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_")).map((p) => p.sten as number)
+    psicoGuardados
+      .filter((p) => p.sten !== null && !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_") && !p.bateria.startsWith("valanti_"))
+      .map((p) => p.sten as number)
   );
 
   // orden canónico de las claves (el de NOMBRES_*, no el de llegada de la DB) para que el gráfico se lea igual siempre.
@@ -464,6 +475,13 @@ export default function PerfilCandidatoPage() {
   const codigoSegmentoDisc = datosDisc.length === 4 ? datosDisc.map((d) => d.valor).join("") : null;
   const patronDisc = codigoSegmentoDisc ? PATRONES_DISC[codigoSegmentoDisc] : undefined;
   const textosPatronDisc = patronDisc ? TEXTOS_PATRON_DISC[patronDisc] : undefined;
+
+  const datosValanti: DatoBarra[] = (Object.keys(NOMBRES_ESCALA_VALANTI) as EscalaVALANTI[])
+    .map((escala) => {
+      const fila = psicoGuardados.find((p) => p.bateria === `valanti_${escala}`);
+      return fila ? { clave: escala as string, nombre: NOMBRES_ESCALA_VALANTI[escala], valor: fila.sten ?? 0 } : null;
+    })
+    .filter((d): d is DatoBarra => d !== null);
 
   function colorPorDecatipo(decatipo: number): string {
     if (decatipo >= 9) return "#12805C";
@@ -639,7 +657,7 @@ export default function PerfilCandidatoPage() {
           <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 3 — Pruebas Psicométricas</h3>
 
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {(["16pf5", "kostick", "disc"] as const).map((t) => (
+            {(["16pf5", "kostick", "disc", "valanti"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => toggleTestPsicometrico(t)}
@@ -669,7 +687,7 @@ export default function PerfilCandidatoPage() {
           ) : (
             <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>
               <span style={{ background: "#FFF6DE", color: "#8A6400", padding: "2px 8px", borderRadius: 10, fontWeight: 700, fontSize: 10.5 }}>BATERÍA DE EJEMPLO</span>{" "}
-              activa 16PF-5, KOSTICK o DISC arriba, o registra el STEN (1–10) manualmente abajo.
+              activa 16PF-5, KOSTICK, DISC o VALANTI arriba, o registra el STEN (1–10) manualmente abajo.
             </p>
           )}
 
@@ -753,6 +771,25 @@ export default function PerfilCandidatoPage() {
             </div>
           )}
 
+          {datosValanti.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 6 }}>VALANTI · puntaje estándar por valor (media 50 / DE 10)</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={datosValanti} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F7" />
+                  <XAxis dataKey="clave" tick={{ fontSize: 10.5, fill: "#41507A" }} />
+                  <YAxis tick={{ fontSize: 10.5, fill: "#41507A" }} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(valor) => [`Puntaje estándar ${valor}`, ""]}
+                    labelFormatter={(clave) => datosValanti.find((d) => d.clave === clave)?.nombre ?? String(clave)}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="valor" radius={[4, 4, 0, 0]} fill="#7C4FE0" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
           {psicoGuardados.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
               {psicoGuardados.map((p, i) => (
@@ -763,7 +800,9 @@ export default function PerfilCandidatoPage() {
                       ? `Conteo ${p.sten}/9`
                       : p.bateria.startsWith("disc_")
                         ? `Segmento ${p.sten}/7`
-                        : `STEN ${p.sten} · ${categoriaSten(p.sten ?? 0)}`}
+                        : p.bateria.startsWith("valanti_")
+                          ? `Estándar ${p.sten}`
+                          : `STEN ${p.sten} · ${categoriaSten(p.sten ?? 0)}`}
                   </span>
                 </div>
               ))}

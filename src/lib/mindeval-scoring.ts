@@ -4,6 +4,7 @@ import type { MatchCvResultado } from "./mindeval-ia";
 import { ITEMS_16PF5, NORMAS_16PF5, type Escala16PF5 } from "./mindeval-16pf5";
 import { ITEMS_KOSTICK, type FactorKostick } from "./mindeval-kostick";
 import { ITEMS_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, type CategoriaTextoDISC } from "./mindeval-disc";
+import { ITEMS_VALANTI, NORMAS_VALANTI, NIVELES_VALANTI, MENSAJE_AREA_MAS_IMPORTANTE, MENSAJE_AREA_MENOS_IMPORTANTE, type EscalaVALANTI } from "./mindeval-valanti";
 
 export function categoriaSten(sten: number): string {
   if (sten >= 9) return "Muy alto";
@@ -115,11 +116,12 @@ export async function avanzarASenescytSiAplica(
     db.from("mindeval_pruebas_tecnicas").select("puntaje_total").eq("candidato_id", candidatoId).order("created_at", { ascending: false }).limit(1),
   ]);
 
-  // el conteo ipsativo de KOSTICK (0-9) y el segmento de DISC (1-7) no son un
-  // STEN normado, se excluyen del promedio.
+  // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
+  // puntaje estándar de VALANTI (media 50 / DE 10) no son un STEN normado
+  // 1-10, se excluyen del promedio.
   const stenPromedio = promedio(
     ((psico ?? []) as { bateria: string; sten: number | null }[])
-      .filter((p) => !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_"))
+      .filter((p) => !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_") && !p.bateria.startsWith("valanti_"))
       .map((p) => p.sten)
       .filter((s): s is number => s !== null)
   );
@@ -351,5 +353,79 @@ export function calificarDISC(respuestas: RespuestaItemDISC[]): ResultadoDISC {
     codigoSegmento,
     patron,
     textos,
+  };
+}
+
+// ─── VALANTI (banco real) ────────────────────────────────────────────────
+
+export interface RespuestaItemVALANTI {
+  num: number;
+  puntosFraseA: 0 | 1 | 2 | 3; // puntosFraseB siempre es 3 - puntosFraseA (regla del cuestionario original)
+}
+
+export interface PuntajeEscalaVALANTI {
+  escala: EscalaVALANTI;
+  puntoBruto: number;
+  puntajeEstandar: number;
+  nivel: string;
+  distanciaOrganizacion: number;
+}
+
+export interface ResultadoVALANTI {
+  puntajes: PuntajeEscalaVALANTI[];
+  areaMasImportante: string;
+  areaMenosImportante: string;
+}
+
+function nivelPuntajeEstandar(x: number): { etiqueta: string } {
+  let actual = NIVELES_VALANTI[0];
+  for (const nivel of NIVELES_VALANTI) {
+    if (x >= nivel.minimo) actual = nivel;
+    else break;
+  }
+  return actual;
+}
+
+/**
+ * Convierte las 30 respuestas del VALANTI (puntos 0-3 asignados a la fraseA
+ * de cada ítem — la fraseB recibe siempre el complemento 3-x) en puntaje
+ * bruto + puntaje estándar (tipo T, media 50/DE 10, NO decatipo) por cada una
+ * de las 5 escalas, usando el baremo real "Normas nacionales" del Excel
+ * fuente (mindeval-valanti.ts — ver esa nota sobre el bug de fórmula
+ * corregido con confirmación del usuario). Cada ítem suma su fraseA a
+ * escalaFraseA y su fraseB (3-fraseA) a escalaFraseB.
+ */
+export function calificarVALANTI(respuestas: RespuestaItemVALANTI[], nombreCandidato: string): ResultadoVALANTI {
+  const porItem = new Map(respuestas.map((r) => [r.num, r.puntosFraseA]));
+  const bruto: Record<EscalaVALANTI, number> = { verdad: 0, rectitud: 0, paz: 0, amor: 0, no_violencia: 0 };
+
+  for (const item of ITEMS_VALANTI) {
+    const a = porItem.get(item.num);
+    if (a === undefined) continue;
+    const b = 3 - a;
+    bruto[item.escalaFraseA] += a;
+    bruto[item.escalaFraseB] += b;
+  }
+
+  const puntajes: PuntajeEscalaVALANTI[] = (Object.keys(bruto) as EscalaVALANTI[]).map((escala) => {
+    const { media, desviacion, estandarOrganizacional } = NORMAS_VALANTI[escala];
+    const puntoBruto = bruto[escala];
+    const puntajeEstandar = Math.round(((puntoBruto - media) / desviacion) * 10 + 50);
+    return {
+      escala,
+      puntoBruto,
+      puntajeEstandar,
+      nivel: nivelPuntajeEstandar(puntajeEstandar).etiqueta,
+      distanciaOrganizacion: puntajeEstandar - estandarOrganizacional,
+    };
+  });
+
+  const maxEscala = puntajes.reduce((a, b) => (b.puntajeEstandar > a.puntajeEstandar ? b : a));
+  const minEscala = puntajes.reduce((a, b) => (b.puntajeEstandar < a.puntajeEstandar ? b : a));
+
+  return {
+    puntajes,
+    areaMasImportante: MENSAJE_AREA_MAS_IMPORTANTE[maxEscala.escala](nombreCandidato),
+    areaMenosImportante: MENSAJE_AREA_MENOS_IMPORTANTE[minEscala.escala],
   };
 }

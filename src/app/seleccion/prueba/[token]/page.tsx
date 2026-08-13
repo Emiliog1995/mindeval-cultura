@@ -41,6 +41,7 @@ interface DatosPsicometricaReal {
     "16pf5"?: { num: number; texto: string; opciones: { letra: "a" | "b" | "c"; texto: string }[] }[];
     kostick?: { num: number; a: string; b: string }[];
     disc?: { num: number; palabras: string[] }[];
+    valanti?: { num: number; fraseA: string; fraseB: string }[];
   };
 }
 type DatosPsicometrica = DatosPsicometricaPlaceholder | DatosPsicometricaReal;
@@ -57,7 +58,8 @@ function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessme
       const tiene16pf5 = !!datos.tests["16pf5"];
       const tieneKostick = !!datos.tests.kostick;
       const tieneDisc = !!datos.tests.disc;
-      const minutos = (tiene16pf5 ? 45 : 0) + (tieneKostick ? 15 : 0) + (tieneDisc ? 15 : 0);
+      const tieneValanti = !!datos.tests.valanti;
+      const minutos = (tiene16pf5 ? 45 : 0) + (tieneKostick ? 15 : 0) + (tieneDisc ? 15 : 0) + (tieneValanti ? 15 : 0);
       return minutos || 30;
     }
     return 30;
@@ -106,6 +108,7 @@ export default function PruebaTokenPage() {
   const [respuestas16pf5, setRespuestas16pf5] = useState<Record<number, "a" | "b" | "c">>({});
   const [respuestasKostick, setRespuestasKostick] = useState<Record<number, "a" | "b">>({});
   const [respuestasDisc, setRespuestasDisc] = useState<Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>>({});
+  const [respuestasValanti, setRespuestasValanti] = useState<Record<number, 0 | 1 | 2 | 3>>({});
 
   useEffect(() => {
     fetch(`/api/mindeval-prueba/${token}`)
@@ -153,6 +156,9 @@ export default function PruebaTokenPage() {
                     : undefined,
                   respuestasDisc: datos.tests.disc
                     ? Object.entries(respuestasDisc).map(([num, r]) => ({ num: Number(num), mas: r.mas, menos: r.menos }))
+                    : undefined,
+                  respuestasValanti: datos.tests.valanti
+                    ? Object.entries(respuestasValanti).map(([num, puntosFraseA]) => ({ num: Number(num), puntosFraseA }))
                     : undefined,
                 }
               : { respuestas: respuestasPsico };
@@ -500,18 +506,67 @@ export default function PruebaTokenPage() {
               </>
             )}
 
+            {datos.tests.valanti && (
+              <>
+                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                  Reparte 3 puntos entre las dos frases de cada par, según qué tan importante es cada una para ti.
+                </div>
+                {datos.tests.valanti.map((it, i) => (
+                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                    <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {([0, 1, 2, 3] as const).map((puntosA) => {
+                        const seleccionado = respuestasValanti[it.num] === puntosA;
+                        return (
+                          <label
+                            key={puntosA}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12,
+                              padding: "10px 12px",
+                              borderRadius: 8,
+                              border: seleccionado ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                              background: seleccionado ? "#FFFBEF" : "#FFFFFF",
+                              cursor: "pointer",
+                              fontSize: 13,
+                              color: "#41507A",
+                            }}
+                          >
+                            <input
+                              type="radio"
+                              name={`valanti-${it.num}`}
+                              checked={seleccionado}
+                              onChange={() => setRespuestasValanti((prev) => ({ ...prev, [it.num]: puntosA }))}
+                            />
+                            <span style={{ flex: 1 }}>{it.fraseA}</span>
+                            <span style={{ fontWeight: 800, color: NAVY, minWidth: 30, textAlign: "center" }}>
+                              {puntosA}-{3 - puntosA}
+                            </span>
+                            <span style={{ flex: 1, textAlign: "right" }}>{it.fraseB}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
             {(() => {
               const total16pf5 = datos.tests["16pf5"]?.length ?? 0;
               const totalKostick = datos.tests.kostick?.length ?? 0;
               const totalDisc = datos.tests.disc?.length ?? 0;
+              const totalValanti = datos.tests.valanti?.length ?? 0;
               const faltaSexo = total16pf5 > 0 && !sexo16pf5;
               const falta16pf5 = Object.keys(respuestas16pf5).length < total16pf5;
               const faltaKostick = Object.keys(respuestasKostick).length < totalKostick;
               const faltaDisc = Object.values(respuestasDisc).filter((r) => r.mas && r.menos).length < totalDisc;
+              const faltaValanti = Object.keys(respuestasValanti).length < totalValanti;
               return (
                 <button
                   onClick={enviar}
-                  disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc}
+                  disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc || faltaValanti}
                   style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
                 >
                   {enviando ? "Enviando…" : "Enviar respuestas"}
