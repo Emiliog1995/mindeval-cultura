@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const vacanteId = formData.get("vacante_id") as string;
     const nombreCompleto = (formData.get("nombre_completo") as string)?.trim();
+    const cedula = (formData.get("cedula") as string) || null;
     const email = (formData.get("email") as string) || null;
     const telefono = (formData.get("telefono") as string) || null;
     const ciudad = (formData.get("ciudad") as string) || null;
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
 
     if (!vacanteId || !nombreCompleto) {
       return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
+    }
+    if (!cedula || !/^\d{10}$/.test(cedula)) {
+      return NextResponse.json({ error: "La cédula debe tener 10 dígitos" }, { status: 400 });
     }
     if (!consentimientoLopdp) {
       return NextResponse.json({ error: "Debes aceptar el Aviso de Privacidad para postular" }, { status: 400 });
@@ -70,6 +74,7 @@ export async function POST(req: NextRequest) {
       .insert({
         vacante_id: vacanteId,
         nombre_completo: nombreCompleto,
+        cedula,
         email,
         telefono,
         ciudad,

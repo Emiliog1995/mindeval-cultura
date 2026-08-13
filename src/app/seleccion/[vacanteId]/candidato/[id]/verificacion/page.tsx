@@ -4,11 +4,20 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import { authHeaders } from "@/lib/auth-headers";
 import type { VerificacionTitulo } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
 const inputStyle: React.CSSProperties = { padding: "9px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13, boxSizing: "border-box", width: "100%" };
+
+interface TituloSenescyt {
+  institucion: string;
+  titulo: string;
+  tipo: string;
+  registro: string;
+  fecha_registro: string;
+}
 
 export default function VerificacionSenescyt() {
   const params = useParams<{ vacanteId: string; id: string }>();
@@ -16,6 +25,7 @@ export default function VerificacionSenescyt() {
   const { verificando } = useAuthGuard();
 
   const [candidatoNombre, setCandidatoNombre] = useState("");
+  const [cedula, setCedula] = useState("");
   const [titulo, setTitulo] = useState("");
   const [institucion, setInstitucion] = useState("");
   const [anio, setAnio] = useState<number | "">("");
@@ -25,13 +35,18 @@ export default function VerificacionSenescyt() {
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
 
+  const [consultando, setConsultando] = useState(false);
+  const [errorAuto, setErrorAuto] = useState("");
+  const [titulosEncontrados, setTitulosEncontrados] = useState<TituloSenescyt[] | null>(null);
+
   useEffect(() => {
     if (verificando) return;
     (async () => {
-      const { data: c } = await supabase.from("mindeval_candidatos").select("nombre_completo, educacion").eq("id", params.id).single();
+      const { data: c } = await supabase.from("mindeval_candidatos").select("nombre_completo, educacion, cedula").eq("id", params.id).single();
       if (c) {
         setCandidatoNombre(c.nombre_completo);
         setTitulo(c.educacion ?? "");
+        setCedula(c.cedula ?? "");
       }
       const { data: v } = await supabase.from("mindeval_verificaciones_titulo").select("*").eq("candidato_id", params.id).order("id", { ascending: false }).limit(1);
       if (v?.[0]) {
@@ -44,6 +59,43 @@ export default function VerificacionSenescyt() {
       }
     })();
   }, [verificando, params.id]);
+
+  async function consultarAutomatico() {
+    setErrorAuto("");
+    setTitulosEncontrados(null);
+    if (!/^\d{10}$/.test(cedula)) {
+      setErrorAuto("Escribe una cédula válida (10 dígitos) antes de consultar.");
+      return;
+    }
+    setConsultando(true);
+    try {
+      await supabase.from("mindeval_candidatos").update({ cedula }).eq("id", params.id);
+
+      const res = await fetch("/api/mindeval-verificar-senescyt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ cedula }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setTitulosEncontrados(data.titulos);
+      if (data.estado === "registrado" && data.titulos.length > 0) {
+        const t = data.titulos[0] as TituloSenescyt;
+        setTitulo(t.titulo);
+        setInstitucion(t.institucion);
+        const anioRegistro = Number((t.fecha_registro ?? "").slice(0, 4));
+        if (anioRegistro) setAnio(anioRegistro);
+        setEstado("registrado");
+      } else {
+        setEstado("sin_registro");
+      }
+    } catch (e) {
+      setErrorAuto(e instanceof Error ? e.message : "No se pudo consultar automáticamente. Usa el link manual de abajo.");
+    } finally {
+      setConsultando(false);
+    }
+  }
 
   async function guardar() {
     setGuardando(true);
@@ -80,9 +132,48 @@ export default function VerificacionSenescyt() {
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "2rem 1.5rem" }}>
         <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 12, padding: 16, marginBottom: 20, fontSize: 12.5, color: "#8A6400" }}>
-          Esta consulta es pública y no tiene una API oficial documentada. Ábrela en una pestaña
-          nueva, revisa el resultado manualmente y regresa a marcarlo aquí. MindEval nunca simula
-          este resultado automáticamente.
+          SENESCYT no tiene una API oficial documentada. La consulta automática de abajo usa
+          <strong> webservices.ec</strong>, un proveedor externo de pago ($0.10 por consulta) que
+          hace la búsqueda por ti — pero el resultado siempre queda pendiente de que tú lo
+          confirmes y guardes abajo. Si prefieres, puedes seguir usando el link oficial y marcarlo
+          a mano, como antes.
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 22, marginBottom: 20 }}>
+          <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 5 }}>Cédula del candidato</label>
+          <div style={{ display: "flex", gap: 10, marginBottom: errorAuto || titulosEncontrados ? 12 : 0 }}>
+            <input
+              style={{ ...inputStyle, maxWidth: 200 }}
+              value={cedula}
+              maxLength={10}
+              inputMode="numeric"
+              placeholder="10 dígitos"
+              onChange={(e) => setCedula(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            />
+            <button
+              onClick={consultarAutomatico}
+              disabled={consultando}
+              style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "9px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: consultando ? "not-allowed" : "pointer", opacity: consultando ? 0.6 : 1 }}
+            >
+              {consultando ? "Consultando…" : "Consultar automáticamente ($0.10)"}
+            </button>
+          </div>
+          {errorAuto && (
+            <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>{errorAuto}</div>
+          )}
+          {titulosEncontrados && titulosEncontrados.length > 0 && (
+            <div style={{ background: "#EAF7F1", borderRadius: 8, padding: "10px 12px", fontSize: 12, color: "#0F5132" }}>
+              {titulosEncontrados.length} título(s) encontrado(s) — se precargó el primero abajo, revisa y ajusta si hace falta antes de guardar.
+              {titulosEncontrados.map((t, i) => (
+                <div key={i} style={{ marginTop: 4 }}>· {t.titulo} — {t.institucion} ({t.fecha_registro})</div>
+              ))}
+            </div>
+          )}
+          {titulosEncontrados && titulosEncontrados.length === 0 && (
+            <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>
+              No se encontró ningún título registrado para esta cédula.
+            </div>
+          )}
         </div>
 
         <a
@@ -91,7 +182,7 @@ export default function VerificacionSenescyt() {
           rel="noopener noreferrer"
           style={{ display: "inline-block", background: GOLD, color: NAVY, fontWeight: 700, fontSize: 13, padding: "10px 18px", borderRadius: 8, textDecoration: "none", marginBottom: 24 }}
         >
-          Abrir consulta oficial SENESCYT ↗
+          Abrir consulta oficial SENESCYT (manual) ↗
         </a>
 
         <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 22 }}>

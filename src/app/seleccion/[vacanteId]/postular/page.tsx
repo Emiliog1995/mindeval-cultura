@@ -13,6 +13,7 @@ export default function PostularPage() {
   const [cargando, setCargando] = useState(true);
 
   const [nombre, setNombre] = useState("");
+  const [cedula, setCedula] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [ciudad, setCiudad] = useState("");
@@ -39,6 +40,10 @@ export default function PostularPage() {
       setError("Escribe tu nombre completo.");
       return;
     }
+    if (!/^\d{10}$/.test(cedula)) {
+      setError("Escribe tu número de cédula (10 dígitos).");
+      return;
+    }
     if (!consentimiento) {
       setError("Debes aceptar el Aviso de Privacidad para continuar.");
       return;
@@ -48,6 +53,7 @@ export default function PostularPage() {
       const formData = new FormData();
       formData.append("vacante_id", params.vacanteId);
       formData.append("nombre_completo", nombre);
+      formData.append("cedula", cedula);
       formData.append("consentimiento_lopdp", "true");
       if (email) formData.append("email", email);
       if (telefono) formData.append("telefono", telefono);
@@ -112,6 +118,14 @@ export default function PostularPage() {
 
         <div style={{ background: "#FFFFFF", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
           <input style={inputStyle} placeholder="Nombre completo *" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <input
+            style={inputStyle}
+            placeholder="Cédula * (10 dígitos)"
+            value={cedula}
+            maxLength={10}
+            inputMode="numeric"
+            onChange={(e) => setCedula(e.target.value.replace(/\D/g, "").slice(0, 10))}
+          />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <input style={inputStyle} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
             <input style={inputStyle} placeholder="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
