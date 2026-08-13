@@ -78,6 +78,10 @@ export default function PerfilCandidatoPage() {
   const [errorGlobal, setErrorGlobal] = useState("");
   const [avisoGlobal, setAvisoGlobal] = useState("");
 
+  const [editandoCedula, setEditandoCedula] = useState(false);
+  const [cedulaEditada, setCedulaEditada] = useState("");
+  const [guardandoCedula, setGuardandoCedula] = useState(false);
+
   const [sesiones, setSesiones] = useState<SesionPrueba[]>([]);
   const [fechaAgendar, setFechaAgendar] = useState<Record<TipoSesionPrueba, string>>({ psicometrica: "", tecnica: "", assessment: "" });
   const [agendando, setAgendando] = useState<Record<TipoSesionPrueba, boolean>>({ psicometrica: false, tecnica: false, assessment: false });
@@ -191,6 +195,28 @@ export default function PerfilCandidatoPage() {
   async function moverEtapa(nueva: EtapaCandidato) {
     await supabase.from("mindeval_candidatos").update({ etapa_actual: nueva }).eq("id", params.id);
     setCandidato((prev) => (prev ? { ...prev, etapa_actual: nueva } : prev));
+  }
+
+  /**
+   * Único lugar autorizado para corregir la cédula de un candidato — la
+   * pantalla de Verificación SENESCYT la muestra de solo lectura a propósito
+   * (para que nadie consulte/guarde por accidente con un número distinto al
+   * que el candidato declaró al postular). Si de verdad está mal, se corrige
+   * aquí, con el consultor identificado por su sesión.
+   */
+  async function guardarCedula() {
+    if (!/^\d{10}$/.test(cedulaEditada)) {
+      setErrorGlobal("La cédula debe tener 10 dígitos.");
+      return;
+    }
+    setGuardandoCedula(true);
+    try {
+      await supabase.from("mindeval_candidatos").update({ cedula: cedulaEditada }).eq("id", params.id);
+      setCandidato((prev) => (prev ? { ...prev, cedula: cedulaEditada } : prev));
+      setEditandoCedula(false);
+    } finally {
+      setGuardandoCedula(false);
+    }
   }
 
   async function toggleTestPsicometrico(test: "16pf5" | "kostick" | "disc" | "valanti") {
@@ -606,6 +632,38 @@ export default function PerfilCandidatoPage() {
             )}
             <div style={{ fontSize: 12.5, color: "#A9B6D8", marginTop: 4 }}>
               {[candidato.ciudad, candidato.anios_experiencia ? `${candidato.anios_experiencia} años exp.` : null, candidato.educacion].filter(Boolean).join(" · ") || "Sin datos adicionales"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#A9B6D8", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+              {editandoCedula ? (
+                <>
+                  <input
+                    value={cedulaEditada}
+                    maxLength={10}
+                    inputMode="numeric"
+                    onChange={(e) => setCedulaEditada(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    style={{ padding: "4px 8px", borderRadius: 6, border: "1.5px solid #3A4A7A", fontSize: 12, width: 130 }}
+                  />
+                  <button onClick={guardarCedula} disabled={guardandoCedula} style={{ background: GOLD, color: NAVY, border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    {guardandoCedula ? "…" : "Guardar"}
+                  </button>
+                  <button onClick={() => setEditandoCedula(false)} style={{ background: "transparent", color: "#A9B6D8", border: "1px solid #3A4A7A", padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>
+                    Cancelar
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span>Cédula: {candidato.cedula ?? <span style={{ color: "#FF8A78" }}>sin registrar (necesaria para verificar SENESCYT)</span>}</span>
+                  <button
+                    onClick={() => {
+                      setCedulaEditada(candidato.cedula ?? "");
+                      setEditandoCedula(true);
+                    }}
+                    style={{ background: "transparent", color: "#8FA0CC", border: "1px solid #3A4A7A", padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                  >
+                    {candidato.cedula ? "Corregir" : "Registrar"}
+                  </button>
+                </>
+              )}
             </div>
             <select
               value={candidato.etapa_actual}

@@ -102,6 +102,12 @@ export interface VerificacionTitulo {
   verificado_por?: string | null;
   verificado_en?: string | null;
   comprobante_url?: string | null;
+  // resultado que encontró webservices.ec en una consulta automática — solo
+  // informativo mientras estado siga en 'pendiente', nunca se trata como el
+  // resultado final (ver /candidato/[id]/verificacion y el ranking).
+  resultado_automatico?: "registrado" | "sin_registro" | null;
+  consultado_automaticamente_en?: string | null;
+  created_at: string;
 }
 
 export interface PruebaPsicometrica {

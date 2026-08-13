@@ -15,6 +15,7 @@ import {
   type EtapaCandidato,
   type TipoSesionPrueba,
   type Vacante,
+  type VerificacionTitulo,
 } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
@@ -26,6 +27,16 @@ interface CandidatoConScore extends Candidato {
   tecnicaTotal?: number;
   assessmentPromedio?: number;
   idoneidad: number | null;
+  verificacion?: VerificacionTitulo;
+}
+
+function badgeSenescyt(v?: VerificacionTitulo): { label: string; color: string; bg: string } {
+  if (!v) return { label: "— Sin verificar", color: "#7C89A8", bg: "transparent" };
+  if (v.estado === "registrado") return { label: "✓ Registrado", color: "#12805C", bg: "#E8F6EF" };
+  if (v.estado === "sin_registro") return { label: "✗ Sin registro", color: "#C4402F", bg: "#FDEDEA" };
+  if (v.resultado_automatico === "registrado") return { label: "⏳ Revisar (proveedor: Registrado)", color: "#8A6400", bg: "#FFF6DE" };
+  if (v.resultado_automatico === "sin_registro") return { label: "⏳ Revisar (proveedor: Sin registro)", color: "#8A6400", bg: "#FFF6DE" };
+  return { label: "— Sin verificar", color: "#7C89A8", bg: "transparent" };
 }
 
 export default function ProcesoVacante() {
@@ -49,6 +60,11 @@ export default function ProcesoVacante() {
   const [fechaLote, setFechaLote] = useState("");
   const [agendandoLote, setAgendandoLote] = useState(false);
   const [resultadoLote, setResultadoLote] = useState<{ nombre: string; ok: boolean; motivo?: string }[]>([]);
+
+  const [confirmandoCostoSenescyt, setConfirmandoCostoSenescyt] = useState(false);
+  const [verificandoSenescytLote, setVerificandoSenescytLote] = useState(false);
+  const [resultadoSenescytLote, setResultadoSenescytLote] = useState<{ nombre: string; ok: boolean; motivo?: string; estado?: string }[]>([]);
+  const [confirmandoPendiente, setConfirmandoPendiente] = useState<Set<string>>(new Set());
 
   const [recalculando, setRecalculando] = useState(false);
   const [resultadoRecalculo, setResultadoRecalculo] = useState("");
@@ -78,12 +94,20 @@ export default function ProcesoVacante() {
     const lista = cands ?? [];
     const ids = lista.map((c) => c.id);
 
-    const [matches, psico, tecnicas, assess] = await Promise.all([
+    const [matches, psico, tecnicas, assess, verificaciones] = await Promise.all([
       ids.length ? supabase.from("mindeval_cv_matches").select("candidato_id, match_pct, generado_en").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_pruebas_psicometricas").select("candidato_id, bateria, sten").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_pruebas_tecnicas").select("candidato_id, puntaje_total").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_assessment_evaluaciones").select("candidato_id, puntaje").in("candidato_id", ids) : { data: [] },
+      ids.length ? supabase.from("mindeval_verificaciones_titulo").select("*").in("candidato_id", ids).order("created_at", { ascending: false }) : { data: [] },
     ]);
+
+    // la más reciente por candidato — la query ya viene ordenada desc, se
+    // queda con la primera ocurrencia de cada candidato_id.
+    const verificacionPorCandidato = new Map<string, VerificacionTitulo>();
+    for (const v of (verificaciones.data ?? []) as VerificacionTitulo[]) {
+      if (!verificacionPorCandidato.has(v.candidato_id)) verificacionPorCandidato.set(v.candidato_id, v);
+    }
 
     const conScore: CandidatoConScore[] = lista.map((c) => {
       const matchesC = (matches.data ?? []).filter((m: { candidato_id: string }) => m.candidato_id === c.id);
@@ -120,6 +144,7 @@ export default function ProcesoVacante() {
         tecnicaTotal,
         assessmentPromedio,
         idoneidad: calcularIdoneidadGlobal({ matchCv, stenPromedio, tecnicaTotal, assessmentPromedio }),
+        verificacion: verificacionPorCandidato.get(c.id),
       };
     });
 
@@ -188,6 +213,67 @@ export default function ProcesoVacante() {
       setResultadoLote([{ nombre: "Error", ok: false, motivo: e instanceof Error ? e.message : "No se pudo agendar el lote" }]);
     } finally {
       setAgendandoLote(false);
+    }
+  }
+
+  async function verificarSenescytLote() {
+    if (!confirmandoCostoSenescyt) {
+      setConfirmandoCostoSenescyt(true);
+      return;
+    }
+    setConfirmandoCostoSenescyt(false);
+    setVerificandoSenescytLote(true);
+    setResultadoSenescytLote([]);
+    try {
+      const res = await fetch("/api/mindeval-verificar-senescyt-masivo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ candidato_ids: Array.from(seleccionados) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setResultadoSenescytLote(data.resultados ?? []);
+      setSeleccionados(new Set());
+      await cargar();
+    } catch (e) {
+      setResultadoSenescytLote([{ nombre: "Error", ok: false, motivo: e instanceof Error ? e.message : "No se pudo verificar el lote" }]);
+    } finally {
+      setVerificandoSenescytLote(false);
+    }
+  }
+
+  /**
+   * Confirma con un click el resultado que ya encontró el proveedor externo
+   * para un candidato en la cola de "pendiente de revisar" — el reclutador
+   * sigue siendo quien decide (puede confirmar lo que sugiere el proveedor o
+   * marcar lo contrario), nunca se guarda solo porque el proveedor lo dijo.
+   * Mismo criterio de avance de etapa que la ficha individual de verificación.
+   */
+  async function confirmarPendienteSenescyt(candidatoId: string, estadoFinal: "registrado" | "sin_registro") {
+    setConfirmandoPendiente((prev) => new Set(prev).add(candidatoId));
+    try {
+      const pendiente = candidatos.find((c) => c.id === candidatoId)?.verificacion;
+      const { data: userData } = await supabase.auth.getUser();
+      await supabase.from("mindeval_verificaciones_titulo").insert({
+        candidato_id: candidatoId,
+        titulo_declarado: pendiente?.titulo_declarado ?? null,
+        institucion: pendiente?.institucion ?? null,
+        anio: pendiente?.anio ?? null,
+        estado: estadoFinal,
+        verificado_por: userData.user?.email ?? "consulta automática confirmada",
+        verificado_en: new Date().toISOString(),
+      });
+      if (estadoFinal === "registrado") {
+        // verificacion_titulo (etapa 5) avanza a assessment (etapa 6).
+        await supabase.from("mindeval_candidatos").update({ etapa_actual: "assessment" }).eq("id", candidatoId);
+      }
+      await cargar();
+    } finally {
+      setConfirmandoPendiente((prev) => {
+        const next = new Set(prev);
+        next.delete(candidatoId);
+        return next;
+      });
     }
   }
 
@@ -399,6 +485,85 @@ export default function ProcesoVacante() {
                   ))}
                 </div>
               )}
+
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #D5DCEB", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {!confirmandoCostoSenescyt ? (
+                  <button
+                    onClick={verificarSenescytLote}
+                    disabled={verificandoSenescytLote}
+                    style={{ background: "none", border: `1.5px solid ${NAVY}`, color: NAVY, padding: "9px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Consultar SENESCYT automáticamente (${(seleccionados.size * 0.1).toFixed(2)} · {seleccionados.size} consulta{seleccionados.size > 1 ? "s" : ""})
+                  </button>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 12, color: "#8A6400", fontWeight: 600 }}>
+                      ¿Confirmas gastar ${(seleccionados.size * 0.1).toFixed(2)} en webservices.ec? El resultado quedará pendiente de tu revisión, no se guarda como final.
+                    </span>
+                    <button onClick={verificarSenescytLote} disabled={verificandoSenescytLote} style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "9px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+                      {verificandoSenescytLote ? "Consultando…" : "Sí, consultar"}
+                    </button>
+                    <button onClick={() => setConfirmandoCostoSenescyt(false)} style={{ background: "none", border: "1px solid #D5DCEB", padding: "9px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}>
+                      Cancelar
+                    </button>
+                  </>
+                )}
+              </div>
+              {resultadoSenescytLote.length > 0 && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {resultadoSenescytLote.map((r, i) => (
+                    <div key={i} style={{ fontSize: 11.5, color: r.ok ? "#8A6400" : "#C4402F" }}>
+                      {r.ok ? "⏳" : "✗"} {r.nombre}
+                      {r.ok
+                        ? ` — proveedor encontró: ${r.estado === "registrado" ? "Registrado" : "Sin registro"} (revisa abajo)`
+                        : r.motivo
+                          ? ` — ${r.motivo}`
+                          : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {candidatos.some((c) => c.verificacion?.estado === "pendiente" && c.verificacion?.resultado_automatico) && (
+            <div style={{ margin: "0 24px 16px", background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
+                Verificaciones SENESCYT pendientes de tu confirmación
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {candidatos
+                  .filter((c) => c.verificacion?.estado === "pendiente" && c.verificacion?.resultado_automatico)
+                  .map((c) => (
+                    <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12.5 }}>
+                      <span style={{ fontWeight: 700, color: NAVY, minWidth: 160 }}>{c.nombre_completo}</span>
+                      <span style={{ color: "#8A6400" }}>
+                        Proveedor dice: {c.verificacion?.resultado_automatico === "registrado" ? "Registrado" : "Sin registro"}
+                        {c.verificacion?.titulo_declarado ? ` — ${c.verificacion.titulo_declarado}` : ""}
+                      </span>
+                      <button
+                        onClick={() => confirmarPendienteSenescyt(c.id, "registrado")}
+                        disabled={confirmandoPendiente.has(c.id)}
+                        style={{ background: "#E8F6EF", color: "#12805C", border: "1px solid #12805C", padding: "5px 12px", borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        ✓ Confirmar Registrado
+                      </button>
+                      <button
+                        onClick={() => confirmarPendienteSenescyt(c.id, "sin_registro")}
+                        disabled={confirmandoPendiente.has(c.id)}
+                        style={{ background: "#FDEDEA", color: "#C4402F", border: "1px solid #C4402F", padding: "5px 12px", borderRadius: 6, fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        ✗ Confirmar Sin registro
+                      </button>
+                      <button
+                        onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${c.id}/verificacion`)}
+                        style={{ background: "none", border: "1px solid #D5DCEB", padding: "5px 12px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                      >
+                        Ver detalle
+                      </button>
+                    </div>
+                  ))}
+              </div>
             </div>
           )}
 
@@ -407,7 +572,7 @@ export default function ProcesoVacante() {
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
                   <th style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }} />
-                  {["#", "Candidato", "% Idoneidad", "Etapa actual", "STEN", "Acciones"].map((h) => (
+                  {["#", "Candidato", "% Idoneidad", "Etapa actual", "STEN", "SENESCYT", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>
                       {h}
                     </th>
@@ -452,6 +617,16 @@ export default function ProcesoVacante() {
                       <td style={{ padding: "12px 20px", fontSize: 12 }}>
                         {c.stenPromedio !== undefined ? `STEN ${c.stenPromedio.toFixed(1)} · ${categoriaSten(Math.round(c.stenPromedio))}` : "—"}
                       </td>
+                      <td style={{ padding: "12px 20px", fontSize: 11.5 }}>
+                        {(() => {
+                          const b = badgeSenescyt(c.verificacion);
+                          return (
+                            <span style={{ background: b.bg, color: b.color, fontWeight: 700, padding: b.bg === "transparent" ? 0 : "3px 9px", borderRadius: 20 }}>
+                              {b.label}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td style={{ padding: "12px 20px" }}>
                         <button
                           onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${c.id}`)}
@@ -465,7 +640,7 @@ export default function ProcesoVacante() {
                 })}
                 {candidatos.length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
+                    <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
                       Sin candidatos todavía. Comparte el link de postulación o añade uno manualmente.
                     </td>
                   </tr>

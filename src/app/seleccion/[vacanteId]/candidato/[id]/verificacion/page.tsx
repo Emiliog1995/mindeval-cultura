@@ -48,7 +48,7 @@ export default function VerificacionSenescyt() {
         setTitulo(c.educacion ?? "");
         setCedula(c.cedula ?? "");
       }
-      const { data: v } = await supabase.from("mindeval_verificaciones_titulo").select("*").eq("candidato_id", params.id).order("id", { ascending: false }).limit(1);
+      const { data: v } = await supabase.from("mindeval_verificaciones_titulo").select("*").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1);
       if (v?.[0]) {
         setTitulo(v[0].titulo_declarado ?? "");
         setInstitucion(v[0].institucion ?? "");
@@ -64,13 +64,15 @@ export default function VerificacionSenescyt() {
     setErrorAuto("");
     setTitulosEncontrados(null);
     if (!/^\d{10}$/.test(cedula)) {
-      setErrorAuto("Escribe una cédula válida (10 dígitos) antes de consultar.");
+      setErrorAuto("Este candidato no tiene una cédula válida registrada. Corrígela desde su ficha antes de consultar.");
       return;
     }
     setConsultando(true);
     try {
-      await supabase.from("mindeval_candidatos").update({ cedula }).eq("id", params.id);
-
+      // la cédula que se consulta es siempre la que el candidato declaró al
+      // postular — este campo es de solo lectura a propósito, para que nadie
+      // consulte/guarde por accidente con un número distinto. Si está mal de
+      // verdad, se corrige desde la ficha del candidato, no aquí.
       const res = await fetch("/api/mindeval-verificar-senescyt", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
@@ -111,7 +113,10 @@ export default function VerificacionSenescyt() {
         comprobante_url: comprobanteUrl || null,
       });
       if (estado === "registrado") {
-        await supabase.from("mindeval_candidatos").update({ etapa_actual: "psicometricas" }).eq("id", params.id);
+        // verificacion_titulo (etapa 5) avanza a assessment (etapa 6) — nunca
+        // hacia atrás a psicometricas (etapa 3), que ya se completó antes de
+        // llegar aquí (ver ETAPAS en mindeval-types.ts).
+        await supabase.from("mindeval_candidatos").update({ etapa_actual: "assessment" }).eq("id", params.id);
       }
       setGuardado(true);
     } finally {
@@ -140,23 +145,34 @@ export default function VerificacionSenescyt() {
         </div>
 
         <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 22, marginBottom: 20 }}>
-          <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 5 }}>Cédula del candidato</label>
-          <div style={{ display: "flex", gap: 10, marginBottom: errorAuto || titulosEncontrados ? 12 : 0 }}>
-            <input
-              style={{ ...inputStyle, maxWidth: 200 }}
-              value={cedula}
-              maxLength={10}
-              inputMode="numeric"
-              placeholder="10 dígitos"
-              onChange={(e) => setCedula(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            />
+          <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 5 }}>
+            Cédula del candidato <span style={{ fontWeight: 400, color: "#7C89A8" }}>(la que declaró al postular — solo lectura aquí)</span>
+          </label>
+          <div style={{ display: "flex", gap: 10, marginBottom: 6, alignItems: "center" }}>
+            <input style={{ ...inputStyle, maxWidth: 200, background: "#F4F6FA", color: "#41507A" }} value={cedula || "Sin registrar"} readOnly disabled />
             <button
               onClick={consultarAutomatico}
-              disabled={consultando}
-              style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "9px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: consultando ? "not-allowed" : "pointer", opacity: consultando ? 0.6 : 1 }}
+              disabled={consultando || !/^\d{10}$/.test(cedula)}
+              style={{
+                background: NAVY,
+                color: "#FFFFFF",
+                border: "none",
+                padding: "9px 16px",
+                borderRadius: 8,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: consultando || !/^\d{10}$/.test(cedula) ? "not-allowed" : "pointer",
+                opacity: consultando || !/^\d{10}$/.test(cedula) ? 0.6 : 1,
+              }}
             >
               {consultando ? "Consultando…" : "Consultar automáticamente ($0.10)"}
             </button>
+          </div>
+          <div
+            onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${params.id}`)}
+            style={{ fontSize: 11.5, color: "#7C89A8", cursor: "pointer", marginBottom: errorAuto || titulosEncontrados ? 12 : 0 }}
+          >
+            ¿La cédula está mal o falta? Corrígela en la ficha del candidato ↗
           </div>
           {errorAuto && (
             <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>{errorAuto}</div>
