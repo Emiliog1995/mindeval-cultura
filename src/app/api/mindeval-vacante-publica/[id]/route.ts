@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { vacanteAceptaPostulaciones } from "@/lib/mindeval-types";
 
 /**
@@ -9,7 +10,10 @@ import { vacanteAceptaPostulaciones } from "@/lib/mindeval-types";
  * identifique sin login. Nunca expone cortes, perfil_cargo_manual,
  * fecha_limite_postulacion en crudo ni puesto_id.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { permitido } = checkRateLimit(req, "mindeval-vacante-publica");
+  if (!permitido) return rateLimitResponse();
+
   const { id } = await params;
 
   const { data, error } = await supabaseAdmin

@@ -21,6 +21,18 @@ const LABEL_TIPO: Record<TipoSesionPrueba, string> = {
   assessment: "assessment center",
 };
 
+// nombreCandidato/tituloVacante/empresa llegan de datos que el propio
+// candidato (o, para empresa/vacante, el reclutador) escribió en un
+// formulario — nunca se insertan crudos en el HTML del correo.
+function escapeHtml(texto: string): string {
+  return texto
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function enviarInvitacionPrueba(params: {
   to: string;
   nombreCandidato: string;
@@ -36,6 +48,9 @@ export async function enviarInvitacionPrueba(params: {
 
   const fecha = new Date(params.fechaProgramada).toLocaleString("es-EC", { dateStyle: "full", timeStyle: "short" });
   const label = LABEL_TIPO[params.tipo];
+  const nombreCandidato = escapeHtml(params.nombreCandidato);
+  const tituloVacante = escapeHtml(params.tituloVacante);
+  const empresa = escapeHtml(params.empresa);
 
   const html = `
     <div style="font-family: -apple-system, Arial, sans-serif; max-width: 560px; margin: 0 auto;">
@@ -43,9 +58,9 @@ export async function enviarInvitacionPrueba(params: {
         <div style="color: ${GOLD}; font-weight: 800; font-size: 18px;">MindEval</div>
       </div>
       <div style="border: 1px solid #E3E8F2; border-top: none; border-radius: 0 0 10px 10px; padding: 28px;">
-        <p style="font-size: 14px; color: #1B2A5B;">Hola ${params.nombreCandidato},</p>
+        <p style="font-size: 14px; color: #1B2A5B;">Hola ${nombreCandidato},</p>
         <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
-          Como parte del proceso de selección para <strong>${params.tituloVacante}</strong> en ${params.empresa},
+          Como parte del proceso de selección para <strong>${tituloVacante}</strong> en ${empresa},
           te invitamos a rendir tu <strong>${label}</strong>.
         </p>
         <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
@@ -95,16 +110,19 @@ export async function enviarNoSeleccionado(params: {
     return { ok: false, error: "RESEND_API_KEY no configurada" };
   }
 
+  const nombreCandidato = escapeHtml(params.nombreCandidato);
+  const tituloVacante = escapeHtml(params.tituloVacante);
+
   const html = `
     <div style="font-family: -apple-system, Arial, sans-serif; max-width: 560px; margin: 0 auto;">
       <div style="background: ${NAVY}; padding: 24px 28px; border-radius: 10px 10px 0 0;">
         <div style="color: ${GOLD}; font-weight: 800; font-size: 18px;">MindEval</div>
       </div>
       <div style="border: 1px solid #E3E8F2; border-top: none; border-radius: 0 0 10px 10px; padding: 28px;">
-        <p style="font-size: 14px; color: #1B2A5B;">Hola ${params.nombreCandidato},</p>
+        <p style="font-size: 14px; color: #1B2A5B;">Hola ${nombreCandidato},</p>
         <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
           Gracias por tu interés y por el tiempo dedicado al proceso de selección para
-          <strong>${params.tituloVacante}</strong>.
+          <strong>${tituloVacante}</strong>.
         </p>
         <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
           Luego de revisar tu perfil, en esta ocasión no continuarás en el proceso, ya que no

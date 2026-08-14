@@ -1,0 +1,13 @@
+-- MINDEVAL SELECCIÓN -- retirar el insert público de mindeval_alertas_fraude
+-- Ejecutar en Supabase -> SQL Editor (proyecto mindeval-cultura)
+-- Idempotente.
+--
+-- Por qué: la policy "mindeval_alertas_insert_publico" (FOR INSERT TO anon
+-- WITH CHECK (true)) permitía que cualquiera, con o sin sesión, insertara
+-- una alerta de fraude con cualquier candidato_id -- ajeno o inventado --
+-- sin rate limit ni validación de que correspondiera a un examen real en
+-- curso. Los inserts ahora pasan por /api/mindeval-alerta-fraude
+-- (service_role), que valida un token de examen activo (candidato) o una
+-- sesión de staff autenticada antes de escribir -- ver ese route handler.
+-- El navegador ya no necesita (ni debe tener) permiso de insert directo.
+DROP POLICY IF EXISTS "mindeval_alertas_insert_publico" ON mindeval_alertas_fraude;

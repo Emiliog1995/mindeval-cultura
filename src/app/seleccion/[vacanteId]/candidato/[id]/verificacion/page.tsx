@@ -76,7 +76,7 @@ export default function VerificacionSenescyt() {
       const res = await fetch("/api/mindeval-verificar-senescyt", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ cedula }),
+        body: JSON.stringify({ cedula, candidato_id: params.id }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

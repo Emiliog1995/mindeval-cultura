@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { calcularIndiceIntegridad } from "@/lib/mindeval-scoring";
+import { authHeaders } from "@/lib/auth-headers";
 import type { SeveridadAlerta } from "@/lib/mindeval-types";
 
 interface Props {
   candidatoId: string;
   sesionTipo: "psicometricas" | "tecnica" | "assessment";
+  // Presente cuando lo renderiza el candidato sin login durante su examen
+  // (/seleccion/prueba/[token]). Ausente cuando lo activa un reclutador
+  // autenticado desde la ficha del candidato — en ese caso se manda el
+  // Authorization de la sesión en su lugar.
+  token?: string;
   onInvalidar?: () => void;
 }
 
@@ -21,22 +26,32 @@ interface AlertaLocal {
  * Señales verificables desde el navegador — sin inventar analítica que no
  * existe (no hay detección de audio ni de rostro en esta versión; ver
  * mindeval-seleccion.md Paso 8 para el plan de detección de rostro opcional
- * con face-api.js). Cada evento se registra en mindeval_alertas_fraude vía
- * insert público (RLS permite anon insert en esa tabla).
+ * con face-api.js). Cada evento se registra vía /api/mindeval-alerta-fraude,
+ * que valida el token de examen (candidato) o la sesión autenticada (staff)
+ * antes de insertar — un insert público sin esa validación permitía
+ * registrar alertas contra cualquier candidato_id, sin rate limit.
  */
-export default function AntiFraudeMonitor({ candidatoId, sesionTipo, onInvalidar }: Props) {
+export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onInvalidar }: Props) {
   const [alertas, setAlertas] = useState<AlertaLocal[]>([]);
   const fullscreenSalidas = useRef(0);
 
   async function registrarAlerta(tipo: string, severidad: SeveridadAlerta, detalle?: string) {
     setAlertas((prev) => [{ tipo, severidad, hora: new Date().toLocaleTimeString("es-EC") }, ...prev].slice(0, 20));
     try {
-      await supabase.from("mindeval_alertas_fraude").insert({
-        candidato_id: candidatoId,
-        sesion_tipo: sesionTipo,
-        tipo_alerta: tipo,
-        severidad,
-        detalle: detalle ?? null,
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (!token) Object.assign(headers, await authHeaders());
+
+      await fetch("/api/mindeval-alerta-fraude", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          token,
+          candidato_id: candidatoId,
+          sesion_tipo: sesionTipo,
+          tipo_alerta: tipo,
+          severidad,
+          detalle: detalle ?? null,
+        }),
       });
     } catch {
       // Fallback amigable: si falla el insert (ej. sin conexión), la prueba sigue.

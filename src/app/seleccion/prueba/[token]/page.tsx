@@ -310,7 +310,11 @@ export default function PruebaTokenPage() {
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <AntiFraudeMonitor candidatoId={datos.candidato_id} sesionTipo={datos.tipo === "tecnica" ? "tecnica" : datos.tipo === "assessment" ? "assessment" : "psicometricas"} />
+          <AntiFraudeMonitor
+            candidatoId={datos.candidato_id}
+            sesionTipo={datos.tipo === "tecnica" ? "tecnica" : datos.tipo === "assessment" ? "assessment" : "psicometricas"}
+            token={token}
+          />
         </div>
 
         {datos.tipo === "tecnica" && datos.modo === "banco" ? (
