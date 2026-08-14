@@ -26,17 +26,19 @@
 --   'seleccion', 'clima', 'evaluacion_360', 'nomina', 'manual_puestos',
 --   'cultura_docs', 'admin'.
 --
--- empresas_mdt es la única tabla compartida entre dos módulos (Manual de
--- Puestos y Nómina la usan ambos como catálogo de empresas cliente) -- su
--- policy exige CUALQUIERA de los dos, no ambos.
+-- empresas_mdt es la única tabla compartida entre tres módulos (Manual de
+-- Puestos, Nómina y Selección la usan como catálogo de empresas cliente) --
+-- su policy exige CUALQUIERA de los tres, no todos. Selección la necesita
+-- para el selector de empresa al crear una vacante (mindeval_vacantes.
+-- empresa_id) y su "+ Nueva empresa" inline.
 --
--- Selección NO tiene acceso de lectura a puestos/empresas_mdt/competencias_
--- puesto aunque su flujo de "elegir puesto existente" al crear una vacante
--- los consulte -- es deliberado (aislamiento real, no "casi total"): una
--- cuenta solo-Selección simplemente ve ese selector vacío y usa el perfil
--- ligero manual en su lugar (Paso 11 de la skill). Si se prefiere que sí
--- puedan elegir puestos existentes, hay que decidirlo explícitamente y
--- añadir esa excepción a mano.
+-- Selección NO tiene acceso de lectura a puestos/competencias_puesto
+-- aunque su flujo de "elegir puesto existente" al crear una vacante los
+-- consulte -- es deliberado (aislamiento real, no "casi total"): una cuenta
+-- solo-Selección ve ese selector vacío y usa el perfil ligero manual en su
+-- lugar (Paso 11 de la skill). Si se prefiere que sí puedan elegir puestos
+-- existentes, hay que decidirlo explícitamente y añadir esa excepción a
+-- mano.
 -- ============================================================================
 
 ALTER TABLE usuarios_autorizados ADD COLUMN IF NOT EXISTS modulos_permitidos TEXT[];
@@ -97,10 +99,12 @@ SELECT _aplicar_modulo(
   $$usuario_tiene_modulo('nomina')$$
 );
 
--- empresas_mdt: compartida entre Manual de Puestos y Nómina -------------------
+-- empresas_mdt: compartida entre Manual de Puestos, Nómina y Selección
+-- (el selector de empresa al crear una vacante y su "+ Nueva empresa" leen
+-- y escriben esta tabla igual que los otros dos módulos) ---------------------
 SELECT _aplicar_modulo(
   ARRAY['empresas_mdt'],
-  $$(usuario_tiene_modulo('manual_puestos') OR usuario_tiene_modulo('nomina'))$$
+  $$(usuario_tiene_modulo('manual_puestos') OR usuario_tiene_modulo('nomina') OR usuario_tiene_modulo('seleccion'))$$
 );
 
 -- Panel interno MINDTALENT (gestión de clientes/módulos activos) -------------

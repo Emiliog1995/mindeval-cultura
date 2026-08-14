@@ -46,6 +46,7 @@ export interface Vacante {
   perfil_cargo_manual?: PerfilCargoManual | null;
   titulo: string;
   empresa: string;
+  empresa_id?: string | null;
   codigo_proceso?: string | null;
   estado: "abierta" | "pausada" | "cerrada";
   fecha_limite_postulacion?: string | null;

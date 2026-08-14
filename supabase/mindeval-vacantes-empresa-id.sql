@@ -1,0 +1,15 @@
+-- MINDEVAL SELECCIÓN -- empresa_id relacional en mindeval_vacantes
+-- Ejecutar en Supabase -> SQL Editor (proyecto mindeval-cultura)
+-- Idempotente. Aditivo: columna nullable, no toca filas existentes.
+--
+-- Por qué: mindeval_vacantes solo tenía `empresa` como texto libre, a
+-- diferencia de evaluaciones/clima_respuestas/sesiones/evaluados_360, que ya
+-- tienen empresa_id desde panel_clientes_paso2.sql -- por eso Selección no
+-- podía "conectarse" al panel de clientes (/admin/clientes/[id]) igual que
+-- los demás módulos: no había con qué filtrar sus vacantes por empresa.
+--
+-- Sin backfill: al momento de escribir esto, mindeval_vacantes solo tiene 2
+-- filas de prueba ("PAN CON COLA", "Pan Con Cola 2") que no corresponden a
+-- ninguna empresa real en empresas_mdt -- quedan con empresa_id NULL, se
+-- pueden reasignar a mano desde /seleccion/nueva si hace falta.
+ALTER TABLE mindeval_vacantes ADD COLUMN IF NOT EXISTS empresa_id UUID REFERENCES empresas_mdt(id);

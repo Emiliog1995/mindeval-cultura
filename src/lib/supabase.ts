@@ -376,6 +376,10 @@ export const MODULOS_ECOSISTEMA = [
     key: "nomina", label: "Nómina", href: "/nomina", preseleccionaEmpresa: true,
     captura: "Empleados de nómina, parámetros legales y períodos — se levanta con cada empresa.",
   },
+  {
+    key: "seleccion", label: "Selección de Talento", href: "/seleccion", preseleccionaEmpresa: true,
+    captura: "Vacantes, candidatos y pruebas se crean directo en el módulo — puede reusar el Manual de Puestos de esta empresa si ya existe, o un perfil ligero si no.",
+  },
 ] as const;
 
 export type ModuloKey = (typeof MODULOS_ECOSISTEMA)[number]["key"];

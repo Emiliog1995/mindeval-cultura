@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
@@ -15,7 +15,13 @@ interface Puesto {
   nombre_puesto: string;
   area: string;
   mision?: string | null;
+  empresa_id: string;
   empresas_mdt?: { nombre: string } | null;
+}
+
+interface Empresa {
+  id: string;
+  nombre: string;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -30,7 +36,16 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 5, display: "block" };
 
 export default function NuevaVacante() {
+  return (
+    <Suspense fallback={null}>
+      <NuevaVacanteInner />
+    </Suspense>
+  );
+}
+
+function NuevaVacanteInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { verificando } = useAuthGuard();
 
   const [puestos, setPuestos] = useState<Puesto[]>([]);
@@ -38,8 +53,13 @@ export default function NuevaVacante() {
   const [puestoId, setPuestoId] = useState("");
   const [verTodasLasEmpresas, setVerTodasLasEmpresas] = useState(false);
 
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [empresaId, setEmpresaId] = useState(searchParams.get("empresa") ?? "");
+  const [nuevaEmpresa, setNuevaEmpresa] = useState(false);
+  const [nombreNuevaEmpresa, setNombreNuevaEmpresa] = useState("");
+  const [creandoEmpresa, setCreandoEmpresa] = useState(false);
+
   const [titulo, setTitulo] = useState("");
-  const [empresa, setEmpresa] = useState("");
   const [codigoProceso, setCodigoProceso] = useState("");
   const [fechaLimitePostulacion, setFechaLimitePostulacion] = useState("");
   const [corteMatchCv, setCorteMatchCv] = useState(72);
@@ -60,27 +80,41 @@ export default function NuevaVacante() {
     if (verificando) return;
     supabase
       .from("puestos")
-      .select("id, nombre_puesto, area, mision, empresas_mdt(nombre)")
+      .select("id, nombre_puesto, area, mision, empresa_id, empresas_mdt(nombre)")
       .order("nombre_puesto")
       .then(({ data }) => setPuestos((data as unknown as Puesto[]) ?? []));
+    supabase
+      .from("empresas_mdt")
+      .select("id, nombre")
+      .order("nombre")
+      .then(({ data }) => setEmpresas(data ?? []));
   }, [verificando]);
 
-  const puestoSeleccionado = puestos.find((p) => p.id === puestoId);
-
-  function mismaEmpresa(nombrePuesto?: string | null): boolean {
-    const a = empresa.trim().toLowerCase();
-    const b = (nombrePuesto ?? "").trim().toLowerCase();
-    if (!a || !b) return false;
-    return a.includes(b) || b.includes(a);
+  async function crearEmpresa() {
+    if (!nombreNuevaEmpresa.trim()) return;
+    setCreandoEmpresa(true);
+    try {
+      const { data, error: cErr } = await supabase.from("empresas_mdt").insert({ nombre: nombreNuevaEmpresa.trim() }).select().single();
+      if (cErr || !data) throw new Error(cErr?.message ?? "No se pudo crear la empresa");
+      setEmpresas((prev) => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setEmpresaId(data.id);
+      setNuevaEmpresa(false);
+      setNombreNuevaEmpresa("");
+    } finally {
+      setCreandoEmpresa(false);
+    }
   }
 
-  const puestosDeLaEmpresa = puestos.filter((p) => mismaEmpresa(p.empresas_mdt?.nombre));
-  const puestosMostrados = verTodasLasEmpresas || !empresa.trim() || puestosDeLaEmpresa.length === 0 ? puestos : puestosDeLaEmpresa;
-  const puestoDeOtraEmpresa = origenPerfil === "puesto" && !!puestoSeleccionado && !!empresa.trim() && !mismaEmpresa(puestoSeleccionado.empresas_mdt?.nombre);
+  const empresaSeleccionada = empresas.find((e) => e.id === empresaId);
+  const puestoSeleccionado = puestos.find((p) => p.id === puestoId);
+
+  const puestosDeLaEmpresa = puestos.filter((p) => p.empresa_id === empresaId);
+  const puestosMostrados = verTodasLasEmpresas || !empresaId || puestosDeLaEmpresa.length === 0 ? puestos : puestosDeLaEmpresa;
+  const puestoDeOtraEmpresa = origenPerfil === "puesto" && !!puestoSeleccionado && !!empresaId && puestoSeleccionado.empresa_id !== empresaId;
 
   async function guardar() {
     setError("");
-    if (!titulo.trim() || !empresa.trim()) {
+    if (!titulo.trim() || !empresaId) {
       setError("Completa al menos el título de la vacante y la empresa.");
       return;
     }
@@ -97,7 +131,8 @@ export default function NuevaVacante() {
     try {
       const payload: Record<string, unknown> = {
         titulo,
-        empresa,
+        empresa: empresaSeleccionada?.nombre ?? "",
+        empresa_id: empresaId,
         codigo_proceso: codigoProceso || null,
         fecha_limite_postulacion: fechaLimitePostulacion ? new Date(fechaLimitePostulacion).toISOString() : null,
         corte_match_cv: corteMatchCv,
@@ -156,7 +191,47 @@ export default function NuevaVacante() {
             </div>
             <div>
               <label style={labelStyle}>Empresa *</label>
-              <input style={inputStyle} value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Corporación Andina S.A." />
+              {nuevaEmpresa ? (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    style={inputStyle}
+                    value={nombreNuevaEmpresa}
+                    onChange={(e) => setNombreNuevaEmpresa(e.target.value)}
+                    placeholder="Nombre de la nueva empresa"
+                  />
+                  <button
+                    type="button"
+                    onClick={crearEmpresa}
+                    disabled={creandoEmpresa || !nombreNuevaEmpresa.trim()}
+                    style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "0 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    {creandoEmpresa ? "…" : "Guardar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNuevaEmpresa(false)}
+                    style={{ background: "none", border: "1px solid #D5DCEB", color: NAVY, padding: "0 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <select style={inputStyle} value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
+                    <option value="">Selecciona una empresa…</option>
+                    {empresas.map((e) => (
+                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setNuevaEmpresa(true)}
+                    style={{ background: "none", border: "1px solid #D5DCEB", color: NAVY, padding: "0 12px", borderRadius: 8, fontSize: 12.5, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+                  >
+                    + Nueva
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
@@ -272,9 +347,9 @@ export default function NuevaVacante() {
                 </div>
               ) : (
                 <>
-                  {empresa.trim() && puestosDeLaEmpresa.length === 0 && !verTodasLasEmpresas ? (
+                  {empresaId && puestosDeLaEmpresa.length === 0 && !verTodasLasEmpresas ? (
                     <div style={{ fontSize: 12.5, color: "#7C89A8", marginBottom: 8 }}>
-                      No hay puestos de &quot;{empresa}&quot; en el Manual de Puestos.{" "}
+                      No hay puestos de &quot;{empresaSeleccionada?.nombre}&quot; en el Manual de Puestos.{" "}
                       <button type="button" onClick={() => setVerTodasLasEmpresas(true)} style={{ color: NAVY, fontWeight: 700, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", fontSize: 12.5 }}>
                         Ver puestos de otras empresas
                       </button>{" "}
@@ -306,7 +381,7 @@ export default function NuevaVacante() {
               {puestoDeOtraEmpresa && (
                 <div style={{ marginTop: 12, padding: 12, background: "#FDEDEA", border: "1px solid #F3C2B8", borderRadius: 8, fontSize: 12.5, color: "#C4402F" }}>
                   <div style={{ marginBottom: 8 }}>
-                    ⚠️ Este puesto pertenece a <strong>{puestoSeleccionado?.empresas_mdt?.nombre}</strong>, no a &quot;{empresa}&quot;. Comparar el CV contra los requisitos de otra empresa dará un % de match sin sentido.
+                    ⚠️ Este puesto pertenece a <strong>{puestoSeleccionado?.empresas_mdt?.nombre}</strong>, no a &quot;{empresaSeleccionada?.nombre}&quot;. Comparar el CV contra los requisitos de otra empresa dará un % de match sin sentido.
                   </div>
                   <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, cursor: "pointer" }}>
                     <input type="checkbox" checked={confirmarOtraEmpresa} onChange={(e) => setConfirmarOtraEmpresa(e.target.checked)} />

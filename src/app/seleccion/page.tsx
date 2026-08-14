@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import type { Vacante } from "@/lib/mindeval-types";
@@ -13,10 +13,26 @@ interface VacanteConConteo extends Vacante {
   total_candidatos: number;
 }
 
+interface Empresa {
+  id: string;
+  nombre: string;
+}
+
 export default function PanelSeleccion() {
+  return (
+    <Suspense fallback={null}>
+      <PanelSeleccionInner />
+    </Suspense>
+  );
+}
+
+function PanelSeleccionInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { verificando } = useAuthGuard();
   const [vacantes, setVacantes] = useState<VacanteConConteo[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [empresaId, setEmpresaId] = useState(searchParams.get("empresa") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -44,6 +60,13 @@ export default function PanelSeleccion() {
       setLoading(false);
     })();
   }, [verificando]);
+
+  useEffect(() => {
+    if (verificando) return;
+    supabase.from("empresas_mdt").select("id, nombre").order("nombre").then(({ data }) => setEmpresas(data ?? []));
+  }, [verificando]);
+
+  const vacantesFiltradas = empresaId ? vacantes.filter((v) => v.empresa_id === empresaId) : vacantes;
 
   if (verificando) return null;
 
@@ -79,19 +102,32 @@ export default function PanelSeleccion() {
           </div>
         )}
 
+        <div style={{ marginBottom: 16 }}>
+          <select
+            value={empresaId}
+            onChange={(e) => setEmpresaId(e.target.value)}
+            style={{ padding: "9px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13, color: NAVY, background: "#FFFFFF" }}
+          >
+            <option value="">Todas las empresas</option>
+            {empresas.map((e) => (
+              <option key={e.id} value={e.id}>{e.nombre}</option>
+            ))}
+          </select>
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "18px 20px" }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>VACANTES ABIERTAS</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>{vacantes.filter((v) => v.estado === "abierta").length}</div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>{vacantesFiltradas.filter((v) => v.estado === "abierta").length}</div>
           </div>
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "18px 20px" }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>TOTAL VACANTES</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>{vacantes.length}</div>
+            <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>{vacantesFiltradas.length}</div>
           </div>
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "18px 20px" }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>CANDIDATOS TOTALES</div>
             <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>
-              {vacantes.reduce((s, v) => s + v.total_candidatos, 0)}
+              {vacantesFiltradas.reduce((s, v) => s + v.total_candidatos, 0)}
             </div>
           </div>
         </div>
@@ -111,7 +147,7 @@ export default function PanelSeleccion() {
                 </tr>
               </thead>
               <tbody>
-                {vacantes.map((v) => (
+                {vacantesFiltradas.map((v) => (
                   <tr key={v.id} style={{ borderTop: "1px solid #EEF1F7" }}>
                     <td style={{ padding: "12px 20px", fontSize: 13, fontWeight: 700, color: NAVY }}>{v.titulo}</td>
                     <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{v.empresa}</td>
@@ -143,7 +179,7 @@ export default function PanelSeleccion() {
                     </td>
                   </tr>
                 ))}
-                {vacantes.length === 0 && (
+                {vacantesFiltradas.length === 0 && (
                   <tr>
                     <td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
                       No hay vacantes registradas.{" "}
