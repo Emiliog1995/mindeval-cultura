@@ -16,17 +16,17 @@ import { consultarSenescyt } from "@/lib/mindeval-senescyt";
  * confirmar el costo total antes de llamar a esta ruta.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
-  const { permitido } = checkRateLimit(req, "mindeval-verificar-senescyt-masivo");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const { candidato_ids }: { candidato_ids: string[] } = await req.json();
     if (!candidato_ids?.length) {
       return NextResponse.json({ error: "Selecciona al menos un candidato" }, { status: 400 });
     }
+
+    const authError = await requireAuth(req, "seleccion", { candidatoIds: candidato_ids });
+    if (authError) return authError;
+
+    const { permitido } = checkRateLimit(req, "mindeval-verificar-senescyt-masivo");
+    if (!permitido) return rateLimitResponse();
 
     const { data: candidatos } = await supabaseAdmin
       .from("mindeval_candidatos")

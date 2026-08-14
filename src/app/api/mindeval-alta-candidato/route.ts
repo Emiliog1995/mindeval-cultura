@@ -15,12 +15,6 @@ import { extraerTextoCv } from "@/lib/mindeval-cv-extract";
  * candidato al que le falte el match.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
-  const { permitido } = checkRateLimit(req, "mindeval-alta-candidato");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const formData = await req.formData();
     const vacanteId = formData.get("vacante_id") as string;
@@ -32,6 +26,12 @@ export async function POST(req: NextRequest) {
     if (!vacanteId || !nombreCompleto) {
       return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
     }
+
+    const authError = await requireAuth(req, "seleccion", { vacanteId });
+    if (authError) return authError;
+
+    const { permitido } = checkRateLimit(req, "mindeval-alta-candidato");
+    if (!permitido) return rateLimitResponse();
     if (cedula && !/^\d{10}$/.test(cedula)) {
       return NextResponse.json({ error: "La cédula debe tener 10 dígitos" }, { status: 400 });
     }

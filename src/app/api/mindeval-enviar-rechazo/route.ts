@@ -10,17 +10,17 @@ import { enviarNoSeleccionado } from "@/lib/mindeval-email";
  * el reclutador confirme el descarte antes de notificarlo.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
-  const { permitido } = checkRateLimit(req, "mindeval-enviar-rechazo");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const { candidato_id, titulo_vacante }: { candidato_id: string; titulo_vacante: string } = await req.json();
     if (!candidato_id || !titulo_vacante) {
       return NextResponse.json({ error: "Faltan datos para enviar el correo" }, { status: 400 });
     }
+
+    const authError = await requireAuth(req, "seleccion", { candidatoId: candidato_id });
+    if (authError) return authError;
+
+    const { permitido } = checkRateLimit(req, "mindeval-enviar-rechazo");
+    if (!permitido) return rateLimitResponse();
 
     const { data: candidato, error } = await supabaseAdmin
       .from("mindeval_candidatos")

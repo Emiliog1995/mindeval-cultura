@@ -17,15 +17,15 @@ import type { Vacante } from "@/lib/mindeval-types";
  * descarte automático que la postulación pública.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
-  const { permitido } = checkRateLimit(req, "mindeval-reextraer-cv");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const { candidato_id }: { candidato_id: string } = await req.json();
     if (!candidato_id) return NextResponse.json({ error: "Falta candidato_id" }, { status: 400 });
+
+    const authError = await requireAuth(req, "seleccion", { candidatoId: candidato_id });
+    if (authError) return authError;
+
+    const { permitido } = checkRateLimit(req, "mindeval-reextraer-cv");
+    if (!permitido) return rateLimitResponse();
 
     const { data: candidato, error: cErr } = await supabaseAdmin
       .from("mindeval_candidatos")

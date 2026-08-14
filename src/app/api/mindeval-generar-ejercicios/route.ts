@@ -14,17 +14,17 @@ import type { Vacante } from "@/lib/mindeval-types";
  * a un candidato.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
-  const { permitido } = checkRateLimit(req, "mindeval-generar-ejercicios");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const { vacante_id, cantidad }: { vacante_id: string; cantidad?: number } = await req.json();
     if (!vacante_id) {
       return NextResponse.json({ error: "Falta la vacante" }, { status: 400 });
     }
+
+    const authError = await requireAuth(req, "seleccion", { vacanteId: vacante_id });
+    if (authError) return authError;
+
+    const { permitido } = checkRateLimit(req, "mindeval-generar-ejercicios");
+    if (!permitido) return rateLimitResponse();
 
     const { data: vacante, error: vErr } = await supabaseAdmin
       .from("mindeval_vacantes")

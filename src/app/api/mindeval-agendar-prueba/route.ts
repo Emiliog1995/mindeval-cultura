@@ -13,12 +13,6 @@ import type { SesionPrueba, TipoSesionPrueba, Vacante } from "@/lib/mindeval-typ
  * criterio que el resto de rutas server-side del proyecto.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
-  const { permitido } = checkRateLimit(req, "mindeval-agendar-prueba");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const { vacante_id, tipo, fecha_programada, candidato_ids }: {
       vacante_id: string;
@@ -30,6 +24,12 @@ export async function POST(req: NextRequest) {
     if (!vacante_id || !tipo || !fecha_programada || !candidato_ids?.length) {
       return NextResponse.json({ error: "Faltan datos para agendar la prueba" }, { status: 400 });
     }
+
+    const authError = await requireAuth(req, "seleccion", { vacanteId: vacante_id, candidatoIds: candidato_ids });
+    if (authError) return authError;
+
+    const { permitido } = checkRateLimit(req, "mindeval-agendar-prueba");
+    if (!permitido) return rateLimitResponse();
 
     const { data: vacante, error: vErr } = await supabaseAdmin
       .from("mindeval_vacantes")
