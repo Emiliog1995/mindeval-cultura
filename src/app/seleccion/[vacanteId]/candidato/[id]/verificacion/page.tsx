@@ -129,9 +129,12 @@ export default function VerificacionSenescyt() {
   return (
     <div style={{ minHeight: "100vh", background: "#F4F6FA" }}>
       <div style={{ background: NAVY, color: "#FFFFFF", padding: "1rem 1.5rem" }}>
-        <div onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${params.id}`)} style={{ fontSize: 12, color: "#8FA0CC", cursor: "pointer", marginBottom: 6 }}>
+        <button
+          onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${params.id}`)}
+          style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)", padding: "6px 12px", borderRadius: 7, fontSize: 12, cursor: "pointer", marginBottom: 6 }}
+        >
           ← Volver al perfil
-        </div>
+        </button>
         <div style={{ fontSize: 18, fontWeight: 800 }}>Verificación SENESCYT — {candidatoNombre}</div>
       </div>
 

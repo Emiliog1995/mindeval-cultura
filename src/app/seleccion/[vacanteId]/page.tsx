@@ -50,9 +50,11 @@ export default function ProcesoVacante() {
   const [error, setError] = useState("");
   const [mostrarAlta, setMostrarAlta] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoCedula, setNuevoCedula] = useState("");
   const [nuevoEmail, setNuevoEmail] = useState("");
-  const [nuevoCv, setNuevoCv] = useState("");
+  const [nuevoArchivo, setNuevoArchivo] = useState<File | null>(null);
   const [guardandoAlta, setGuardandoAlta] = useState(false);
+  const [errorAlta, setErrorAlta] = useState("");
   const [linkCopiado, setLinkCopiado] = useState(false);
 
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
@@ -155,19 +157,32 @@ export default function ProcesoVacante() {
 
   async function altaCandidato() {
     if (!nuevoNombre.trim()) return;
+    setErrorAlta("");
     setGuardandoAlta(true);
     try {
-      await supabase.from("mindeval_candidatos").insert({
-        vacante_id: params.vacanteId,
-        nombre_completo: nuevoNombre,
-        email: nuevoEmail || null,
-        cv_texto: nuevoCv || null,
+      const formData = new FormData();
+      formData.append("vacante_id", params.vacanteId);
+      formData.append("nombre_completo", nuevoNombre);
+      if (nuevoCedula) formData.append("cedula", nuevoCedula);
+      if (nuevoEmail) formData.append("email", nuevoEmail);
+      if (nuevoArchivo) formData.append("cv_file", nuevoArchivo);
+
+      const res = await fetch("/api/mindeval-alta-candidato", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: formData,
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
       setNuevoNombre("");
+      setNuevoCedula("");
       setNuevoEmail("");
-      setNuevoCv("");
+      setNuevoArchivo(null);
       setMostrarAlta(false);
       await cargar();
+    } catch (e) {
+      setErrorAlta(e instanceof Error ? e.message : "No se pudo guardar el candidato");
     } finally {
       setGuardandoAlta(false);
     }
@@ -406,13 +421,30 @@ export default function ProcesoVacante() {
         {mostrarAlta && (
           <section style={{ background: "#FFFFFF", border: `1px solid ${GOLD}`, borderRadius: 14, padding: 20, marginBottom: 20 }}>
             <h3 style={{ margin: "0 0 12px", fontSize: 14, color: NAVY }}>Añadir candidato manualmente</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <input placeholder="Nombre completo" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} style={{ padding: 9, border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13 }} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <input placeholder="Nombre completo *" value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} style={{ padding: 9, border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13 }} />
+              <input
+                placeholder="Cédula (10 dígitos)"
+                value={nuevoCedula}
+                maxLength={10}
+                inputMode="numeric"
+                onChange={(e) => setNuevoCedula(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                style={{ padding: 9, border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13 }}
+              />
               <input placeholder="Email (opcional)" value={nuevoEmail} onChange={(e) => setNuevoEmail(e.target.value)} style={{ padding: 9, border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13 }} />
             </div>
-            <textarea placeholder="Pegar texto del CV (opcional, para el match con IA)" value={nuevoCv} onChange={(e) => setNuevoCv(e.target.value)} style={{ width: "100%", minHeight: 80, padding: 9, border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13, boxSizing: "border-box", marginBottom: 10 }} />
+            <label style={{ fontSize: 11.5, color: "#7C89A8", display: "block", marginBottom: 5 }}>
+              Hoja de vida (PDF o DOCX) — se extrae el texto automáticamente para el match con IA
+            </label>
+            <input
+              type="file"
+              accept=".pdf,.docx"
+              onChange={(e) => setNuevoArchivo(e.target.files?.[0] ?? null)}
+              style={{ display: "block", width: "100%", padding: 9, border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 12.5, boxSizing: "border-box", marginBottom: 10, background: "#FFFFFF" }}
+            />
+            {errorAlta && <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12, marginBottom: 10 }}>{errorAlta}</div>}
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={altaCandidato} disabled={guardandoAlta} style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}>
+              <button onClick={altaCandidato} disabled={guardandoAlta || !nuevoNombre.trim()} style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}>
                 {guardandoAlta ? "Guardando…" : "Guardar candidato"}
               </button>
               <button onClick={() => setMostrarAlta(false)} style={{ background: "none", border: "1px solid #D5DCEB", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}>

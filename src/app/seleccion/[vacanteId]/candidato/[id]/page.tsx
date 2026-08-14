@@ -587,9 +587,12 @@ export default function PerfilCandidatoPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#F4F6FA" }}>
       <div style={{ background: NAVY, padding: "24px 28px", color: "#FFFFFF" }}>
-        <div onClick={() => router.push(`/seleccion/${params.vacanteId}`)} style={{ fontSize: 12, color: "#8FA0CC", cursor: "pointer", marginBottom: 10 }}>
+        <button
+          onClick={() => router.push(`/seleccion/${params.vacanteId}`)}
+          style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)", padding: "6px 12px", borderRadius: 7, fontSize: 12, cursor: "pointer", marginBottom: 10 }}
+        >
           ← Volver al proceso
-        </div>
+        </button>
         <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 }}>

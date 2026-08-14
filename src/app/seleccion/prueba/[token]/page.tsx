@@ -52,6 +52,12 @@ interface DatosAssessment {
   ejercicios: { id: string; competencia: string; enunciado: string }[];
 }
 
+interface InfoSesion {
+  tipo: "tecnica" | "psicometrica" | "assessment";
+  candidato_nombre: string;
+  requiere_cedula: boolean;
+}
+
 function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessment): number {
   if (datos.tipo === "psicometrica") {
     if (datos.modo === "real") {
@@ -96,9 +102,14 @@ export default function PruebaTokenPage() {
   const { token } = useParams<{ token: string }>();
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState<InfoSesion | null>(null);
   const [datos, setDatos] = useState<DatosTecnica | DatosPsicometrica | DatosAssessment | null>(null);
   const [enviado, setEnviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
+
+  const [cedulaConfirmar, setCedulaConfirmar] = useState("");
+  const [verificandoCedula, setVerificandoCedula] = useState(false);
+  const [errorCedula, setErrorCedula] = useState("");
 
   const [respuestaTecnica, setRespuestaTecnica] = useState("");
   const [respuestasBanco, setRespuestasBanco] = useState<Record<string, string>>({});
@@ -119,19 +130,43 @@ export default function PruebaTokenPage() {
         }
         return r.json();
       })
-      .then((d) => {
-        setDatos(d);
-        if (d.tipo === "psicometrica" && d.modo === "placeholder") {
-          const iniciales: Record<string, number[]> = {};
-          Object.keys(d.items).forEach((k) => {
-            iniciales[k] = d.items[k].map(() => 3);
-          });
-          setRespuestasPsico(iniciales);
-        }
+      .then((d: InfoSesion) => {
+        setInfo(d);
+        // si no hay cédula registrada para este candidato, no hay nada que
+        // confirmar — se entrega el contenido directo, igual que antes.
+        if (!d.requiere_cedula) desbloquearContenido("");
       })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function desbloquearContenido(cedula: string) {
+    setErrorCedula("");
+    setVerificandoCedula(true);
+    try {
+      const res = await fetch(`/api/mindeval-prueba/${token}/contenido`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cedula }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "No se pudo verificar tu cédula.");
+
+      setDatos(d);
+      if (d.tipo === "psicometrica" && d.modo === "placeholder") {
+        const iniciales: Record<string, number[]> = {};
+        Object.keys(d.items).forEach((k) => {
+          iniciales[k] = d.items[k].map(() => 3);
+        });
+        setRespuestasPsico(iniciales);
+      }
+    } catch (e) {
+      setErrorCedula(e instanceof Error ? e.message : "No se pudo verificar tu cédula.");
+    } finally {
+      setVerificandoCedula(false);
+    }
+  }
 
   async function enviar() {
     if (!datos) return;
@@ -182,10 +217,53 @@ export default function PruebaTokenPage() {
 
   if (cargando) return null;
 
-  if (error && !datos) {
+  if (error && !info) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FA" }}>
         <div style={{ textAlign: "center", color: "#C4402F", maxWidth: 380, padding: 20 }}>{error}</div>
+      </div>
+    );
+  }
+
+  if (info && !datos) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FA", padding: 20 }}>
+        <div style={{ textAlign: "center", background: "#FFFFFF", padding: "2.5rem 2rem", borderRadius: 16, maxWidth: 400, width: "100%" }}>
+          <div style={{ fontSize: 10, letterSpacing: 1.2, color: GOLD, fontWeight: 700, marginBottom: 6 }}>MINDEVAL · BY MINDTALENT</div>
+          <h2 style={{ color: NAVY, marginBottom: 6 }}>Hola, {info.candidato_nombre}</h2>
+          <p style={{ color: "#7C89A8", fontSize: 13, marginBottom: 20 }}>
+            Antes de comenzar, confirma tu número de cédula para verificar que eres tú quien va a rendir la prueba.
+          </p>
+          <input
+            value={cedulaConfirmar}
+            maxLength={10}
+            inputMode="numeric"
+            placeholder="Cédula (10 dígitos)"
+            onChange={(e) => setCedulaConfirmar(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            style={{ width: "100%", padding: "11px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 12, textAlign: "center" }}
+          />
+          {errorCedula && (
+            <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{errorCedula}</div>
+          )}
+          <button
+            onClick={() => desbloquearContenido(cedulaConfirmar)}
+            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar)}
+            style={{
+              width: "100%",
+              background: GOLD,
+              color: NAVY,
+              border: "none",
+              padding: "12px",
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 800,
+              cursor: verificandoCedula ? "not-allowed" : "pointer",
+              opacity: verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) ? 0.6 : 1,
+            }}
+          >
+            {verificandoCedula ? "Verificando…" : "Continuar"}
+          </button>
+        </div>
       </div>
     );
   }

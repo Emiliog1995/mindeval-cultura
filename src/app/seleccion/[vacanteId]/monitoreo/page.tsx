@@ -54,6 +54,7 @@ export default function MonitoreoVacante() {
   const [alertas, setAlertas] = useState<AlertaConCandidato[]>([]);
   const nombresRef = useRef<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [eliminando, setEliminando] = useState<string | null>(null);
 
   useEffect(() => {
     if (verificando) return;
@@ -116,15 +117,35 @@ export default function MonitoreoVacante() {
     setLoading(false);
   }
 
+  /**
+   * Elimina una sesión de prueba (agendamiento) — no toca resultados ni
+   * calificaciones, solo el registro de "se agendó esta prueba para tal
+   * fecha". Sirve para limpiar sesiones de prueba/testing que se acumulan
+   * sin dejar rastro real que auditar, a diferencia de las calificaciones.
+   */
+  async function eliminarSesion(id: string) {
+    if (!window.confirm("¿Eliminar esta sesión agendada? El candidato ya no podrá usar ese enlace. No se puede deshacer.")) return;
+    setEliminando(id);
+    try {
+      await supabase.from("mindeval_sesiones_prueba").delete().eq("id", id);
+      setSesiones((prev) => prev.filter((s) => s.id !== id));
+    } finally {
+      setEliminando(null);
+    }
+  }
+
   if (verificando || loading || !vacante) return null;
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F6FA" }}>
       <div style={{ background: NAVY, color: "#FFFFFF", padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <div onClick={() => router.push(`/seleccion/${params.vacanteId}`)} style={{ fontSize: 11.5, color: "#8FA0CC", cursor: "pointer", marginBottom: 6 }}>
+          <button
+            onClick={() => router.push(`/seleccion/${params.vacanteId}`)}
+            style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)", padding: "6px 12px", borderRadius: 7, fontSize: 12, cursor: "pointer", marginBottom: 8 }}
+          >
             ← Volver al proceso
-          </div>
+          </button>
           <div style={{ fontSize: 19, fontWeight: 800 }}>Monitoreo en vivo — {vacante.titulo}</div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -160,6 +181,14 @@ export default function MonitoreoVacante() {
                     style={{ background: "none", border: `1px solid ${NAVY}`, color: NAVY, fontSize: 11, padding: "5px 10px", borderRadius: 6, cursor: "pointer", flex: "none" }}
                   >
                     Ver perfil
+                  </button>
+                  <button
+                    onClick={() => eliminarSesion(s.id)}
+                    disabled={eliminando === s.id}
+                    title="Eliminar esta sesión agendada"
+                    style={{ background: "none", border: "1px solid #C4402F", color: "#C4402F", fontSize: 11, padding: "5px 10px", borderRadius: 6, cursor: eliminando === s.id ? "not-allowed" : "pointer", flex: "none", opacity: eliminando === s.id ? 0.5 : 1 }}
+                  >
+                    {eliminando === s.id ? "…" : "Eliminar"}
                   </button>
                 </div>
               ))}
