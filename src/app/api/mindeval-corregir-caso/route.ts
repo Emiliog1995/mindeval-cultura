@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/require-auth";
 import { corregirCasoTecnico } from "@/lib/mindeval-ia";
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-corregir-caso");

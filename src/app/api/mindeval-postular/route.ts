@@ -13,6 +13,13 @@ import { vacanteAceptaPostulaciones, type Vacante } from "@/lib/mindeval-types";
  * vacante antes de escribir (para validar que sigue abierta), no puede pasar
  * por la anon key directo desde el navegador — usa supabaseAdmin server-side.
  *
+ * El CV ya NO viaja en este request: el navegador lo sube antes, directo a
+ * Storage, con la URL firmada de /api/mindeval-postular-cv-url (evita el
+ * límite de 4.5MB de las funciones serverless de Vercel, que un CV
+ * escaneado desde el celular supera fácil). Acá solo llega `cv_path`, y esta
+ * ruta descarga el archivo del bucket server-side — esa descarga no está
+ * sujeta al límite de tamaño del request entrante.
+ *
  * Extrae el texto del CV (PDF o DOCX) y, si lo logra, calcula el match con
  * IA automáticamente y deja al candidato en la etapa "filtro_cv" — así el
  * reclutador ve el % de idoneidad apenas entra al proceso, sin tener que
@@ -23,17 +30,17 @@ export async function POST(req: NextRequest) {
   if (!permitido) return rateLimitResponse();
 
   try {
-    const formData = await req.formData();
-    const vacanteId = formData.get("vacante_id") as string;
-    const nombreCompleto = (formData.get("nombre_completo") as string)?.trim();
-    const cedula = (formData.get("cedula") as string) || null;
-    const email = (formData.get("email") as string) || null;
-    const telefono = (formData.get("telefono") as string) || null;
-    const ciudad = (formData.get("ciudad") as string) || null;
-    const aniosRaw = formData.get("anios_experiencia") as string;
-    const educacion = (formData.get("educacion") as string) || null;
-    const file = formData.get("cv_file") as File | null;
-    const consentimientoLopdp = formData.get("consentimiento_lopdp") === "true";
+    const body = await req.json();
+    const vacanteId = body.vacante_id as string;
+    const nombreCompleto = (body.nombre_completo as string)?.trim();
+    const cedula = (body.cedula as string) || null;
+    const email = (body.email as string) || null;
+    const telefono = (body.telefono as string) || null;
+    const ciudad = (body.ciudad as string) || null;
+    const aniosRaw = body.anios_experiencia;
+    const educacion = (body.educacion as string) || null;
+    const cvPath = (body.cv_path as string) || null;
+    const consentimientoLopdp = body.consentimiento_lopdp === true;
 
     if (!vacanteId || !nombreCompleto) {
       return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
@@ -54,18 +61,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Esta vacante ya no está disponible para postulaciones" }, { status: 404 });
     }
 
-    // 1. Extraer texto del CV (best-effort — un CV en formato no soportado
-    // o que falle al extraerse no debe bloquear la postulación, solo se
-    // guarda sin cv_texto; el reclutador puede reintentar la extracción
-    // desde el ranking con "Recalcular candidatos sin match")
+    // 1. Descargar el CV ya subido a Storage y extraer su texto (best-effort
+    // — un CV en formato no soportado, corrupto, o que falle al extraerse
+    // no debe bloquear la postulación, solo se guarda sin cv_texto; el
+    // reclutador puede reintentar la extracción desde el ranking con
+    // "Recalcular candidatos sin match")
     let cvTexto = "";
-    let cvBuffer: Buffer | null = null;
-    let cvNombreArchivo = "";
-    if (file && file.size > 0) {
-      const bytes = await file.arrayBuffer();
-      cvBuffer = Buffer.from(bytes);
-      cvNombreArchivo = file.name;
-      cvTexto = await extraerTextoCv(cvBuffer, cvNombreArchivo);
+    if (cvPath) {
+      const { data: archivo } = await supabaseAdmin.storage.from("mindeval-cvs").download(cvPath);
+      if (archivo) {
+        const buffer = Buffer.from(await archivo.arrayBuffer());
+        cvTexto = await extraerTextoCv(buffer, cvPath);
+      }
     }
 
     // 2. Insertar candidato
@@ -81,21 +88,13 @@ export async function POST(req: NextRequest) {
         anios_experiencia: aniosRaw ? Number(aniosRaw) : null,
         educacion,
         cv_texto: cvTexto || null,
+        cv_url: cvPath,
       })
       .select()
       .single();
     if (cErr || !candidato) throw new Error(cErr?.message ?? "No se pudo guardar la postulación");
 
-    // 3. Subir el archivo original al bucket privado (best-effort, no bloquea)
-    if (cvBuffer) {
-      const path = `${candidato.id}/${cvNombreArchivo}`;
-      const { error: upErr } = await supabaseAdmin.storage.from("mindeval-cvs").upload(path, cvBuffer, { upsert: true });
-      if (!upErr) {
-        await supabaseAdmin.from("mindeval_candidatos").update({ cv_url: path }).eq("id", candidato.id);
-      }
-    }
-
-    // 4. Match automático con IA (best-effort — si falla, el candidato queda
+    // 3. Match automático con IA (best-effort — si falla, el candidato queda
     // guardado igual y el reclutador puede calcularlo manualmente después)
     let matchPct: number | null = null;
     if (cvTexto.trim()) {

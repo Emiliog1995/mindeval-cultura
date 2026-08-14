@@ -15,10 +15,23 @@ export default function Login() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/portal");
+      if (data.session) irADestino();
       else setLoading(false);
     });
   }, [router]);
+
+  // Una cuenta restringida a un solo módulo (ej. modulos_permitidos =
+  // ['seleccion']) entra directo a ese módulo, sin pasar por /portal.
+  // Cuentas normales (modulos_permitidos NULL, o restringidas a varios
+  // módulos) siguen yendo al portal de siempre.
+  async function irADestino() {
+    const { data: modulos } = await supabase.rpc("mis_modulos_permitidos");
+    if (Array.isArray(modulos) && modulos.length === 1 && modulos[0] === "seleccion") {
+      router.replace("/seleccion");
+    } else {
+      router.replace("/portal");
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,7 +45,7 @@ export default function Login() {
     if (authError) {
       setError("Correo o contraseña incorrectos.");
     } else {
-      router.push("/portal");
+      await irADestino();
     }
   }
 

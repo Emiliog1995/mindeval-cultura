@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const NAVY = "#1B2A5B";
+const TAMANO_MAX_CV = 20 * 1024 * 1024; // 20MB — límite del bucket, ver supabase/mindeval-cvs-subida-directa.sql
 const GOLD = "#F5B800";
 const inputStyle: React.CSSProperties = { padding: "10px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 13.5, boxSizing: "border-box", width: "100%" };
 
@@ -48,21 +50,46 @@ export default function PostularPage() {
       setError("Debes aceptar el Aviso de Privacidad para continuar.");
       return;
     }
+    if (archivo && archivo.size > TAMANO_MAX_CV) {
+      setError("Tu hoja de vida pesa demasiado (máximo 20MB). Si la escaneaste con la cámara, intenta exportarla como PDF de texto en vez de fotos.");
+      return;
+    }
     setEnviando(true);
     try {
-      const formData = new FormData();
-      formData.append("vacante_id", params.vacanteId);
-      formData.append("nombre_completo", nombre);
-      formData.append("cedula", cedula);
-      formData.append("consentimiento_lopdp", "true");
-      if (email) formData.append("email", email);
-      if (telefono) formData.append("telefono", telefono);
-      if (ciudad) formData.append("ciudad", ciudad);
-      if (anios !== "") formData.append("anios_experiencia", String(anios));
-      if (educacion) formData.append("educacion", educacion);
-      if (archivo) formData.append("cv_file", archivo);
+      // El CV se sube directo a Storage con una URL firmada, antes de enviar
+      // el resto del formulario — así el archivo nunca pasa por el límite
+      // de 4.5MB de las funciones serverless de Vercel.
+      let cvPath: string | null = null;
+      if (archivo) {
+        const resUrl = await fetch("/api/mindeval-postular-cv-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vacante_id: params.vacanteId, nombre_archivo: archivo.name }),
+        });
+        const datosUrl = await resUrl.json();
+        if (!resUrl.ok) throw new Error(datosUrl.error);
 
-      const res = await fetch("/api/mindeval-postular", { method: "POST", body: formData });
+        const { error: upErr } = await supabase.storage.from("mindeval-cvs").uploadToSignedUrl(datosUrl.path, datosUrl.token, archivo);
+        if (upErr) throw new Error("No se pudo subir tu hoja de vida. Verifica tu conexión e intenta de nuevo.");
+        cvPath = datosUrl.path;
+      }
+
+      const res = await fetch("/api/mindeval-postular", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vacante_id: params.vacanteId,
+          nombre_completo: nombre,
+          cedula,
+          consentimiento_lopdp: true,
+          email: email || undefined,
+          telefono: telefono || undefined,
+          ciudad: ciudad || undefined,
+          anios_experiencia: anios !== "" ? anios : undefined,
+          educacion: educacion || undefined,
+          cv_path: cvPath,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
@@ -142,7 +169,7 @@ export default function PostularPage() {
             </label>
             <input
               type="file"
-              accept=".pdf,.docx"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
               style={{ ...inputStyle, padding: "8px" }}
             />

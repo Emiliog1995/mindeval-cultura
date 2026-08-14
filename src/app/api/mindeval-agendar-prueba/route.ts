@@ -13,7 +13,7 @@ import type { SesionPrueba, TipoSesionPrueba, Vacante } from "@/lib/mindeval-typ
  * criterio que el resto de rutas server-side del proyecto.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-agendar-prueba");

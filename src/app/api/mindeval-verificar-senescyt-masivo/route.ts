@@ -16,7 +16,7 @@ import { consultarSenescyt } from "@/lib/mindeval-senescyt";
  * confirmar el costo total antes de llamar a esta ruta.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-verificar-senescyt-masivo");

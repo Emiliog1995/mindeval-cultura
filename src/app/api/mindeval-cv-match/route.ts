@@ -5,7 +5,7 @@ import { calcularMatchCv } from "@/lib/mindeval-ia";
 import type { PerfilCargoManual } from "@/lib/mindeval-types";
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-cv-match");

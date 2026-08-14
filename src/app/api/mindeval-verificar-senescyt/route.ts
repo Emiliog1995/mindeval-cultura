@@ -11,7 +11,7 @@ import { consultarSenescyt } from "@/lib/mindeval-senescyt";
  * la consulta y mindeval-verificar-senescyt-masivo para la versión en lote.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-verificar-senescyt");

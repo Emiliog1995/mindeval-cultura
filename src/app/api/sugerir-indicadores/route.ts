@@ -5,7 +5,7 @@ import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 import { requireAuth } from '@/lib/require-auth'
 
 export async function POST(req: Request) {
-  const authError = await requireAuth(req)
+  const authError = await requireAuth(req, "manual_puestos")
   if (authError) return authError
 
   const { permitido } = checkRateLimit(req, 'sugerir-indicadores')

@@ -13,7 +13,7 @@ import type { Vacante } from "@/lib/mindeval-types";
  * /seleccion/[vacanteId]/banco-preguntas antes de que lleguen a un candidato.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-generar-banco");

@@ -17,7 +17,7 @@ import type { Vacante } from "@/lib/mindeval-types";
  * descarte automático que la postulación pública.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-reextraer-cv");

@@ -15,7 +15,7 @@ import { extraerTextoCv } from "@/lib/mindeval-cv-extract";
  * candidato al que le falte el match.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-alta-candidato");

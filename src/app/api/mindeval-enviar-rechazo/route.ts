@@ -10,7 +10,7 @@ import { enviarNoSeleccionado } from "@/lib/mindeval-email";
  * el reclutador confirme el descarte antes de notificarlo.
  */
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "mindeval-enviar-rechazo");

@@ -7,7 +7,7 @@ import { requireAuth } from "@/lib/require-auth";
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req);
+  const authError = await requireAuth(req, "evaluacion_360");
   if (authError) return authError;
 
   const { permitido } = checkRateLimit(req, "360-narrativa");
