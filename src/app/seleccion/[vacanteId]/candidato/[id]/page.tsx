@@ -7,6 +7,7 @@ import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
+import { exportarInformeCandidatoPDF } from "@/lib/exportar-informe-candidato-pdf";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
 import { NOMBRES_ESCALA_16PF5, type Escala16PF5 } from "@/lib/mindeval-16pf5";
 import { NOMBRES_FACTOR_KOSTICK, type FactorKostick } from "@/lib/mindeval-kostick";
@@ -14,7 +15,7 @@ import { NOMBRES_RASGO_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, NOMBRES_CATEGORI
 import { NOMBRES_ESCALA_VALANTI, type EscalaVALANTI } from "@/lib/mindeval-valanti";
 import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
-import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type PreguntaBanco, type RespuestaBancoDetalle, type SesionPrueba, type TipoSesionPrueba, type Vacante } from "@/lib/mindeval-types";
+import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type PreguntaBanco, type RespuestaBancoDetalle, type SesionPrueba, type TipoSesionPrueba, type Vacante, type VerificacionTitulo } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
@@ -68,6 +69,8 @@ export default function PerfilCandidatoPage() {
   const [nuevoPuntaje, setNuevoPuntaje] = useState(7);
   const [nuevoEvaluador, setNuevoEvaluador] = useState("");
 
+  const [verificacionTitulo, setVerificacionTitulo] = useState<VerificacionTitulo | null>(null);
+
   const [entrevista, setEntrevista] = useState<EntrevistaRow>({ fecha: null, entrevistadores: "", resultado: null, notas: "" });
   const [guardandoEntrevista, setGuardandoEntrevista] = useState(false);
 
@@ -103,16 +106,18 @@ export default function PerfilCandidatoPage() {
     setCandidato(c ?? null);
     setCvTexto(c?.cv_texto ?? "");
 
-    const [{ data: match }, { data: ps }, { data: tec }, { data: asse }, { data: entr }] = await Promise.all([
+    const [{ data: match }, { data: ps }, { data: tec }, { data: asse }, { data: entr }, { data: verif }] = await Promise.all([
       supabase.from("mindeval_cv_matches").select("match_pct, razones").eq("candidato_id", params.id).order("generado_en", { ascending: false }).limit(1),
       supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id),
       supabase.from("mindeval_pruebas_tecnicas").select("puntaje_total, modo, preguntas_snapshot, respuestas_banco").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
       supabase.from("mindeval_assessment_evaluaciones").select("id, ejercicio, competencia, puntaje, evaluador").eq("candidato_id", params.id),
       supabase.from("mindeval_entrevistas").select("fecha, entrevistadores, resultado, notas").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
+      supabase.from("mindeval_verificaciones_titulo").select("*").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
     ]);
 
     if (match?.[0]) setMatchCv(match[0]);
     setPsicoGuardados(ps ?? []);
+    if (verif?.[0]) setVerificacionTitulo(verif[0]);
     if (tec?.[0]) {
       setTecnicaGuardada(tec[0].puntaje_total);
       if (tec[0].modo === "banco" && tec[0].respuestas_banco) {
@@ -420,10 +425,10 @@ export default function PerfilCandidatoPage() {
           candidato,
           titulo_vacante: vacante.titulo,
           matchCv: matchCv?.match_pct,
+          estadoSenescyt: verificacionTitulo?.estado,
           stenPromedio,
           tecnicaTotal: tecnicaGuardada ?? undefined,
           assessmentPromedio,
-          idoneidadGlobal,
           datos16pf5: datos16pf5.length ? datos16pf5.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
           datosKostick: datosKostick.length ? datosKostick.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
           datosDisc: datosDisc.length ? datosDisc.map((d) => ({ nombre: d.nombre, valor: d.valor })) : undefined,
@@ -435,12 +440,35 @@ export default function PerfilCandidatoPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setInformeIA(data.contenido);
-      await supabase.from("mindeval_informes_ia").insert({ candidato_id: params.id, tipo: "perfil", contenido: data.contenido });
+      // "finalista": este es el contenido de la Etapa 7 (Informe Final) --
+      // se guarda y avanza la etapa, nunca se genera automáticamente para
+      // todo el que postuló.
+      await supabase.from("mindeval_informes_ia").insert({ candidato_id: params.id, tipo: "finalista", contenido: data.contenido });
+      if (candidato.etapa_actual !== "descartado" && candidato.etapa_actual !== "contratado") {
+        await moverEtapa("informe_final");
+      }
     } catch (e) {
       setErrorGlobal(e instanceof Error ? e.message : "Error al generar el informe ejecutivo");
     } finally {
       setGenerandoInforme(false);
     }
+  }
+
+  function descargarInformePDF() {
+    if (!informeIA || !candidato || !vacante) return;
+    exportarInformeCandidatoPDF(
+      {
+        nombreCompleto: candidato.nombre_completo,
+        vacante: vacante.titulo,
+        empresa: vacante.empresa,
+        matchCv: matchCv?.match_pct,
+        stenPromedio: psicoGuardados.length ? stenPromedio : undefined,
+        tecnicaTotal: tecnicaGuardada ?? undefined,
+        assessmentPromedio: assessRows.length ? assessmentPromedio : undefined,
+        estadoSenescyt: verificacionTitulo?.estado,
+      },
+      informeIA
+    );
   }
 
   async function enviarCorreoRechazo() {
@@ -1019,9 +1047,36 @@ export default function PerfilCandidatoPage() {
           </div>
         </section>
 
-        {/* Etapa 7 — Entrevista */}
+        {/* Etapa 7 — Informe Final. Va ANTES de la entrevista a propósito: se
+            genera con SENESCYT + psicométricas + técnica + assessment para
+            decidir a quién entrevistar -- nunca usa datos de la entrevista
+            (Etapa 8, más abajo), que todavía no ha ocurrido en este punto. */}
+        <section style={{ ...card, borderTop: `3px solid ${GOLD}` }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 7 — Informe Final</h3>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7C89A8" }}>
+            Informe ejecutivo por niveles de evidencia (SENESCYT, psicométricas, técnica, assessment) — nunca un índice
+            compuesto ni datos de la entrevista. Insumo para decidir a quién entrevistar y presentar como mejor calificado.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={generarInformeEjecutivo} disabled={generandoInforme} style={btnGold}>
+              {generandoInforme ? "Generando…" : "Generar Informe Final"}
+            </button>
+            {informeIA && (
+              <button onClick={descargarInformePDF} style={{ ...btnPrimario, background: "transparent", color: NAVY, border: `1px solid ${NAVY}` }}>
+                Descargar PDF
+              </button>
+            )}
+          </div>
+          {informeIA && (
+            <div style={{ marginTop: 14, fontSize: 13.5, lineHeight: 1.7, color: "#33405F", whiteSpace: "pre-wrap" }}>{informeIA}</div>
+          )}
+        </section>
+
+        {/* Etapa 8 — Entrevista Virtual, la última. Decisión humana del
+            panel con el líder de área -- no retroalimenta ni regenera el
+            Informe Final de arriba. */}
         <section style={card}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 7 — Entrevista Virtual</h3>
+          <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: NAVY }}>Etapa 8 — Entrevista Virtual</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <input type="datetime-local" style={inputStyle} value={entrevista.fecha ?? ""} onChange={(e) => setEntrevista((prev) => ({ ...prev, fecha: e.target.value }))} />
             <input placeholder="Entrevistadores" style={inputStyle} value={entrevista.entrevistadores ?? ""} onChange={(e) => setEntrevista((prev) => ({ ...prev, entrevistadores: e.target.value }))} />
@@ -1037,17 +1092,6 @@ export default function PerfilCandidatoPage() {
           <button onClick={guardarEntrevista} disabled={guardandoEntrevista} style={btnGold}>
             {guardandoEntrevista ? "Guardando…" : "Guardar entrevista"}
           </button>
-        </section>
-
-        {/* Informe ejecutivo IA */}
-        <section style={{ ...card, borderTop: `3px solid ${GOLD}` }}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 14.5, color: NAVY }}>Informe ejecutivo redactado por IA</h3>
-          <button onClick={generarInformeEjecutivo} disabled={generandoInforme} style={btnGold}>
-            {generandoInforme ? "Generando…" : "Generar informe ejecutivo"}
-          </button>
-          {informeIA && (
-            <div style={{ marginTop: 14, fontSize: 13.5, lineHeight: 1.7, color: "#33405F", whiteSpace: "pre-wrap" }}>{informeIA}</div>
-          )}
         </section>
       </div>
     </div>

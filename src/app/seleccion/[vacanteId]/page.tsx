@@ -71,6 +71,8 @@ export default function ProcesoVacante() {
   const [recalculando, setRecalculando] = useState(false);
   const [resultadoRecalculo, setResultadoRecalculo] = useState("");
 
+  const [cerrandoProceso, setCerrandoProceso] = useState(false);
+
   useEffect(() => {
     if (verificando) return;
     cargar();
@@ -356,6 +358,29 @@ export default function ProcesoVacante() {
     }
   }
 
+  /**
+   * Cierre manual y explícito del proceso -- distinto del cierre automático
+   * por fecha límite (vacanteAceptaPostulaciones). Marca la vacante como
+   * 'cerrada': deja de aceptar postulaciones nuevas y de aparecer como
+   * abierta en /seleccion, pero no toca ni borra a los candidatos ya
+   * evaluados -- sus informes y resultados quedan intactos para consultarlos
+   * después. Es la acción con la que el reclutador da por terminado el
+   * ciclo de reclutamiento (ej. el cierre mensual del proceso).
+   */
+  async function cerrarProceso() {
+    if (!vacante) return;
+    if (!window.confirm(`¿Cerrar el proceso de "${vacante.titulo}"? Dejará de aceptar postulaciones nuevas. Los candidatos y sus informes ya generados no se ven afectados.`)) {
+      return;
+    }
+    setCerrandoProceso(true);
+    try {
+      await supabase.from("mindeval_vacantes").update({ estado: "cerrada" }).eq("id", vacante.id);
+      setVacante((prev) => (prev ? { ...prev, estado: "cerrada" } : prev));
+    } finally {
+      setCerrandoProceso(false);
+    }
+  }
+
   if (verificando || loading) return null;
   if (error || !vacante) {
     return <div style={{ padding: 40, textAlign: "center", color: "#C4402F" }}>{error}</div>;
@@ -414,6 +439,26 @@ export default function ProcesoVacante() {
           <button onClick={() => setMostrarAlta(true)} style={{ background: GOLD, color: NAVY, border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
             + Añadir candidato
           </button>
+          {vacante.estado !== "cerrada" && (
+            <button
+              onClick={cerrarProceso}
+              disabled={cerrandoProceso}
+              title="Deja de aceptar postulaciones. No afecta a los candidatos ni a sus informes ya generados."
+              style={{
+                background: "transparent",
+                color: "#FF8A78",
+                border: "1px solid #C4402F",
+                padding: "8px 14px",
+                borderRadius: 8,
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: cerrandoProceso ? "not-allowed" : "pointer",
+                opacity: cerrandoProceso ? 0.6 : 1,
+              }}
+            >
+              {cerrandoProceso ? "Cerrando…" : "Cerrar proceso"}
+            </button>
+          )}
         </div>
       </div>
 

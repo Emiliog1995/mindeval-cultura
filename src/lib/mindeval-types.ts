@@ -1,10 +1,14 @@
 export type EtapaCandidato =
   | "postulado" | "filtro_cv" | "verificacion_titulo" | "psicometricas"
-  | "tecnica" | "assessment" | "entrevista" | "finalista" | "contratado" | "descartado";
+  | "tecnica" | "assessment" | "informe_final" | "entrevista" | "finalista" | "contratado" | "descartado";
 
 // Orden real del proceso (confirmado con el reclutador): el filtro de CV pasa
 // primero, luego psicométricas y técnica (agendadas con enlace al candidato),
 // y SENESCYT se verifica solo a quienes ya aprobaron esas dos — no antes.
+// "informe_final" va ANTES de "entrevista" a propósito: el Informe Ejecutivo
+// se genera con SENESCYT + psicométricas + técnica + assessment para decidir
+// a quién entrevistar — la entrevista misma queda fuera del informe, es
+// decisión humana del panel, no evidencia que la IA deba consolidar.
 export const ETAPAS: { key: EtapaCandidato; label: string; orden: number }[] = [
   { key: "postulado",           label: "Manual de Puestos",     orden: 1 },
   { key: "filtro_cv",           label: "Filtro de CVs con IA",  orden: 2 },
@@ -12,7 +16,8 @@ export const ETAPAS: { key: EtapaCandidato; label: string; orden: number }[] = [
   { key: "tecnica",             label: "Pruebas Técnicas",      orden: 4 },
   { key: "verificacion_titulo", label: "Verificación SENESCYT", orden: 5 },
   { key: "assessment",          label: "Assessment Center",     orden: 6 },
-  { key: "entrevista",          label: "Entrevista Virtual",    orden: 7 },
+  { key: "informe_final",       label: "Informe Final",         orden: 7 },
+  { key: "entrevista",          label: "Entrevista Virtual",    orden: 8 },
 ];
 
 export function labelEtapa(key: EtapaCandidato): string {
