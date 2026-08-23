@@ -2,7 +2,16 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { OpcionPregunta, PerfilCargoManual } from "./mindeval-types";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// El SDK de Anthropic lanza una excepción en su propio constructor si no
+// hay API key (o es inválida) -- instanciarlo a nivel de módulo tumbaba
+// CUALQUIER ruta que importara este archivo (incluida /api/mindeval-postular,
+// donde el match con IA es "best-effort", nunca un requisito para que un
+// candidato pueda postular) antes de que el try/catch de quien llama
+// tuviera oportunidad de atraparlo -- mismo criterio que getResend() en
+// mindeval-email.ts. Se crea perezoso, solo cuando de verdad se va a usar.
+function getClient(): Anthropic {
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
 
 export interface MatchCvResultado {
   match_pct: number;
@@ -88,7 +97,7 @@ Si el CV no menciona explícitamente un requisito excluyente, márcalo como no c
 
 "detalle" debe ser una frase breve de máximo 15 palabras — el perfil puede tener muchas competencias y cada razón debe ser corta para que la respuesta completa quepa en el presupuesto de salida.`;
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
@@ -131,7 +140,7 @@ Responde SOLO con JSON exacto, sin texto adicional:
 
 Los 4 valores de "criterios" son los puntos máximos de cada rúbrica y deben sumar 100.`;
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
@@ -184,7 +193,7 @@ Cada puntaje no puede superar el máximo de su criterio. La justificación es un
 explicando el porqué de los puntajes — el reclutador puede ajustar cualquier valor manualmente
 después, así que sé objetivo y específico sobre qué faltó o sobró en la respuesta.`;
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
@@ -247,7 +256,7 @@ Responde SOLO con JSON exacto, sin texto adicional, sin backticks de markdown:
 Genera exactamente ${cantidad} preguntas. Manten cada enunciado y cada opción cortos —
 el banco completo debe caber en la respuesta sin cortarse.`;
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 6144,
     messages: [{ role: "user", content: prompt }],
@@ -310,7 +319,7 @@ Responde SOLO con JSON exacto, sin texto adicional, sin backticks de markdown:
 Genera exactamente ${cantidad} ejercicios. Manten cada enunciado y cada rúbrica cortos —
 el banco completo debe caber en la respuesta sin cortarse.`;
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
@@ -358,7 +367,7 @@ Responde SOLO con JSON exacto, sin texto adicional:
 "puntaje" va de 0 a 10. "notas" es una justificación breve (1-2 frases) de por qué —
 el reclutador puede ajustar el valor manualmente después, así que sé objetivo y específico.`;
 
-  const message = await client.messages.create({
+  const message = await getClient().messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
