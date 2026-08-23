@@ -86,8 +86,8 @@ function NuevoPuestoInner() {
           .select('area, empresa_id')
           .eq('id', data.puesto_id)
           .single()
-        area = area || puesto?.area ?? ''
-        empresa_id = empresa_id || puesto?.empresa_id ?? ''
+        area = area || (puesto?.area ?? '')
+        empresa_id = empresa_id || (puesto?.empresa_id ?? '')
       }
 
       setBannerOcupante(

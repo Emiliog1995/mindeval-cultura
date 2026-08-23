@@ -25,6 +25,14 @@ import { vacanteAceptaPostulaciones, type Vacante } from "@/lib/mindeval-types";
  * reclutador ve el % de idoneidad apenas entra al proceso, sin tener que
  * calcularlo manualmente candidato por candidato.
  */
+// Descargar el CV + extraer texto + llamar a Claude para el match, todo en
+// una sola invocación, puede superar el límite por defecto de las funciones
+// serverless de Vercel (10-15s) con un CV pesado o un cold start -- eso
+// mata la función a mitad de camino y el navegador recibe la página de
+// error de Vercel en vez de JSON ("Unexpected token '<'"). Este techo más
+// alto le da margen a la cadena completa para terminar normalmente.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const { permitido } = checkRateLimit(req, "mindeval-postular");
   if (!permitido) return rateLimitResponse();

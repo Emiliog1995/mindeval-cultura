@@ -162,17 +162,36 @@ export default function ProcesoVacante() {
     setErrorAlta("");
     setGuardandoAlta(true);
     try {
-      const formData = new FormData();
-      formData.append("vacante_id", params.vacanteId);
-      formData.append("nombre_completo", nuevoNombre);
-      if (nuevoCedula) formData.append("cedula", nuevoCedula);
-      if (nuevoEmail) formData.append("email", nuevoEmail);
-      if (nuevoArchivo) formData.append("cv_file", nuevoArchivo);
+      const headers = { "Content-Type": "application/json", ...(await authHeaders()) };
+
+      // El CV se sube directo a Storage con una URL firmada, igual que en la
+      // postulación pública -- así nunca pasa por el límite de 4.5MB de las
+      // funciones serverless de Vercel.
+      let cvPath: string | null = null;
+      if (nuevoArchivo) {
+        const resUrl = await fetch("/api/mindeval-alta-candidato-cv-url", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ vacante_id: params.vacanteId, nombre_archivo: nuevoArchivo.name }),
+        });
+        const datosUrl = await resUrl.json();
+        if (!resUrl.ok) throw new Error(datosUrl.error);
+
+        const { error: upErr } = await supabase.storage.from("mindeval-cvs").uploadToSignedUrl(datosUrl.path, datosUrl.token, nuevoArchivo);
+        if (upErr) throw new Error("No se pudo subir la hoja de vida. Verifica tu conexión e intenta de nuevo.");
+        cvPath = datosUrl.path;
+      }
 
       const res = await fetch("/api/mindeval-alta-candidato", {
         method: "POST",
-        headers: await authHeaders(),
-        body: formData,
+        headers,
+        body: JSON.stringify({
+          vacante_id: params.vacanteId,
+          nombre_completo: nuevoNombre,
+          cedula: nuevoCedula || undefined,
+          email: nuevoEmail || undefined,
+          cv_path: cvPath,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);

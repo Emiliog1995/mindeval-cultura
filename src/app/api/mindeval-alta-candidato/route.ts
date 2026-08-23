@@ -7,21 +7,32 @@ import { extraerTextoCv } from "@/lib/mindeval-cv-extract";
 /**
  * Alta manual de un candidato desde el ranking de la vacante (staff-only) —
  * mismo patrón que /api/mindeval-postular (extrae texto del PDF/DOCX con
- * extraerTextoCv, sube el archivo original al bucket privado), pero para
- * candidatos que el reclutador agrega directamente (ej. venían de un
- * referido o LinkedIn) en vez de postularse por el link público. No calcula
- * el match con IA automáticamente aquí — el reclutador lo dispara desde
- * "Recalcular candidatos sin match" cuando quiera, igual que cualquier
- * candidato al que le falte el match.
+ * extraerTextoCv), pero para candidatos que el reclutador agrega
+ * directamente (ej. venían de un referido o LinkedIn) en vez de postularse
+ * por el link público. No calcula el match con IA automáticamente aquí — el
+ * reclutador lo dispara desde "Recalcular candidatos sin match" cuando
+ * quiera, igual que cualquier candidato al que le falte el match.
+ *
+ * El CV ya NO viaja en este request: el navegador lo sube antes, directo a
+ * Storage, con la URL firmada de /api/mindeval-alta-candidato-cv-url (mismo
+ * criterio que /api/mindeval-postular — evita el límite de 4.5MB de las
+ * funciones serverless de Vercel). Acá solo llega `cv_path`, y esta ruta
+ * descarga el archivo del bucket server-side.
  */
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const vacanteId = formData.get("vacante_id") as string;
-    const nombreCompleto = (formData.get("nombre_completo") as string)?.trim();
-    const cedula = (formData.get("cedula") as string) || null;
-    const email = (formData.get("email") as string) || null;
-    const file = formData.get("cv_file") as File | null;
+    const {
+      vacante_id: vacanteId,
+      nombre_completo: nombreCompletoRaw,
+      cedula: cedulaRaw,
+      email: emailRaw,
+      cv_path: cvPath,
+    }: { vacante_id: string; nombre_completo: string; cedula?: string; email?: string; cv_path?: string } = await req.json();
+    const nombreCompleto = nombreCompletoRaw?.trim();
+    const cedula = cedulaRaw || null;
+    const email = emailRaw || null;
 
     if (!vacanteId || !nombreCompleto) {
       return NextResponse.json({ error: "Faltan datos obligatorios" }, { status: 400 });
@@ -37,13 +48,12 @@ export async function POST(req: NextRequest) {
     }
 
     let cvTexto = "";
-    let cvBuffer: Buffer | null = null;
-    let cvNombreArchivo = "";
-    if (file && file.size > 0) {
-      const bytes = await file.arrayBuffer();
-      cvBuffer = Buffer.from(bytes);
-      cvNombreArchivo = file.name;
-      cvTexto = await extraerTextoCv(cvBuffer, cvNombreArchivo);
+    if (cvPath) {
+      const { data: archivo } = await supabaseAdmin.storage.from("mindeval-cvs").download(cvPath);
+      if (archivo) {
+        const buffer = Buffer.from(await archivo.arrayBuffer());
+        cvTexto = await extraerTextoCv(buffer, cvPath);
+      }
     }
 
     const { data: candidato, error: cErr } = await supabaseAdmin
@@ -54,18 +64,11 @@ export async function POST(req: NextRequest) {
         cedula,
         email,
         cv_texto: cvTexto || null,
+        cv_url: cvPath || null,
       })
       .select()
       .single();
     if (cErr || !candidato) throw new Error(cErr?.message ?? "No se pudo guardar el candidato");
-
-    if (cvBuffer) {
-      const path = `${candidato.id}/${cvNombreArchivo}`;
-      const { error: upErr } = await supabaseAdmin.storage.from("mindeval-cvs").upload(path, cvBuffer, { upsert: true });
-      if (!upErr) {
-        await supabaseAdmin.from("mindeval_candidatos").update({ cv_url: path }).eq("id", candidato.id);
-      }
-    }
 
     return NextResponse.json({ ok: true, candidato_id: candidato.id, cv_extraido: !!cvTexto.trim() });
   } catch (e) {
