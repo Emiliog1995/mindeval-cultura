@@ -1,13 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // pdf-parse (vía pdfjs-dist) carga su pdf.worker.mjs con una ruta relativa
-  // a su propia carpeta en node_modules — si Turbopack/webpack lo empaqueta
-  // dentro de .next/server/chunks esa ruta deja de existir y la extracción
-  // de CVs en PDF falla en silencio. Con esto se carga directo desde
-  // node_modules en runtime, sin empaquetar.
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
-
   async headers() {
     return [
       {
