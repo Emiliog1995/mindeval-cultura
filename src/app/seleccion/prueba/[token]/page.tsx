@@ -231,8 +231,15 @@ export default function PruebaTokenPage() {
         <div style={{ textAlign: "center", background: "#FFFFFF", padding: "2.5rem 2rem", borderRadius: 16, maxWidth: 400, width: "100%" }}>
           <div style={{ fontSize: 10, letterSpacing: 1.2, color: GOLD, fontWeight: 700, marginBottom: 6 }}>MINDEVAL · BY MINDTALENT</div>
           <h2 style={{ color: NAVY, marginBottom: 6 }}>Hola, {info.candidato_nombre}</h2>
-          <p style={{ color: "#7C89A8", fontSize: 13, marginBottom: 20 }}>
+          <p style={{ color: "#7C89A8", fontSize: 13, marginBottom: 12 }}>
             Antes de comenzar, confirma tu número de cédula para verificar que eres tú quien va a rendir la prueba.
+          </p>
+          <p style={{ color: "#A9B6D8", fontSize: 11, marginBottom: 20 }}>
+            Esta prueba tiene monitoreo anti-fraude activo durante todo el intento. Tus respuestas se tratan
+            conforme a nuestro{" "}
+            <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+              Aviso de Privacidad
+            </a>.
           </p>
           <input
             value={cedulaConfirmar}

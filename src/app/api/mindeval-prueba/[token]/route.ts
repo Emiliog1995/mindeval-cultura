@@ -60,6 +60,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   if (new Date(sesion.fecha_programada).getTime() > Date.now() + 30 * 60_000) {
     return NextResponse.json({ error: "Esta prueba todavía no está disponible. Vuelve a la hora agendada." }, { status: 403 });
   }
+  // Ventana de 30 min antes a 1 hora después de la hora agendada -- fuera de
+  // eso, aunque el link siga vivo (no ha llegado a los EXPIRACION_DIAS),
+  // exige que el candidato entre a la hora que se le indicó, en vez de
+  // dejarlo abrir el mismo link horas o días después sin más control. No
+  // aplica si ya está "en_curso" -- un candidato que ya desbloqueó la prueba
+  // y recarga la página cerca de que se le acabe el tiempo no debe quedar
+  // bloqueado a mitad de su propio intento.
+  if (sesion.estado !== "en_curso" && Date.now() > new Date(sesion.fecha_programada).getTime() + 60 * 60_000) {
+    return NextResponse.json(
+      { error: "Ya pasó la hora agendada para esta prueba. Contacta al reclutador para que te reagende un nuevo horario." },
+      { status: 403 }
+    );
+  }
 
   return NextResponse.json({
     tipo: sesion.tipo,

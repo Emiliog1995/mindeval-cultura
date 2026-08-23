@@ -55,6 +55,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (new Date(sesion.fecha_programada).getTime() > Date.now() + 30 * 60_000) {
     return NextResponse.json({ error: "Esta prueba todavía no está disponible. Vuelve a la hora agendada." }, { status: 403 });
   }
+  // Misma ventana que GET /api/mindeval-prueba/[token] (30 min antes a 1 hora
+  // después) -- se repite acá porque este endpoint es el que de verdad
+  // entrega el contenido; GET solo informa si hace falta cédula. No aplica
+  // si ya está "en_curso": un candidato que ya desbloqueó la prueba y
+  // recarga la página cerca de que se le acabe el tiempo no debe quedar
+  // bloqueado a mitad de su propio intento.
+  if (sesion.estado !== "en_curso" && Date.now() > new Date(sesion.fecha_programada).getTime() + 60 * 60_000) {
+    return NextResponse.json(
+      { error: "Ya pasó la hora agendada para esta prueba. Contacta al reclutador para que te reagende un nuevo horario." },
+      { status: 403 }
+    );
+  }
 
   const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;
   if (cedulaRegistrada && cedulaRegistrada !== (cedula ?? "").trim()) {
