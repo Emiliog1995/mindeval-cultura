@@ -196,7 +196,7 @@ export default function VerificacionSenescyt() {
         </div>
 
         <a
-          href="https://www.senescyt.gob.ec/consulta-titulos-web/"
+          href="https://titulos-edusuperior.minedec.gob.ec/consulta-titulos-web/faces/vista/consulta/consulta.xhtml"
           target="_blank"
           rel="noopener noreferrer"
           style={{ display: "inline-block", background: GOLD, color: NAVY, fontWeight: 700, fontSize: 13, padding: "10px 18px", borderRadius: 8, textDecoration: "none", marginBottom: 24 }}
@@ -205,20 +205,13 @@ export default function VerificacionSenescyt() {
         </a>
 
         <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 22 }}>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 5 }}>Título declarado</label>
-            <input style={inputStyle} value={titulo} onChange={(e) => setTitulo(e.target.value)} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 14 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 5 }}>Institución</label>
-              <input style={inputStyle} value={institucion} onChange={(e) => setInstitucion(e.target.value)} />
+          {(titulo || institucion || anio) && (
+            <div style={{ background: "#F4F6FA", borderRadius: 8, padding: "10px 12px", fontSize: 12, color: "#41507A", marginBottom: 14 }}>
+              {titulo || "(sin título)"}
+              {institucion ? ` — ${institucion}` : ""}
+              {anio ? ` (${anio})` : ""}
             </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 5 }}>Año</label>
-              <input type="number" style={inputStyle} value={anio} onChange={(e) => setAnio(e.target.value ? Number(e.target.value) : "")} />
-            </div>
-          </div>
+          )}
 
           <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 8 }}>Resultado de la consulta manual</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
