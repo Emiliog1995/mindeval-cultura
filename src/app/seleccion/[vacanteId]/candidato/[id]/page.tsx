@@ -7,6 +7,7 @@ import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
+import InformeMarkdown from "@/components/mindeval/InformeMarkdown";
 import { exportarInformeCandidatoPDF } from "@/lib/exportar-informe-candidato-pdf";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
 import { NOMBRES_ESCALA_16PF5, type Escala16PF5 } from "@/lib/mindeval-16pf5";
@@ -1068,7 +1069,9 @@ export default function PerfilCandidatoPage() {
             )}
           </div>
           {informeIA && (
-            <div style={{ marginTop: 14, fontSize: 13.5, lineHeight: 1.7, color: "#33405F", whiteSpace: "pre-wrap" }}>{informeIA}</div>
+            <div style={{ marginTop: 14 }}>
+              <InformeMarkdown texto={informeIA} />
+            </div>
           )}
         </section>
 

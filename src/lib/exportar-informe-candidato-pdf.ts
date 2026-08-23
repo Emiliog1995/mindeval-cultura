@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { parseInformeMarkdown, type SegmentoTexto } from "./mindeval-informe-markdown";
 
 // Branding propio de MindEval (navy #1B2A5B / dorado #F5B800) -- no la
 // paleta de MINDTALENT/otros sub-productos del ecosistema, son marcas
@@ -24,6 +25,57 @@ interface DatosInformeCandidato {
   tecnicaTotal?: number;
   assessmentPromedio?: number;
   estadoSenescyt?: EstadoSenescyt;
+}
+
+const MARGEN_IZQ = 14;
+const ANCHO_CONTENIDO = 182;
+const LIMITE_INFERIOR = 275;
+
+function asegurarEspacio(doc: jsPDF, y: number, necesario: number): number {
+  if (y + necesario > LIMITE_INFERIOR) {
+    doc.addPage();
+    return 20;
+  }
+  return y;
+}
+
+/**
+ * Dibuja segmentos con negrita real (cambia de fuente por tramo, no solo
+ * deja los ** literales) con salto de línea palabra por palabra -- jsPDF no
+ * tiene texto enriquecido nativo, así que el ancho de cada palabra se mide
+ * a mano para decidir cuándo saltar de línea y cuándo saltar de página.
+ */
+function dibujarSegmentos(doc: jsPDF, segmentos: SegmentoTexto[], x: number, y: number, anchoMax: number, fontSize: number, lineHeight: number): number {
+  doc.setFontSize(fontSize);
+  let cursorX = x;
+  let cursorY = y;
+
+  for (const seg of segmentos) {
+    doc.setFont("helvetica", seg.negrita ? "bold" : "normal");
+    // Los espacios se parten como su propio token (en vez de dividir por
+    // palabra y sumar un espacio fijo después de cada una) para no forzar
+    // uno entre el final de un tramo en negrita y el texto normal que le
+    // sigue pegado en el original (ej. "**100**." no debe quedar "100 .").
+    const tokens = seg.texto.split(/(\s+)/).filter((t) => t.length > 0);
+    for (const token of tokens) {
+      if (/^\s+$/.test(token)) {
+        cursorX += doc.getTextWidth(" ");
+        continue;
+      }
+      const anchoToken = doc.getTextWidth(token);
+      if (cursorX !== x && cursorX + anchoToken > x + anchoMax) {
+        cursorX = x;
+        cursorY += lineHeight;
+        if (cursorY > LIMITE_INFERIOR) {
+          doc.addPage();
+          cursorY = 20;
+        }
+      }
+      doc.text(token, cursorX, cursorY);
+      cursorX += anchoToken;
+    }
+  }
+  return cursorY + lineHeight;
 }
 
 function slugificar(texto: string): string {
@@ -94,19 +146,42 @@ export function exportarInformeCandidatoPDF(datos: DatosInformeCandidato, textoI
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
 
   // Cuerpo del informe -- ya incluye la nota de alcance fija, agregada por
-  // la ruta /api/mindeval-informe-ejecutivo, no por este exportador.
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(51, 64, 95);
-  const textoLimpio = textoInforme.replace(/[•‣]/g, "-");
-  const lineas = doc.splitTextToSize(textoLimpio, 182) as string[];
-  for (const linea of lineas) {
-    if (y > 275) {
-      doc.addPage();
-      y = 20;
+  // la ruta /api/mindeval-informe-ejecutivo, no por este exportador. El
+  // texto viene en el subconjunto de Markdown que usa ese prompt (#, ##,
+  // **negrita**, ---); se parsea y se dibuja con formato real en vez de
+  // volcar los símbolos tal cual, que es lo que hacía splitTextToSize().
+  const bloques = parseInformeMarkdown(textoInforme);
+  for (const bloque of bloques) {
+    if (bloque.tipo === "hr") {
+      y = asegurarEspacio(doc, y, 8);
+      y += 2;
+      doc.setDrawColor(220, 224, 234);
+      doc.setLineWidth(0.3);
+      doc.line(MARGEN_IZQ, y, MARGEN_IZQ + ANCHO_CONTENIDO, y);
+      y += 5;
+      continue;
     }
-    doc.text(linea, 14, y);
-    y += 5.2;
+    if (bloque.tipo === "h1" || bloque.tipo === "h2") {
+      const fontSize = bloque.tipo === "h1" ? 12.5 : 11;
+      y = asegurarEspacio(doc, y, fontSize / 2 + 4);
+      y += 2;
+      doc.setTextColor(...NAVY);
+      y = dibujarSegmentos(doc, bloque.segmentos.map((s) => ({ ...s, negrita: true })), MARGEN_IZQ, y, ANCHO_CONTENIDO, fontSize, fontSize / 1.8);
+      doc.setTextColor(51, 64, 95);
+      y += 1;
+      continue;
+    }
+    // párrafo o bullet
+    const x = bloque.tipo === "bullet" ? MARGEN_IZQ + 4 : MARGEN_IZQ;
+    const anchoMax = bloque.tipo === "bullet" ? ANCHO_CONTENIDO - 4 : ANCHO_CONTENIDO;
+    y = asegurarEspacio(doc, y, 5.2);
+    // el espacio va pegado al texto del bullet (no es un segmento aparte)
+    // porque ya no se fuerza un espacio entre segmentos -- eso es justo lo
+    // que arregla el caso "**100**." (sin ese espacio, quedaría "•Riesgo").
+    const segmentos = bloque.tipo === "bullet" ? [{ texto: "•  ", negrita: false }, ...bloque.segmentos] : bloque.segmentos;
+    doc.setTextColor(51, 64, 95);
+    y = dibujarSegmentos(doc, segmentos, x, y, anchoMax, 10, 5.2);
+    y += 1.5;
   }
 
   // Pie de página en todas las páginas
