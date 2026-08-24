@@ -49,8 +49,25 @@ export interface Evaluado360 {
   departamento: string;
   empresa?: string;
   empresa_id?: string;
+  puesto_id?: string;
   jefe?: string;
   fecha_ingreso?: string;
+  created_at: string;
+}
+
+export interface IndicadorEsencial {
+  id: string;
+  indicador: string;
+  formula: string;
+  meta: string;
+}
+
+export interface IndicadorResultado360 {
+  id: string;
+  evaluado_id: string;
+  periodo: string;
+  indicador_puesto_id: string;
+  calificacion: number;
   created_at: string;
 }
 
@@ -109,6 +126,9 @@ export interface ResultadoConsolidado360 {
   evaluado: Evaluado360;
   periodo: string;
   puntaje360: number;
+  cumplimientoIndicadores: number | null;
+  puntajeDesempenoFinal: number;
+  indicadoresEsenciales: Array<IndicadorEsencial & { calificacion: number | null }>;
   nivelDesempeno: NivelDesempeno;
   colorDesempeno: string;
   puntajePotencial: number;

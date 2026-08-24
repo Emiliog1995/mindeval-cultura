@@ -14,15 +14,15 @@ interface Props {
 const PLAZO_OPTIONS = ["1 mes", "3 meses", "6 meses", "12 meses"];
 
 const CUADRANTE_COLORS: Record<string, string> = {
-  ESTRELLA:          "#10b981",
-  "FUTURA ESTRELLA": "#84cc16",
-  "ALTO IMPACTO":    "#2dd4bf",
-  NÚCLEO:            "#eab308",
-  ENIGMA:            "#f97316",
-  DILEMA:            "#f97316",
-  "ALTO RENDIMIENTO":"#eab308",
-  INCONSISTENTE:     "#ef4444",
-  "BAJO RENDIMIENTO":"#ef4444",
+  ESTRELLA:                 "#10b981",
+  "TALENTO EN CRECIMIENTO": "#84cc16",
+  "ALTO DESEMPEÑO":         "#2dd4bf",
+  EXPERTO:                  "#2dd4bf",
+  "PROFESIONAL CLAVE":      "#eab308",
+  "TRABAJADOR EFICAZ":      "#eab308",
+  ENIGMA:                   "#f97316",
+  INCONSISTENTE:            "#ef4444",
+  RIESGO:                   "#ef4444",
 };
 
 export default function PDIForm({ evaluadoId, periodo, cuadrante, pdiInicial, onGuardado }: Props) {

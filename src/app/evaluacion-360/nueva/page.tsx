@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { crear360Evaluado, crear360Evaluacion, crearTokens360 } from "@/lib/supabase";
+import {
+  crear360Evaluado, crear360Evaluacion, crearTokens360,
+  listarEmpresas, listarPuestosPorEmpresa,
+  type Empresa, type PuestoResumen,
+} from "@/lib/supabase";
 import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, type FuenteEvaluacion, type CompetenciaKey, type PotencialKey } from "@/lib/360-types";
 import { calcularPuntaje360, clasificarNivelDesempeno } from "@/lib/360-scoring";
 import type { Evaluacion360, Token360 } from "@/lib/supabase";
@@ -36,8 +40,23 @@ export default function NuevaEvaluacion360() {
   const [copiado, setCopiado] = useState<string | null>(null);
 
   const [datos, setDatos] = useState({
-    nombre: "", cargo: "", departamento: "", empresa: "", jefe: "", fecha_ingreso: "", periodo: "",
+    nombre: "", cargo: "", departamento: "", empresa: "", empresaId: "", puestoId: "",
+    jefe: "", fecha_ingreso: "", periodo: "",
   });
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [puestos, setPuestos] = useState<PuestoResumen[]>([]);
+
+  useEffect(() => {
+    listarEmpresas().then(setEmpresas).catch(() => setEmpresas([]));
+  }, []);
+
+  useEffect(() => {
+    if (!datos.empresaId) {
+      setPuestos([]);
+      return;
+    }
+    listarPuestosPorEmpresa(datos.empresaId).then(setPuestos).catch(() => setPuestos([]));
+  }, [datos.empresaId]);
 
   const [calificaciones, setCalificaciones] = useState<Record<FuenteEvaluacion, CompetenciasMap>>({
     autoevaluacion:  emptyCompetencias(),
@@ -83,6 +102,8 @@ export default function NuevaEvaluacion360() {
         cargo: datos.cargo,
         departamento: datos.departamento,
         empresa: datos.empresa || undefined,
+        empresa_id: datos.empresaId || undefined,
+        puesto_id: datos.puestoId || undefined,
         jefe: datos.jefe || undefined,
         fecha_ingreso: datos.fecha_ingreso || undefined,
       });
@@ -122,6 +143,8 @@ export default function NuevaEvaluacion360() {
         cargo: datos.cargo,
         departamento: datos.departamento,
         empresa: datos.empresa || undefined,
+        empresa_id: datos.empresaId || undefined,
+        puesto_id: datos.puestoId || undefined,
         jefe: datos.jefe || undefined,
         fecha_ingreso: datos.fecha_ingreso || undefined,
       });
@@ -168,7 +191,6 @@ export default function NuevaEvaluacion360() {
             <h2 className="text-white font-semibold">Datos del evaluado</h2>
             {[
               { field: "nombre",         label: "Nombre completo *",   type: "text" },
-              { field: "empresa",        label: "Empresa",             type: "text" },
               { field: "cargo",          label: "Cargo *",             type: "text" },
               { field: "departamento",   label: "Departamento *",      type: "text" },
               { field: "jefe",           label: "Jefe directo",        type: "text" },
@@ -185,6 +207,42 @@ export default function NuevaEvaluacion360() {
                 />
               </div>
             ))}
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Empresa</label>
+              <select
+                value={datos.empresaId}
+                onChange={(e) => {
+                  const emp = empresas.find((x) => x.id === e.target.value);
+                  setDatos((p) => ({ ...p, empresaId: e.target.value, empresa: emp?.nombre ?? "", puestoId: "" }));
+                }}
+                className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
+              >
+                <option value="">Sin empresa</option>
+                {empresas.map((emp) => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">
+                Puesto del Manual de Puestos (opcional)
+              </label>
+              <select
+                value={datos.puestoId}
+                onChange={(e) => setDatos((p) => ({ ...p, puestoId: e.target.value }))}
+                disabled={!datos.empresaId}
+                className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf] disabled:opacity-50"
+              >
+                <option value="">
+                  {datos.empresaId ? "Sin vincular" : "Elige una empresa primero"}
+                </option>
+                {puestos.map((p) => <option key={p.id} value={p.id}>{p.nombre_puesto} — {p.area}</option>)}
+              </select>
+              <p className="text-[10px] text-gray-500 mt-1">
+                Si lo vinculas, el Desempeño combina el 360° con el cumplimiento de los indicadores esenciales de esa ficha.
+              </p>
+            </div>
+
             <button
               onClick={() => setVista("modo")}
               className="w-full py-2.5 rounded-lg font-semibold text-sm mt-2"

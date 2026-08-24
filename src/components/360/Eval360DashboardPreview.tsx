@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { listar360Evaluados, listarTodas360Evaluaciones } from "@/lib/supabase";
-import { calcularPuntaje360, calcularPotencial, determinarCuadrante, clasificarNivelDesempeno, calcularBrechas } from "@/lib/360-scoring";
+import { listar360Evaluados, listarTodas360Evaluaciones, listarTodasIndicadoresResultado360 } from "@/lib/supabase";
+import { construirResultadoBase360 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import { COMPETENCIAS_360 } from "@/lib/360-types";
 import NineBoxMatrix from "./NineBoxMatrix";
@@ -15,9 +15,10 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
   useEffect(() => {
     async function cargar() {
       try {
-        const [todosEvaluados, todasEval] = await Promise.all([
+        const [todosEvaluados, todasEval, todosIndicadores] = await Promise.all([
           listar360Evaluados(),
           listarTodas360Evaluaciones(),
+          listarTodasIndicadoresResultado360(),
         ]);
         const evaluados = empresaId ? todosEvaluados.filter((e) => e.empresa_id === empresaId) : todosEvaluados;
 
@@ -25,28 +26,16 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
         for (const ev of evaluados) {
           const evs = todasEval.filter((e) => e.evaluado_id === ev.id);
           if (evs.length === 0) continue;
-          const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evs);
-          const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntaje360);
-          const jefeEv = evs.find((e) => e.fuente === "jefe");
-          const { puntaje: puntajePotencial, nivel: nivelPotencial } = jefeEv?.potencial
-            ? calcularPotencial(jefeEv.potencial)
-            : { puntaje: 0, nivel: "MEDIO" as const };
-          const cuadranteInfo = determinarCuadrante(nivelDesempeno, nivelPotencial);
-          const brechas = calcularBrechas(puntajesPorCompetencia);
+          const periodo = evs[0]?.periodo ?? "";
+          const calificacionesIndicadores = todosIndicadores
+            .filter((r) => r.evaluado_id === ev.id && r.periodo === periodo)
+            .map((r) => r.calificacion);
+          const base = construirResultadoBase360(evs, calificacionesIndicadores);
           res.push({
             evaluado: ev,
-            periodo: evs[0]?.periodo ?? "",
-            puntaje360,
-            nivelDesempeno,
-            colorDesempeno,
-            puntajePotencial,
-            nivelPotencial,
-            cuadrante: cuadranteInfo.numero,
-            nombreCuadrante: cuadranteInfo.nombre,
-            accionCuadrante: cuadranteInfo.accion,
-            colorCuadrante: cuadranteInfo.colorFondo,
-            puntajesPorCompetencia,
-            brechas,
+            periodo,
+            ...base,
+            indicadoresEsenciales: [],
             evaluaciones: evs,
           });
         }
@@ -63,7 +52,7 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
   const zonaVerde = resultados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
   const zonaRoja  = resultados.filter((r) => [1, 2].includes(r.cuadrante)).length;
   const promOrg   = resultados.length
-    ? resultados.reduce((s, r) => s + r.puntaje360, 0) / resultados.length
+    ? resultados.reduce((s, r) => s + r.puntajeDesempenoFinal, 0) / resultados.length
     : 0;
 
   const mayorBrecha = resultados.length
@@ -79,7 +68,7 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
   const nineBoxData = resultados.map((r) => ({
     nombre: r.evaluado.nombre,
     cuadrante: r.cuadrante,
-    puntaje360: r.puntaje360,
+    puntaje360: r.puntajeDesempenoFinal,
     potencial: r.puntajePotencial,
   }));
 
@@ -110,7 +99,7 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
           { label: "Total evaluados", value: resultados.length, color: "#2dd4bf" },
           { label: "Zona verde (6,8,9)", value: `${resultados.length ? Math.round(zonaVerde / resultados.length * 100) : 0}%`, color: "#10b981" },
           { label: "Zona roja (1,2)", value: `${resultados.length ? Math.round(zonaRoja / resultados.length * 100) : 0}%`, color: "#ef4444" },
-          { label: "Promedio org 360°", value: promOrg.toFixed(2), color: "#10b981" },
+          { label: "Promedio org — Desempeño", value: promOrg.toFixed(2), color: "#10b981" },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
             <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>

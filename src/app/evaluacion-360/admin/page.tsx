@@ -3,14 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { listar360Evaluados, listarTodas360Evaluaciones } from "@/lib/supabase";
-import {
-  calcularPuntaje360,
-  calcularPotencial,
-  determinarCuadrante,
-  clasificarNivelDesempeno,
-  calcularBrechas,
-} from "@/lib/360-scoring";
+import { listar360Evaluados, listarTodas360Evaluaciones, listarTodasIndicadoresResultado360 } from "@/lib/supabase";
+import { construirResultadoBase360 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import NineBoxMatrix from "@/components/360/NineBoxMatrix";
@@ -29,32 +23,25 @@ export default function Admin360Page() {
 
     async function cargar() {
       try {
-        const [evaluados, todasEval] = await Promise.all([
+        const [evaluados, todasEval, todosIndicadores] = await Promise.all([
           listar360Evaluados(),
           listarTodas360Evaluaciones(),
+          listarTodasIndicadoresResultado360(),
         ]);
         const res: ResultadoConsolidado360[] = [];
         for (const ev of evaluados) {
           const evs = todasEval.filter((e) => e.evaluado_id === ev.id);
           if (evs.length === 0) continue;
-          const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evs);
-          const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntaje360);
-          const jefeEv = evs.find((e) => e.fuente === "jefe");
-          const { puntaje: puntajePotencial, nivel: nivelPotencial } = jefeEv?.potencial
-            ? calcularPotencial(jefeEv.potencial)
-            : { puntaje: 0, nivel: "MEDIO" as const };
-          const cuadranteInfo = determinarCuadrante(nivelDesempeno, nivelPotencial);
-          const brechas = calcularBrechas(puntajesPorCompetencia);
+          const periodo = evs[0]?.periodo ?? "";
+          const calificacionesIndicadores = todosIndicadores
+            .filter((r) => r.evaluado_id === ev.id && r.periodo === periodo)
+            .map((r) => r.calificacion);
+          const base = construirResultadoBase360(evs, calificacionesIndicadores);
           res.push({
             evaluado: ev,
-            periodo: evs[0]?.periodo ?? "",
-            puntaje360, nivelDesempeno, colorDesempeno,
-            puntajePotencial, nivelPotencial,
-            cuadrante: cuadranteInfo.numero,
-            nombreCuadrante: cuadranteInfo.nombre,
-            accionCuadrante: cuadranteInfo.accion,
-            colorCuadrante: cuadranteInfo.colorFondo,
-            puntajesPorCompetencia, brechas,
+            periodo,
+            ...base,
+            indicadoresEsenciales: [],
             evaluaciones: evs,
           });
         }
@@ -82,25 +69,27 @@ export default function Admin360Page() {
   const zonaVerde = filtrados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
   const zonaRoja  = filtrados.filter((r) => [1, 2].includes(r.cuadrante)).length;
   const promOrg   = filtrados.length
-    ? filtrados.reduce((s, r) => s + r.puntaje360, 0) / filtrados.length
+    ? filtrados.reduce((s, r) => s + r.puntajeDesempenoFinal, 0) / filtrados.length
     : 0;
 
   const nineBoxData = filtrados.map((r) => ({
     nombre:    r.evaluado.nombre,
     cuadrante: r.cuadrante,
-    puntaje360: r.puntaje360,
+    puntaje360: r.puntajeDesempenoFinal,
     potencial: r.puntajePotencial,
   }));
 
   async function exportarCSV() {
     const filas = [
-      ["Nombre", "Cargo", "Departamento", "Período", "360°", "Nivel desempeño", "Potencial", "Nivel potencial", "Cuadrante", "Nombre cuadrante"],
+      ["Nombre", "Cargo", "Departamento", "Período", "360° (competencias)", "Indicadores esenciales", "Desempeño final", "Nivel desempeño", "Potencial", "Nivel potencial", "Cuadrante", "Nombre cuadrante"],
       ...filtrados.map((r) => [
         r.evaluado.nombre,
         r.evaluado.cargo,
         r.evaluado.departamento,
         r.periodo,
         r.puntaje360.toFixed(2),
+        r.cumplimientoIndicadores !== null ? r.cumplimientoIndicadores.toFixed(2) : "—",
+        r.puntajeDesempenoFinal.toFixed(2),
         r.nivelDesempeno,
         r.puntajePotencial.toFixed(2),
         r.nivelPotencial,
@@ -252,7 +241,7 @@ export default function Admin360Page() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#2d3a50]">
-                    {["Nombre", "Cargo", "Departamento", "Período", "360°", "Potencial", "Nivel", "Cuadrante", ""].map((h) => (
+                    {["Nombre", "Cargo", "Departamento", "Período", "Desempeño", "Potencial", "Nivel", "Cuadrante", ""].map((h) => (
                       <th key={h} className="text-left text-xs font-semibold text-gray-400 px-4 py-3 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -270,7 +259,7 @@ export default function Admin360Page() {
                       <td className="px-4 py-3 text-gray-400 text-sm whitespace-nowrap">{r.periodo}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className="font-bold text-sm" style={{ color: r.colorDesempeno }}>
-                          {r.puntaje360.toFixed(2)}
+                          {r.puntajeDesempenoFinal.toFixed(2)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{r.puntajePotencial.toFixed(2)}</td>

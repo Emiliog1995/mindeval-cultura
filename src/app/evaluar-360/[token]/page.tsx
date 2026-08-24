@@ -15,6 +15,20 @@ function emptyPotencial(): PotencialMap {
   return Object.fromEntries(POTENCIAL_CRITERIOS.map((c) => [c.key, 3])) as PotencialMap;
 }
 
+interface IndicadorEsencialForm {
+  id: string;
+  indicador: string;
+  meta: string;
+}
+
+const ESCALA_INDICADOR = [
+  { valor: 5, label: "Superó la meta" },
+  { valor: 4, label: "Cumplió la meta" },
+  { valor: 3, label: "Cerca de la meta" },
+  { valor: 2, label: "Por debajo de la meta" },
+  { valor: 1, label: "Muy por debajo / no se ejecutó" },
+];
+
 export default function EvaluarToken360() {
   const { token } = useParams<{ token: string }>();
   const [cargando, setCargando] = useState(true);
@@ -22,9 +36,11 @@ export default function EvaluarToken360() {
   const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState<{ token: Token360; evaluado: Evaluado360 } | null>(null);
+  const [indicadoresEsenciales, setIndicadoresEsenciales] = useState<IndicadorEsencialForm[]>([]);
 
   const [competencias, setCompetencias] = useState<CompetenciasMap>(emptyCompetencias());
   const [potencial, setPotencial] = useState<PotencialMap>(emptyPotencial());
+  const [calificacionesIndicadores, setCalificacionesIndicadores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetch(`/api/token/360/${token}`)
@@ -33,13 +49,21 @@ export default function EvaluarToken360() {
           const body = await r.json().catch(() => ({}));
           throw new Error(body.error ?? "Este link no es válido o ya no está disponible.");
         }
-        return r.json() as Promise<{ token: Token360; evaluado: Evaluado360 }>;
+        return r.json() as Promise<{
+          token: Token360;
+          evaluado: Evaluado360;
+          indicadoresEsenciales: IndicadorEsencialForm[];
+        }>;
       })
       .then((res) => {
         if (res.token.completado) {
           setEnviado(true);
         } else {
           setData(res);
+          setIndicadoresEsenciales(res.indicadoresEsenciales ?? []);
+          setCalificacionesIndicadores(
+            Object.fromEntries((res.indicadoresEsenciales ?? []).map((i) => [i.id, 3])),
+          );
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar"))
@@ -52,6 +76,9 @@ export default function EvaluarToken360() {
   function setPot(key: PotencialKey, val: number) {
     setPotencial((prev) => ({ ...prev, [key]: val }));
   }
+  function setIndicador(id: string, val: number) {
+    setCalificacionesIndicadores((prev) => ({ ...prev, [id]: val }));
+  }
 
   async function handleEnviar() {
     if (!data) return;
@@ -62,7 +89,16 @@ export default function EvaluarToken360() {
       const res = await fetch(`/api/token/360/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ competencias, potencial: esJefe ? potencial : undefined }),
+        body: JSON.stringify({
+          competencias,
+          potencial: esJefe ? potencial : undefined,
+          indicadoresResultado: esJefe
+            ? indicadoresEsenciales.map((ind) => ({
+                indicador_puesto_id: ind.id,
+                calificacion: calificacionesIndicadores[ind.id] ?? 3,
+              }))
+            : undefined,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -152,6 +188,32 @@ export default function EvaluarToken360() {
                 <span className="text-[#10b981] text-sm font-bold w-10 text-right">
                   {potencial[crit.key].toFixed(1)}
                 </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {data.token.fuente === "jefe" && indicadoresEsenciales.length > 0 && (
+          <div className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] p-4 space-y-4">
+            <div>
+              <p className="text-xs text-gray-500">Cumplimiento de indicadores esenciales</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                ¿Qué tan cumplida está la meta de cada indicador de este período?
+              </p>
+            </div>
+            {indicadoresEsenciales.map((ind) => (
+              <div key={ind.id} className="space-y-1.5">
+                <p className="text-xs text-gray-300">{ind.indicador}</p>
+                <p className="text-[10px] text-gray-500">Meta: {ind.meta}</p>
+                <select
+                  value={calificacionesIndicadores[ind.id] ?? 3}
+                  onChange={(e) => setIndicador(ind.id, parseInt(e.target.value, 10))}
+                  className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#10b981]"
+                >
+                  {ESCALA_INDICADOR.map((op) => (
+                    <option key={op.valor} value={op.valor}>{op.valor} — {op.label}</option>
+                  ))}
+                </select>
               </div>
             ))}
           </div>

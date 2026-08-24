@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { listar360Evaluados, listarTodas360Evaluaciones, listarTokens360PorEvaluado, type Evaluado360 } from "@/lib/supabase";
 import {
-  calcularPuntaje360, calcularPotencial, determinarCuadrante,
-  clasificarNivelDesempeno, calcularBrechas,
-} from "@/lib/360-scoring";
+  listar360Evaluados, listarTodas360Evaluaciones, listarTokens360PorEvaluado,
+  listarTodasIndicadoresResultado360, eliminar360Evaluado,
+  type Evaluado360,
+} from "@/lib/supabase";
+import { construirResultadoBase360 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import NineBoxMatrix from "@/components/360/NineBoxMatrix";
 import { useAuthGuard } from "@/lib/useAuthGuard";
@@ -21,13 +22,31 @@ export default function Evaluacion360Page() {
   const [filtroDpto, setFiltroDpto] = useState("");
   const [filtroPeriodo, setFiltroPeriodo] = useState("");
   const [filtroEmpresa, setFiltroEmpresa] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; nombre: string } | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+
+  async function handleEliminar() {
+    if (!confirmDelete) return;
+    setEliminando(true);
+    try {
+      await eliminar360Evaluado(confirmDelete.id);
+      setResultados((prev) => prev.filter((r) => r.evaluado.id !== confirmDelete.id));
+      setPendientes((prev) => prev.filter((p) => p.evaluado.id !== confirmDelete.id));
+      setConfirmDelete(null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo eliminar el evaluado.");
+    } finally {
+      setEliminando(false);
+    }
+  }
 
   useEffect(() => {
     async function cargar() {
       try {
-        const [evaluados, todasEval] = await Promise.all([
+        const [evaluados, todasEval, todosIndicadores] = await Promise.all([
           listar360Evaluados(),
           listarTodas360Evaluaciones(),
+          listarTodasIndicadoresResultado360(),
         ]);
         const res: ResultadoConsolidado360[] = [];
         const pend: Array<{ evaluado: Evaluado360; completados: number; total: number }> = [];
@@ -40,24 +59,16 @@ export default function Evaluacion360Page() {
             }
             continue;
           }
-          const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evs);
-          const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntaje360);
-          const jefeEv = evs.find((e) => e.fuente === "jefe");
-          const { puntaje: puntajePotencial, nivel: nivelPotencial } = jefeEv?.potencial
-            ? calcularPotencial(jefeEv.potencial)
-            : { puntaje: 0, nivel: "MEDIO" as const };
-          const cuadranteInfo = determinarCuadrante(nivelDesempeno, nivelPotencial);
-          const brechas = calcularBrechas(puntajesPorCompetencia);
+          const periodo = evs[0]?.periodo ?? "";
+          const calificacionesIndicadores = todosIndicadores
+            .filter((r) => r.evaluado_id === ev.id && r.periodo === periodo)
+            .map((r) => r.calificacion);
+          const base = construirResultadoBase360(evs, calificacionesIndicadores);
           res.push({
             evaluado: ev,
-            periodo: evs[0]?.periodo ?? "",
-            puntaje360, nivelDesempeno, colorDesempeno,
-            puntajePotencial, nivelPotencial,
-            cuadrante: cuadranteInfo.numero,
-            nombreCuadrante: cuadranteInfo.nombre,
-            accionCuadrante: cuadranteInfo.accion,
-            colorCuadrante: cuadranteInfo.colorFondo,
-            puntajesPorCompetencia, brechas,
+            periodo,
+            ...base,
+            indicadoresEsenciales: [],
             evaluaciones: evs,
           });
         }
@@ -96,13 +107,13 @@ export default function Evaluacion360Page() {
   const zonaVerde = filtrados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
   const zonaRoja  = filtrados.filter((r) => [1, 2].includes(r.cuadrante)).length;
   const promOrg   = filtrados.length
-    ? filtrados.reduce((s, r) => s + r.puntaje360, 0) / filtrados.length
+    ? filtrados.reduce((s, r) => s + r.puntajeDesempenoFinal, 0) / filtrados.length
     : 0;
 
   const nineBoxData = filtrados.map((r) => ({
     nombre: r.evaluado.nombre,
     cuadrante: r.cuadrante,
-    puntaje360: r.puntaje360,
+    puntaje360: r.puntajeDesempenoFinal,
     potencial: r.puntajePotencial,
   }));
 
@@ -137,7 +148,7 @@ export default function Evaluacion360Page() {
             { label: "Total evaluados", value: filtrados.length, color: "#2dd4bf" },
             { label: "% Zona verde", value: `${filtrados.length ? Math.round(zonaVerde / filtrados.length * 100) : 0}%`, color: "#10b981" },
             { label: "% Zona roja", value: `${filtrados.length ? Math.round(zonaRoja / filtrados.length * 100) : 0}%`, color: "#ef4444" },
-            { label: "Promedio org 360°", value: promOrg.toFixed(2), color: "#10b981" },
+            { label: "Promedio org — Desempeño", value: promOrg.toFixed(2), color: "#10b981" },
           ].map((kpi) => (
             <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
               <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -202,7 +213,7 @@ export default function Evaluacion360Page() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#2d3a50]">
-                    {["Nombre", "Empresa", "Cargo", "Depto", "360°", "Potencial", "Cuadrante", ""].map((h) => (
+                    {["Nombre", "Empresa", "Cargo", "Depto", "Desempeño", "Potencial", "Cuadrante", ""].map((h) => (
                       <th key={h} className="text-left text-xs font-semibold text-gray-400 px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -220,7 +231,7 @@ export default function Evaluacion360Page() {
                       <td className="px-4 py-3 text-gray-300 text-sm">{r.evaluado.departamento}</td>
                       <td className="px-4 py-3">
                         <span className="font-bold text-sm" style={{ color: r.colorDesempeno }}>
-                          {r.puntaje360.toFixed(2)}
+                          {r.puntajeDesempenoFinal.toFixed(2)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-300 text-sm">{r.puntajePotencial.toFixed(2)}</td>
@@ -230,7 +241,18 @@ export default function Evaluacion360Page() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-[#10b981] text-xs">Ver →</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[#10b981] text-xs">Ver →</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDelete({ id: r.evaluado.id, nombre: r.evaluado.nombre });
+                            }}
+                            className="text-red-400 hover:text-red-300 text-xs transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -269,7 +291,18 @@ export default function Evaluacion360Page() {
                       {p.completados}/{p.total} respondidos
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-[#10b981] text-xs">Ver →</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[#10b981] text-xs">Ver →</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDelete({ id: p.evaluado.id, nombre: p.evaluado.nombre });
+                          }}
+                          className="text-red-400 hover:text-red-300 text-xs transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -278,6 +311,35 @@ export default function Evaluacion360Page() {
           </div>
         )}
       </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] p-6 max-w-sm w-full space-y-4">
+            <div>
+              <p className="text-white font-semibold text-sm">¿Eliminar a {confirmDelete.nombre}?</p>
+              <p className="text-gray-400 text-xs mt-1">
+                Se borran también sus evaluaciones, links generados, indicadores y PDI. Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={eliminando}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEliminar}
+                disabled={eliminando}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/90 hover:bg-red-500 text-white transition-colors disabled:opacity-60"
+              >
+                {eliminando ? "Eliminando…" : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

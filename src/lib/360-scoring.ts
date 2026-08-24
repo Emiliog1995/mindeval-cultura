@@ -9,6 +9,13 @@ import {
   type CuadranteInfo,
 } from './360-types';
 
+// Desempeño final = 360° (competencias, todas las fuentes) × 60% +
+//                    Cumplimiento de indicadores esenciales (solo jefe) × 40%.
+// Piloto: si el evaluado aún no tiene indicadores esenciales cargados,
+// el Desempeño se apoya 100% en el 360° (fallback amigable, no bloquea).
+export const PESO_360_EN_DESEMPENO = 0.6;
+export const PESO_INDICADORES_EN_DESEMPENO = 0.4;
+
 export function calcularPuntaje360(evaluaciones: Evaluacion360[]): {
   puntajesPorCompetencia: Record<CompetenciaKey, number>;
   puntaje360: number;
@@ -68,16 +75,17 @@ export function calcularPotencial(potencial: Record<PotencialKey, number>): {
   return { puntaje, nivel };
 }
 
+// Clave: `${potencial}-${desempeño}`. Fuente: matriz oficial de 9 cajas (Matriz_9_cajas.docx).
 const CUADRANTES: Record<string, CuadranteInfo> = {
-  'BAJO-BAJO':   { numero: 1, nombre: 'BAJO RENDIMIENTO', accion: 'Intervención inmediata',    colorFondo: '#fecaca' },
-  'MEDIO-BAJO':  { numero: 2, nombre: 'INCONSISTENTE',    accion: 'Revisar motivación',        colorFondo: '#fecaca' },
-  'ALTO-BAJO':   { numero: 3, nombre: 'ALTO RENDIMIENTO', accion: 'Retención táctica',         colorFondo: '#fef9c3' },
-  'BAJO-MEDIO':  { numero: 4, nombre: 'ENIGMA',           accion: 'Coaching + capacitación',   colorFondo: '#fef9c3' },
-  'MEDIO-MEDIO': { numero: 5, nombre: 'NÚCLEO',           accion: 'Reconocer + fidelizar',     colorFondo: '#fef9c3' },
-  'ALTO-MEDIO':  { numero: 6, nombre: 'ALTO IMPACTO',     accion: 'Formación continua',        colorFondo: '#dcfce7' },
-  'BAJO-ALTO':   { numero: 7, nombre: 'DILEMA',           accion: 'Revisar rol',               colorFondo: '#fef9c3' },
-  'MEDIO-ALTO':  { numero: 8, nombre: 'FUTURA ESTRELLA',  accion: 'Proyectos retadores',       colorFondo: '#dcfce7' },
-  'ALTO-ALTO':   { numero: 9, nombre: 'ESTRELLA',         accion: 'Plan de sucesión',          colorFondo: '#dcfce7' },
+  'ALTO-BAJO':    { numero: 1, nombre: 'ENIGMA',                   accion: 'Investigar causa (encaje, inducción, jefatura) antes de decidir', colorFondo: '#fef9c3' },
+  'ALTO-MEDIO':   { numero: 2, nombre: 'TALENTO EN CRECIMIENTO',   accion: 'Retos concretos + formación dirigida + seguimiento cercano',      colorFondo: '#dcfce7' },
+  'ALTO-ALTO':    { numero: 3, nombre: 'ESTRELLA',                 accion: 'Retención prioritaria, candidato a sucesión',                     colorFondo: '#dcfce7' },
+  'MEDIO-BAJO':   { numero: 4, nombre: 'INCONSISTENTE',            accion: 'Plan de mejora con objetivos y plazo definido',                   colorFondo: '#fecaca' },
+  'MEDIO-MEDIO':  { numero: 5, nombre: 'PROFESIONAL CLAVE',        accion: 'Mantener motivado y reconocido',                                  colorFondo: '#fef9c3' },
+  'MEDIO-ALTO':   { numero: 6, nombre: 'ALTO DESEMPEÑO',           accion: 'Margen de crecimiento lateral o de nivel jerárquico',             colorFondo: '#dcfce7' },
+  'BAJO-BAJO':    { numero: 7, nombre: 'RIESGO',                   accion: 'Reubicación, desvinculación o revisar proceso de selección',      colorFondo: '#fecaca' },
+  'BAJO-MEDIO':   { numero: 8, nombre: 'TRABAJADOR EFICAZ',        accion: 'Reconocer que cumple y es confiable; no forzar ascenso',          colorFondo: '#fef9c3' },
+  'BAJO-ALTO':    { numero: 9, nombre: 'EXPERTO',                  accion: 'Retener con reconocimiento técnico, no con promesas de ascenso',  colorFondo: '#dcfce7' },
 };
 
 function nivelDesempenoToEje(nivel: NivelDesempeno | NivelPotencial): 'BAJO' | 'MEDIO' | 'ALTO' {
@@ -90,10 +98,75 @@ export function determinarCuadrante(
   nivelDesempeno: NivelDesempeno,
   nivelPotencial: NivelPotencial,
 ): CuadranteInfo {
-  const ejeX = nivelDesempenoToEje(nivelDesempeno);
-  const ejeY = nivelDesempenoToEje(nivelPotencial);
-  const key = `${ejeX}-${ejeY}`;
+  const ejeDesempeno = nivelDesempenoToEje(nivelDesempeno);
+  const ejePotencial = nivelDesempenoToEje(nivelPotencial);
+  const key = `${ejePotencial}-${ejeDesempeno}`;
   return CUADRANTES[key] ?? CUADRANTES['MEDIO-MEDIO'];
+}
+
+export function calcularCumplimientoIndicadores(calificaciones: number[]): number | null {
+  const vals = calificaciones.filter((v) => v > 0);
+  if (!vals.length) return null;
+  return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+}
+
+export function calcularDesempenoFinal(
+  puntaje360: number,
+  cumplimientoIndicadores: number | null,
+): number {
+  if (cumplimientoIndicadores === null) return puntaje360;
+  const combinado =
+    puntaje360 * PESO_360_EN_DESEMPENO + cumplimientoIndicadores * PESO_INDICADORES_EN_DESEMPENO;
+  return Math.round(combinado * 100) / 100;
+}
+
+// Junta el cálculo completo (360° + indicadores esenciales + potencial + cuadrante)
+// que repiten todas las vistas del módulo, para no duplicar la lógica en cada página.
+export function construirResultadoBase360(
+  evaluaciones: Evaluacion360[],
+  calificacionesIndicadores: number[],
+): {
+  puntajesPorCompetencia: Record<CompetenciaKey, number>;
+  puntaje360: number;
+  cumplimientoIndicadores: number | null;
+  puntajeDesempenoFinal: number;
+  nivelDesempeno: NivelDesempeno;
+  colorDesempeno: string;
+  puntajePotencial: number;
+  nivelPotencial: NivelPotencial;
+  cuadrante: number;
+  nombreCuadrante: string;
+  accionCuadrante: string;
+  colorCuadrante: string;
+  brechas: ReturnType<typeof calcularBrechas>;
+} {
+  const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evaluaciones);
+  const jefeEv = evaluaciones.find((e) => e.fuente === 'jefe');
+  const { puntaje: puntajePotencial, nivel: nivelPotencial } = jefeEv?.potencial
+    ? calcularPotencial(jefeEv.potencial)
+    : { puntaje: 0, nivel: 'MEDIO' as NivelPotencial };
+
+  const cumplimientoIndicadores = calcularCumplimientoIndicadores(calificacionesIndicadores);
+  const puntajeDesempenoFinal = calcularDesempenoFinal(puntaje360, cumplimientoIndicadores);
+  const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntajeDesempenoFinal);
+  const cuadranteInfo = determinarCuadrante(nivelDesempeno, nivelPotencial);
+  const brechas = calcularBrechas(puntajesPorCompetencia);
+
+  return {
+    puntajesPorCompetencia,
+    puntaje360,
+    cumplimientoIndicadores,
+    puntajeDesempenoFinal,
+    nivelDesempeno,
+    colorDesempeno,
+    puntajePotencial,
+    nivelPotencial,
+    cuadrante: cuadranteInfo.numero,
+    nombreCuadrante: cuadranteInfo.nombre,
+    accionCuadrante: cuadranteInfo.accion,
+    colorCuadrante: cuadranteInfo.colorFondo,
+    brechas,
+  };
 }
 
 export function calcularBrechas(

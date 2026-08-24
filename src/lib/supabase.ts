@@ -235,6 +235,18 @@ export async function crear360Evaluado(
   return { ...row, empresa: data.empresa } as Evaluado360;
 }
 
+export async function eliminar360Evaluado(id: string): Promise<void> {
+  // Se borra explícito en cada tabla relacionada (en vez de confiar en
+  // cascade a nivel de FK) para no dejar filas huérfanas si alguna tabla
+  // no tiene el "on delete cascade" configurado.
+  await supabase.from('indicadores_resultado_360').delete().eq('evaluado_id', id);
+  await supabase.from('pdi_360').delete().eq('evaluado_id', id);
+  await supabase.from('tokens_360').delete().eq('evaluado_id', id);
+  await supabase.from('evaluaciones_360').delete().eq('evaluado_id', id);
+  const { error } = await supabase.from('evaluados_360').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 export async function obtener360Evaluado(id: string): Promise<Evaluado360> {
   const { data, error } = await supabase
     .from('evaluados_360')
@@ -353,6 +365,59 @@ export async function listarTokens360(
 
 // El flujo público de completar un token 360° vive en /api/token/360/[token]
 // (server-side, con service_role) — ver src/app/api/token/360/[token]/route.ts
+
+// ── Indicadores esenciales del Manual de Puestos (Desempeño = 360° 60% + indicadores 40%) ──
+
+import type { IndicadorEsencial, IndicadorResultado360 } from './360-types';
+export type { IndicadorEsencial, IndicadorResultado360 };
+
+export interface PuestoResumen {
+  id: string;
+  nombre_puesto: string;
+  area: string;
+}
+
+export async function listarPuestosPorEmpresa(empresaId: string): Promise<PuestoResumen[]> {
+  const { data, error } = await supabase
+    .from('puestos')
+    .select('id, nombre_puesto, area')
+    .eq('empresa_id', empresaId)
+    .order('nombre_puesto');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PuestoResumen[];
+}
+
+export async function listarIndicadoresEsencialesDePuesto(puestoId: string): Promise<IndicadorEsencial[]> {
+  const { data, error } = await supabase
+    .from('indicadores_puesto')
+    .select('id, indicador, formula, meta, actividad:actividades_puesto!actividad_esencial_id(es_esencial)')
+    .eq('puesto_id', puestoId);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as Array<IndicadorEsencial & { actividad: { es_esencial: boolean } | null }>)
+    .filter((row) => row.actividad?.es_esencial === true)
+    .map(({ id, indicador, formula, meta }) => ({ id, indicador, formula, meta }));
+}
+
+export async function listarIndicadoresResultado360(
+  evaluadoId: string,
+  periodo: string,
+): Promise<IndicadorResultado360[]> {
+  const { data, error } = await supabase
+    .from('indicadores_resultado_360')
+    .select('*')
+    .eq('evaluado_id', evaluadoId)
+    .eq('periodo', periodo);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as IndicadorResultado360[];
+}
+
+export async function listarTodasIndicadoresResultado360(): Promise<IndicadorResultado360[]> {
+  const { data, error } = await supabase
+    .from('indicadores_resultado_360')
+    .select('*');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as IndicadorResultado360[];
+}
 
 // ── Panel de clientes: empresas, módulos activos, personas ─────────────────
 

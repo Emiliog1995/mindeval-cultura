@@ -19,7 +19,8 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       const { default: autoTable } = await import("jspdf-autotable");
 
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const { evaluado, periodo, puntaje360, nivelDesempeno, puntajePotencial,
+      const { evaluado, periodo, puntaje360, cumplimientoIndicadores, puntajeDesempenoFinal,
+              nivelDesempeno, puntajePotencial,
               nivelPotencial, nombreCuadrante, accionCuadrante,
               brechas, pdi } = resultado;
 
@@ -52,46 +53,53 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
 
       // KPI cards (text-based)
       doc.setFillColor(240, 244, 248);
-      doc.roundedRect(14, 58, 85, 22, 3, 3, "F");
-      doc.roundedRect(111, 58, 85, 22, 3, 3, "F");
+      doc.roundedRect(14, 58, 85, 26, 3, 3, "F");
+      doc.roundedRect(111, 58, 85, 26, 3, 3, "F");
 
       doc.setTextColor(...PRIMARY);
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text(puntaje360.toFixed(2), 56, 70, { align: "center" });
+      doc.text(puntajeDesempenoFinal.toFixed(2), 56, 70, { align: "center" });
       doc.text(puntajePotencial.toFixed(2), 153, 70, { align: "center" });
 
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(100, 116, 139);
-      doc.text(`Puntaje 360° — ${nivelDesempeno}`, 56, 76, { align: "center" });
+      doc.text(`Desempeño final — ${nivelDesempeno}`, 56, 76, { align: "center" });
       doc.text(`Potencial — ${nivelPotencial}`, 153, 76, { align: "center" });
+      doc.setFontSize(7);
+      doc.text(
+        cumplimientoIndicadores !== null
+          ? `360°: ${puntaje360.toFixed(2)} (60%)  ·  Indicadores esenciales: ${cumplimientoIndicadores.toFixed(2)} (40%)`
+          : `360°: ${puntaje360.toFixed(2)} (sin indicadores esenciales vinculados)`,
+        56, 81, { align: "center" },
+      );
 
       // Nine Box position
       doc.setFillColor(...GOLD);
-      doc.roundedRect(14, 84, 182, 14, 3, 3, "F");
+      doc.roundedRect(14, 88, 182, 14, 3, 3, "F");
       doc.setTextColor(...PRIMARY);
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
-      doc.text(`Nine Box: Cuadrante ${resultado.cuadrante} — ${nombreCuadrante}`, 105, 92, { align: "center" });
+      doc.text(`Nine Box: Cuadrante ${resultado.cuadrante} — ${nombreCuadrante}`, 105, 96, { align: "center" });
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.text(`Acción recomendada: ${accionCuadrante}`, 105, 96, { align: "center" });
+      doc.text(`Acción recomendada: ${accionCuadrante}`, 105, 100, { align: "center" });
 
       // Intenta captura del radar
-      let yAfterRadar = 104;
+      let yAfterRadar = 108;
       if (radarRef.current) {
         try {
           const { default: html2canvas } = await import("html2canvas");
           const canvas = await html2canvas(radarRef.current, { backgroundColor: "#ffffff", scale: 1.5 });
           const imgData = canvas.toDataURL("image/png");
-          doc.addImage(imgData, "PNG", 40, 104, 130, 70);
-          yAfterRadar = 178;
+          doc.addImage(imgData, "PNG", 40, 108, 130, 70);
+          yAfterRadar = 182;
         } catch {
           doc.setFontSize(8);
           doc.setTextColor(150, 150, 150);
-          doc.text("(Ver gráfico radar en la plataforma)", 105, 110, { align: "center" });
-          yAfterRadar = 116;
+          doc.text("(Ver gráfico radar en la plataforma)", 105, 114, { align: "center" });
+          yAfterRadar = 120;
         }
       }
 

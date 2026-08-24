@@ -8,16 +8,12 @@ import {
   listar360Evaluaciones,
   obtener360Pdi,
   listarTokens360PorEvaluado,
+  listarIndicadoresEsencialesDePuesto,
+  listarIndicadoresResultado360,
   type Pdi360,
   type Token360,
 } from "@/lib/supabase";
-import {
-  calcularPuntaje360,
-  calcularPotencial,
-  determinarCuadrante,
-  clasificarNivelDesempeno,
-  calcularBrechas,
-} from "@/lib/360-scoring";
+import { construirResultadoBase360 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import { COMPETENCIAS_360, FUENTE_LABELS } from "@/lib/360-types";
 import RadarChart360 from "@/components/360/RadarChart360";
@@ -56,31 +52,29 @@ export default function EvaluadoIndividualPage() {
           return;
         }
 
-        const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evaluaciones);
-        const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntaje360);
-        const jefeEv = evaluaciones.find((e) => e.fuente === "jefe");
-        const { puntaje: puntajePotencial, nivel: nivelPotencial } = jefeEv?.potencial
-          ? calcularPotencial(jefeEv.potencial)
-          : { puntaje: 0, nivel: "MEDIO" as const };
-        const cuadranteInfo = determinarCuadrante(nivelDesempeno, nivelPotencial);
-        const brechas = calcularBrechas(puntajesPorCompetencia);
         const periodo = evaluaciones[0]?.periodo ?? "";
-        const pdi = await obtener360Pdi(id, periodo);
+
+        const [indicadoresDefinidos, resultadosIndicadores, pdi] = await Promise.all([
+          evaluado.puesto_id ? listarIndicadoresEsencialesDePuesto(evaluado.puesto_id) : Promise.resolve([]),
+          listarIndicadoresResultado360(id, periodo),
+          obtener360Pdi(id, periodo),
+        ]);
+
+        const indicadoresEsenciales = indicadoresDefinidos.map((def) => ({
+          ...def,
+          calificacion: resultadosIndicadores.find((r) => r.indicador_puesto_id === def.id)?.calificacion ?? null,
+        }));
+
+        const base = construirResultadoBase360(
+          evaluaciones,
+          resultadosIndicadores.map((r) => r.calificacion),
+        );
 
         setResultado({
           evaluado,
           periodo,
-          puntaje360,
-          nivelDesempeno,
-          colorDesempeno,
-          puntajePotencial,
-          nivelPotencial,
-          cuadrante: cuadranteInfo.numero,
-          nombreCuadrante: cuadranteInfo.nombre,
-          accionCuadrante: cuadranteInfo.accion,
-          colorCuadrante: cuadranteInfo.colorFondo,
-          puntajesPorCompetencia,
-          brechas,
+          ...base,
+          indicadoresEsenciales,
           evaluaciones,
           pdi: pdi ?? undefined,
         });
@@ -164,7 +158,8 @@ export default function EvaluadoIndividualPage() {
 
   const { evaluado, periodo, puntaje360, nivelDesempeno, colorDesempeno,
           puntajePotencial, nivelPotencial, cuadrante, nombreCuadrante,
-          accionCuadrante, colorCuadrante, puntajesPorCompetencia, brechas } = resultado;
+          accionCuadrante, colorCuadrante, puntajesPorCompetencia, brechas,
+          cumplimientoIndicadores, puntajeDesempenoFinal, indicadoresEsenciales } = resultado;
 
   const radarData = COMPETENCIAS_360.map((c) => ({
     competencia: c.label,
@@ -175,7 +170,7 @@ export default function EvaluadoIndividualPage() {
   const nineBoxData = [{
     nombre: evaluado.nombre,
     cuadrante,
-    puntaje360,
+    puntaje360: puntajeDesempenoFinal,
     potencial: puntajePotencial,
   }];
 
@@ -218,7 +213,7 @@ export default function EvaluadoIndividualPage() {
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Puntaje 360°", value: puntaje360.toFixed(2), color: colorDesempeno },
+            { label: "Desempeño final", value: puntajeDesempenoFinal.toFixed(2), color: colorDesempeno },
             { label: "Nivel desempeño", value: nivelDesempeno, color: colorDesempeno },
             { label: "Puntaje potencial", value: puntajePotencial.toFixed(2), color: "#2dd4bf" },
             { label: "Nivel potencial", value: nivelPotencial, color: "#2dd4bf" },
@@ -229,6 +224,37 @@ export default function EvaluadoIndividualPage() {
             </div>
           ))}
         </div>
+
+        {/* Desglose del Desempeño final */}
+        <div className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50] flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+          <span className="text-gray-400">
+            Desempeño final = 360° <span className="text-white font-semibold">{puntaje360.toFixed(2)}</span> × 60%
+            {cumplimientoIndicadores !== null ? (
+              <> + Indicadores esenciales <span className="text-white font-semibold">{cumplimientoIndicadores.toFixed(2)}</span> × 40%</>
+            ) : (
+              <> (sin puesto vinculado o sin indicadores calificados aún — se usa 100% el 360°)</>
+            )}
+          </span>
+        </div>
+
+        {indicadoresEsenciales.length > 0 && (
+          <div className="bg-[#1e2a42] rounded-xl p-5 border border-[#2d3a50]">
+            <h2 className="text-white font-semibold mb-3 text-sm">Indicadores esenciales del puesto</h2>
+            <div className="space-y-2">
+              {indicadoresEsenciales.map((ind) => (
+                <div key={ind.id} className="flex items-center justify-between gap-3 bg-[#162032] rounded-lg px-3 py-2">
+                  <div>
+                    <p className="text-white text-xs font-medium">{ind.indicador}</p>
+                    <p className="text-[10px] text-gray-500">Meta: {ind.meta}</p>
+                  </div>
+                  <span className="text-sm font-bold text-[#10b981] shrink-0">
+                    {ind.calificacion !== null ? ind.calificacion.toFixed(1) : "— pendiente"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Cuadrante Nine Box */}
         <div
