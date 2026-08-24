@@ -243,7 +243,7 @@ export default function Portal() {
         </Link>
 
         {/* Consultor */}
-        <Link href="/admin" className="group block">
+        <Link href="/dashboard" className="group block">
           <div
             className="rounded-2xl p-8 text-center transition-all duration-200 group-hover:scale-105 group-hover:shadow-2xl cursor-pointer h-full"
             style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)" }}

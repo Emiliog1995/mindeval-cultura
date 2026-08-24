@@ -221,13 +221,18 @@ export async function listar360Evaluados(): Promise<Evaluado360[]> {
 export async function crear360Evaluado(
   data: Omit<Evaluado360, 'id' | 'created_at'>,
 ): Promise<Evaluado360> {
+  // 'empresa' es solo un campo de conveniencia en el tipo — la tabla real
+  // no tiene esa columna, solo 'empresa_id'. Se insertaba igual y tumbaba
+  // el guardado con "Could not find the 'empresa' column" en cuanto alguien
+  // la mandaba con valor.
+  const { empresa: _empresa, ...dataParaInsertar } = data;
   const { data: row, error } = await supabase
     .from('evaluados_360')
-    .insert(data)
+    .insert(dataParaInsertar)
     .select('*')
     .single();
   if (error) throw new Error(error.message);
-  return row as Evaluado360;
+  return { ...row, empresa: data.empresa } as Evaluado360;
 }
 
 export async function obtener360Evaluado(id: string): Promise<Evaluado360> {
