@@ -22,7 +22,7 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       const { evaluado, periodo, puntaje360, cumplimientoIndicadores, puntajeDesempenoFinal,
               nivelDesempeno, puntajePotencial,
               nivelPotencial, nombreCuadrante, accionCuadrante,
-              brechas, pdi } = resultado;
+              brechas, pdi, indicadoresEsenciales } = resultado;
 
       const PRIMARY = [26, 32, 53] as [number, number, number];
       const GOLD    = [201, 168, 76] as [number, number, number];
@@ -125,6 +125,24 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
           }
         },
       });
+
+      // Indicadores esenciales del puesto (detalle, si hay puesto vinculado)
+      if (indicadoresEsenciales.length > 0) {
+        const finalYBrechas = (doc as typeof doc & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? yAfterRadar + 40;
+        autoTable(doc, {
+          startY: finalYBrechas + 8,
+          head: [["Indicador esencial", "Meta", "Calificación (1-5)"]],
+          body: indicadoresEsenciales.map((ind) => [
+            ind.indicador,
+            ind.meta,
+            ind.calificacion !== null ? ind.calificacion.toFixed(1) : "Pendiente",
+          ]),
+          headStyles: { fillColor: PRIMARY, textColor: GOLD, fontStyle: "bold", fontSize: 9 },
+          bodyStyles: { fontSize: 8 },
+          alternateRowStyles: { fillColor: [245, 247, 250] },
+          columnStyles: { 2: { fontStyle: "bold", halign: "center" } },
+        });
+      }
 
       // PDI
       if (pdi) {
