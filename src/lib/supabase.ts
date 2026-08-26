@@ -584,3 +584,39 @@ export async function listarPersonasPorEmpresa(empresaId: string): Promise<Perso
   if (error) throw new Error(error.message);
   return (data ?? []) as Persona[];
 }
+
+export interface PersonaConPuesto {
+  id: string;
+  nombre: string;
+  email: string | null;
+  puesto_id: string | null;
+  cargo: string | null;
+  departamento: string | null;
+  jefe: string | null;
+}
+
+interface PersonaConPuestoRow {
+  id: string;
+  nombre: string;
+  email: string | null;
+  puesto_id: string | null;
+  puestos: { nombre_puesto: string; area: string; supervisado_por: string | null } | null;
+}
+
+export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Promise<PersonaConPuesto[]> {
+  const { data, error } = await supabase
+    .from("personas")
+    .select("id, nombre, email, puesto_id, puestos(nombre_puesto, area, supervisado_por)")
+    .eq("empresa_id", empresaId)
+    .order("nombre");
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as PersonaConPuestoRow[]).map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    email: p.email,
+    puesto_id: p.puesto_id,
+    cargo: p.puestos?.nombre_puesto ?? null,
+    departamento: p.puestos?.area ?? null,
+    jefe: p.puestos?.supervisado_por ?? null,
+  }));
+}

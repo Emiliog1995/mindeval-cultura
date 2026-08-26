@@ -8,8 +8,8 @@ import {
 } from "recharts";
 import {
   listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion,
-  crear360Evaluado, crearTokens360, listarEmpresas,
-  type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360, type Empresa,
+  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa,
+  type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360, type Empresa, type PersonaConPuesto,
 } from "@/lib/supabase";
 import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
 import { getLevelColor } from "@/lib/scoring";
@@ -65,6 +65,8 @@ function DashboardInner() {
   // ─── 360° (generación de links desde el dashboard) ─────────────────────
   const [modo360, setModo360] = useState<'individual' | 'masivo'>("individual");
   const [datos360, setDatos360] = useState({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+  const [personasEmpresa, setPersonasEmpresa] = useState<PersonaConPuesto[]>([]);
+  const [personaId, setPersonaId] = useState("");
   const [textoMasivo360, setTextoMasivo360] = useState("");
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
@@ -92,6 +94,32 @@ function DashboardInner() {
     listarSesiones().then(setSesiones).catch(() => {});
     listarEmpresas().then(setEmpresas).catch(() => {});
   }, [verificando]);
+
+  useEffect(() => {
+    setPersonaId("");
+    if (!nuevaEmpresaId) {
+      setPersonasEmpresa([]);
+      return;
+    }
+    listarPersonasConPuestoPorEmpresa(nuevaEmpresaId).then(setPersonasEmpresa).catch(() => setPersonasEmpresa([]));
+  }, [nuevaEmpresaId]);
+
+  function handleSeleccionarPersona(id: string) {
+    setPersonaId(id);
+    if (id === "" || id === "manual") {
+      setDatos360((prev) => ({ ...prev, nombre: "", cargo: "", departamento: "", jefe: "" }));
+      return;
+    }
+    const p = personasEmpresa.find((x) => x.id === id);
+    if (!p) return;
+    setDatos360((prev) => ({
+      ...prev,
+      nombre: p.nombre,
+      cargo: p.cargo ?? "",
+      departamento: p.departamento ?? "",
+      jefe: p.jefe ?? "",
+    }));
+  }
 
   async function handleCrearSesion() {
     if (nuevaTipo === "360") return handleGenerar360();
@@ -128,6 +156,7 @@ function DashboardInner() {
       setEvaluados360((prev) => [{ evaluado, empresa: nombreEmpresaSeleccionada, links }, ...prev]);
       setExpandido360(evaluado.id);
       setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+      setPersonaId("");
     } catch (e) {
       setError360(e instanceof Error ? e.message : "Error al generar los links de evaluación 360°");
     } finally {
@@ -798,15 +827,40 @@ function DashboardInner() {
                 {nuevaTipo === "360" && modo360 === "individual" && (
                   <>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre del evaluado *</label>
-                      <input
-                        type="text"
-                        value={datos360.nombre}
-                        onChange={(e) => setDatos360((p) => ({ ...p, nombre: e.target.value }))}
-                        placeholder="Nombre completo"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-48 text-gray-900"
-                      />
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Evaluado *</label>
+                      <select
+                        value={personaId}
+                        onChange={(e) => handleSeleccionarPersona(e.target.value)}
+                        disabled={!nuevaEmpresaId}
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-56 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                      >
+                        <option value="">
+                          {!nuevaEmpresaId
+                            ? "Elige una empresa arriba"
+                            : personasEmpresa.length
+                            ? "Selecciona de la nómina..."
+                            : "Sin nómina cargada"}
+                        </option>
+                        {personasEmpresa.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}{p.cargo ? ` — ${p.cargo}` : ""}
+                          </option>
+                        ))}
+                        <option value="manual">+ Escribir manualmente</option>
+                      </select>
                     </div>
+                    {personaId === "manual" && (
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Nombre completo *</label>
+                        <input
+                          type="text"
+                          value={datos360.nombre}
+                          onChange={(e) => setDatos360((p) => ({ ...p, nombre: e.target.value }))}
+                          placeholder="Nombre completo"
+                          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-48 text-gray-900"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Cargo *</label>
                       <input
