@@ -250,12 +250,20 @@ export default function PostularPage() {
             </span>
           </label>
 
+          {enviando && (
+            <div style={{ background: "#FFF8E5", borderLeft: "3px solid #F5B800", borderRadius: 6, padding: "10px 12px" }}>
+              <p style={{ fontSize: 11.5, color: NAVY, margin: 0, lineHeight: 1.6 }}>
+                Estamos subiendo tu hoja de vida, puede tardar unos 30 segundos. No cierres esta pantalla ni vuelvas a hacer clic en enviar.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={enviar}
             disabled={enviando || !consentimiento}
             style={{ background: GOLD, color: NAVY, border: "none", padding: "12px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: enviando || !consentimiento ? "not-allowed" : "pointer", opacity: enviando || !consentimiento ? 0.6 : 1, marginTop: 4 }}
           >
-            {enviando ? "Enviando…" : "Enviar postulación"}
+            {enviando ? "Enviando, espera unos segundos…" : "Enviar postulación"}
           </button>
         </div>
       </div>
