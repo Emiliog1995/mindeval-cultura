@@ -27,7 +27,7 @@ export default function EditarPuesto() {
   const [paso, setPaso] = useState(1)
 
   const [datos, setDatos] = useState({
-    nombre_puesto: '', area: '', supervisado_por: '', supervisa_a: '', mision: '', fecha: '',
+    nombre_puesto: '', area: '', supervisado_por: '', supervisa_a: '', mision: '', fecha: '', tiene_cliente_interno: false,
   })
   const [instruccion, setInstruccion] = useState({
     nivel_educativo: '', titulo: '', area_especializacion: '',
@@ -69,6 +69,7 @@ export default function EditarPuesto() {
         supervisa_a: p.supervisa_a ?? '',
         mision: p.mision ?? '',
         fecha: p.fecha ?? '',
+        tiene_cliente_interno: p.tiene_cliente_interno ?? false,
       })
       if (inst) {
         setInstruccionId(inst.id)
@@ -247,6 +248,7 @@ export default function EditarPuesto() {
       supervisa_a: datos.supervisa_a,
       mision: datos.mision,
       fecha: datos.fecha,
+      tiene_cliente_interno: datos.tiene_cliente_interno,
     }).eq('id', id)
 
     const instData = {
@@ -401,6 +403,10 @@ export default function EditarPuesto() {
                     <input value={datos.supervisa_a} onChange={e => setDatos(d => ({ ...d, supervisa_a: e.target.value }))} style={inputStyle} placeholder='Cargos bajo su supervisión' />
                   </div>
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={datos.tiene_cliente_interno} onChange={e => setDatos(d => ({ ...d, tiene_cliente_interno: e.target.checked }))} />
+                  🤝 Este puesto tiene cliente interno (otra área/persona a la que sirve directamente)
+                </label>
               </div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>

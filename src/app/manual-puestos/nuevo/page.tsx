@@ -42,7 +42,7 @@ function NuevoPuestoInner() {
 
   const [datos, setDatos] = useState({
     empresa_id: '', nombre_puesto: '', area: '', supervisado_por: '', supervisa_a: '',
-    mision: '', fecha: new Date().toISOString().slice(0, 10),
+    mision: '', fecha: new Date().toISOString().slice(0, 10), tiene_cliente_interno: false,
   })
 
   const [actividades, setActividades] = useState<Actividad[]>(
@@ -277,6 +277,7 @@ function NuevoPuestoInner() {
         supervisa_a: datos.supervisa_a || null,
         mision: datos.mision || null,
         fecha: datos.fecha,
+        tiene_cliente_interno: datos.tiene_cliente_interno,
       }).select().single()
       if (pErr || !puestoData) throw pErr
 
@@ -493,6 +494,10 @@ function NuevoPuestoInner() {
                   <input value={datos.supervisa_a} onChange={e => setDatos(d => ({ ...d, supervisa_a: e.target.value }))} style={inputStyle} placeholder='Cargos bajo su supervisión' />
                 </div>
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, fontSize: 13, color: '#374151', cursor: 'pointer' }}>
+                <input type='checkbox' checked={datos.tiene_cliente_interno} onChange={e => setDatos(d => ({ ...d, tiene_cliente_interno: e.target.checked }))} />
+                🤝 Este puesto tiene cliente interno (otra área/persona a la que sirve directamente)
+              </label>
             </div>
 
             {/* Misión */}

@@ -593,6 +593,8 @@ export interface PersonaConPuesto {
   cargo: string | null;
   departamento: string | null;
   jefe: string | null;
+  supervisaA: string | null;
+  tieneClienteInterno: boolean;
 }
 
 interface PersonaConPuestoRow {
@@ -600,13 +602,19 @@ interface PersonaConPuestoRow {
   nombre: string;
   email: string | null;
   puesto_id: string | null;
-  puestos: { nombre_puesto: string; area: string; supervisado_por: string | null } | null;
+  puestos: {
+    nombre_puesto: string;
+    area: string;
+    supervisado_por: string | null;
+    supervisa_a: string | null;
+    tiene_cliente_interno: boolean | null;
+  } | null;
 }
 
 export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Promise<PersonaConPuesto[]> {
   const { data, error } = await supabase
     .from("personas")
-    .select("id, nombre, email, puesto_id, puestos(nombre_puesto, area, supervisado_por)")
+    .select("id, nombre, email, puesto_id, puestos(nombre_puesto, area, supervisado_por, supervisa_a, tiene_cliente_interno)")
     .eq("empresa_id", empresaId)
     .order("nombre");
   if (error) throw new Error(error.message);
@@ -618,5 +626,42 @@ export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Prom
     cargo: p.puestos?.nombre_puesto ?? null,
     departamento: p.puestos?.area ?? null,
     jefe: p.puestos?.supervisado_por ?? null,
+    supervisaA: p.puestos?.supervisa_a ?? null,
+    tieneClienteInterno: p.puestos?.tiene_cliente_interno ?? false,
   }));
+}
+
+const SENTINELS_SIN_VALOR = new Set(["", "ninguno", "ninguna", "n/a", "no aplica", "no tiene", "-"]);
+
+function normalizarTexto(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function tieneValorReal(s: string | null | undefined): boolean {
+  return !SENTINELS_SIN_VALOR.has(normalizarTexto(s));
+}
+
+export function calcularFuentesAplicables(
+  persona: Pick<PersonaConPuesto, "id" | "jefe" | "supervisaA" | "tieneClienteInterno">,
+  todasLasPersonas: Pick<PersonaConPuesto, "id" | "jefe">[],
+): FuenteEvaluacion[] {
+  const fuentes: FuenteEvaluacion[] = ["autoevaluacion"];
+
+  if (tieneValorReal(persona.jefe)) fuentes.push("jefe");
+  if (tieneValorReal(persona.supervisaA)) fuentes.push("colaborador");
+
+  const miJefeNorm = normalizarTexto(persona.jefe);
+  const hayPar =
+    tieneValorReal(persona.jefe) &&
+    todasLasPersonas.some((p) => p.id !== persona.id && normalizarTexto(p.jefe) === miJefeNorm);
+  if (hayPar) fuentes.push("par");
+
+  if (persona.tieneClienteInterno) fuentes.push("cliente_interno");
+
+  return fuentes;
 }

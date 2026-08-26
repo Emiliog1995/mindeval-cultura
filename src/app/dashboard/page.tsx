@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import {
   listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion,
-  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa,
+  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa, calcularFuentesAplicables,
   type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360, type Empresa, type PersonaConPuesto,
 } from "@/lib/supabase";
 import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
@@ -67,6 +67,8 @@ function DashboardInner() {
   const [datos360, setDatos360] = useState({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "", puestoId: "" });
   const [personasEmpresa, setPersonasEmpresa] = useState<PersonaConPuesto[]>([]);
   const [personaId, setPersonaId] = useState("");
+  const FUENTES_FIJAS: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
+  const [fuentesAplicables, setFuentesAplicables] = useState<FuenteEvaluacion[]>(FUENTES_FIJAS);
   const [textoMasivo360, setTextoMasivo360] = useState("");
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
@@ -97,17 +99,20 @@ function DashboardInner() {
 
   useEffect(() => {
     setPersonaId("");
+    setFuentesAplicables(FUENTES_FIJAS);
     if (!nuevaEmpresaId) {
       setPersonasEmpresa([]);
       return;
     }
     listarPersonasConPuestoPorEmpresa(nuevaEmpresaId).then(setPersonasEmpresa).catch(() => setPersonasEmpresa([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nuevaEmpresaId]);
 
   function handleSeleccionarPersona(id: string) {
     setPersonaId(id);
     if (id === "" || id === "manual") {
       setDatos360((prev) => ({ ...prev, nombre: "", cargo: "", departamento: "", jefe: "", puestoId: "" }));
+      setFuentesAplicables(FUENTES_FIJAS);
       return;
     }
     const p = personasEmpresa.find((x) => x.id === id);
@@ -120,6 +125,7 @@ function DashboardInner() {
       jefe: p.jefe ?? "",
       puestoId: p.puesto_id ?? "",
     }));
+    setFuentesAplicables(calcularFuentesAplicables(p, personasEmpresa));
   }
 
   async function handleCrearSesion() {
@@ -150,8 +156,7 @@ function DashboardInner() {
         puesto_id: datos360.puestoId || undefined,
         jefe: datos360.jefe || undefined,
       });
-      const fuentes: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
-      const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
+      const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentesAplicables);
       const base = typeof window !== "undefined" ? window.location.origin : "";
       const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
 
@@ -159,6 +164,7 @@ function DashboardInner() {
       setExpandido360(evaluado.id);
       setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "", puestoId: "" });
       setPersonaId("");
+      setFuentesAplicables(FUENTES_FIJAS);
     } catch (e) {
       setError360(e instanceof Error ? e.message : "Error al generar los links de evaluación 360°");
     } finally {
@@ -964,11 +970,15 @@ function DashboardInner() {
               {nuevaTipo === "360" && error360 && (
                 <p className="text-xs text-red-600 mt-3">{error360}</p>
               )}
-              {nuevaTipo === "360" && (
+              {nuevaTipo === "360" && modo360 === "individual" && personaId && personaId !== "manual" ? (
                 <p className="text-xs text-gray-400 mt-3">
-                  Se generarán 5 links independientes por persona (autoevaluación, jefe, par, colaborador, cliente interno) para que cada evaluador responda sin ver las respuestas de los demás.
+                  Se generarán {fuentesAplicables.length} link(s) para este puesto según el organigrama: {fuentesAplicables.map((f) => FUENTE_LABELS[f]).join(", ")}.
                 </p>
-              )}
+              ) : nuevaTipo === "360" ? (
+                <p className="text-xs text-gray-400 mt-3">
+                  Se generará un link por cada rol aplicable (autoevaluación, jefe, par, colaborador, cliente interno) para que cada evaluador responda sin ver las respuestas de los demás. Al elegir a alguien de la nómina, el sistema ajusta automáticamente cuáles aplican según su puesto.
+                </p>
+              ) : null}
             </div>
 
             {/* Evaluaciones 360° generadas */}
