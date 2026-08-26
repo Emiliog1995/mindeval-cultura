@@ -60,6 +60,12 @@ export interface Vacante {
   corte_tecnica: number;
   modo_tecnica: "caso_abierto" | "banco";
   tests_psicometricos: ("16pf5" | "kostick" | "disc" | "valanti")[];
+  // Caso especial: opciones de sede y filtro de salario en el formulario
+  // público. Nulos en la gran mayoría de vacantes — solo se configuran a
+  // mano (vía SQL) cuando un cliente puntual lo pide, como Fundación
+  // Unbound Ecuador (dos sedes con vacantes separadas y un tope salarial).
+  sedes?: string[] | null;
+  salario_pregunta?: { monto: number } | null;
   created_at: string;
 }
 
@@ -84,6 +90,8 @@ export interface Candidato {
   educacion?: string | null;
   cv_texto?: string | null;
   cv_url?: string | null;
+  sede?: string | null;
+  salario_acuerdo?: boolean | null;
   etapa_actual: EtapaCandidato;
   estado: "activo" | "descartado" | "contratado";
   motivo_descarte?: string | null;

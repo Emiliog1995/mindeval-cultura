@@ -11,7 +11,13 @@ const inputStyle: React.CSSProperties = { padding: "10px 12px", border: "1.5px s
 
 export default function PostularPage() {
   const params = useParams<{ vacanteId: string }>();
-  const [vacante, setVacante] = useState<{ titulo: string; empresa: string; acepta_postulaciones: boolean } | null>(null);
+  const [vacante, setVacante] = useState<{
+    titulo: string;
+    empresa: string;
+    acepta_postulaciones: boolean;
+    sedes?: string[] | null;
+    salario_pregunta?: { monto: number } | null;
+  } | null>(null);
   const [cargando, setCargando] = useState(true);
 
   const [nombre, setNombre] = useState("");
@@ -22,6 +28,8 @@ export default function PostularPage() {
   const [anios, setAnios] = useState<number | "">("");
   const [educacion, setEducacion] = useState("");
   const [archivo, setArchivo] = useState<File | null>(null);
+  const [sede, setSede] = useState("");
+  const [salarioAcuerdo, setSalarioAcuerdo] = useState<boolean | null>(null);
   const [consentimiento, setConsentimiento] = useState(false);
 
   const [enviando, setEnviando] = useState(false);
@@ -44,6 +52,14 @@ export default function PostularPage() {
     }
     if (!/^\d{10}$/.test(cedula)) {
       setError("Escribe tu número de cédula (10 dígitos).");
+      return;
+    }
+    if (vacante?.sedes && vacante.sedes.length > 0 && !sede) {
+      setError("Selecciona la sede a la que estás postulando.");
+      return;
+    }
+    if (vacante?.salario_pregunta && salarioAcuerdo === null) {
+      setError("Indica si estás de acuerdo con el salario ofertado.");
       return;
     }
     if (!consentimiento) {
@@ -88,6 +104,8 @@ export default function PostularPage() {
           anios_experiencia: anios !== "" ? anios : undefined,
           educacion: educacion || undefined,
           cv_path: cvPath,
+          sede: sede || undefined,
+          salario_acuerdo: salarioAcuerdo === null ? undefined : salarioAcuerdo,
         }),
       });
       const data = await res.json();
@@ -163,6 +181,20 @@ export default function PostularPage() {
           </div>
           <input style={inputStyle} placeholder="Educación (ej. Ing. Comercial - PUCE)" value={educacion} onChange={(e) => setEducacion(e.target.value)} />
 
+          {vacante.sedes && vacante.sedes.length > 0 && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 6 }}>Sede a la que aplicas *</label>
+              <select style={inputStyle} value={sede} onChange={(e) => setSede(e.target.value)}>
+                <option value="">Selecciona una opción</option>
+                {vacante.sedes.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 6 }}>
               Hoja de vida (PDF o Word) *
@@ -184,6 +216,24 @@ export default function PostularPage() {
               Solo el equipo de {vacante.empresa} y el consultor de MINDTALENT tendrán acceso.
             </p>
           </div>
+          {vacante.salario_pregunta && (
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "block", marginBottom: 6 }}>
+                ¿Estás de acuerdo con un salario de ${vacante.salario_pregunta.monto}? *
+              </label>
+              <div style={{ display: "flex", gap: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="radio" name="salario_acuerdo" checked={salarioAcuerdo === true} onChange={() => setSalarioAcuerdo(true)} style={{ accentColor: GOLD }} />
+                  Sí
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="radio" name="salario_acuerdo" checked={salarioAcuerdo === false} onChange={() => setSalarioAcuerdo(false)} style={{ accentColor: GOLD }} />
+                  No
+                </label>
+              </div>
+            </div>
+          )}
+
           <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
             <input
               type="checkbox"

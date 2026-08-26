@@ -687,7 +687,7 @@ export default function ProcesoVacante() {
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
                   <th style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }} />
-                  {["#", "Candidato", "Teléfono", "% Idoneidad", "Etapa actual", "STEN", "SENESCYT", "Acciones"].map((h) => (
+                  {["#", "Candidato", "Teléfono", "Sede", "% Idoneidad", "Etapa actual", "STEN", "SENESCYT", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>
                       {h}
                     </th>
@@ -717,6 +717,7 @@ export default function ProcesoVacante() {
                         )}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.telefono || "—"}</td>
+                      <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.sede || "—"}</td>
                       <td style={{ padding: "12px 20px" }}>
                         {c.idoneidad !== null ? (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -776,7 +777,7 @@ export default function ProcesoVacante() {
                 })}
                 {candidatos.length === 0 && (
                   <tr>
-                    <td colSpan={9} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
+                    <td colSpan={10} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
                       Sin candidatos todavía. Comparte el link de postulación o añade uno manualmente.
                     </td>
                   </tr>

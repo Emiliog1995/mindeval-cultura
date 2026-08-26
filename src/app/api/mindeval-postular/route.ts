@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
     const aniosRaw = body.anios_experiencia;
     const educacion = (body.educacion as string) || null;
     const cvPath = (body.cv_path as string) || null;
+    const sede = (body.sede as string) || null;
+    const salarioAcuerdo = typeof body.salario_acuerdo === "boolean" ? body.salario_acuerdo : null;
     const consentimientoLopdp = body.consentimiento_lopdp === true;
 
     if (!vacanteId || !nombreCompleto) {
@@ -97,6 +99,8 @@ export async function POST(req: NextRequest) {
         educacion,
         cv_texto: cvTexto || null,
         cv_url: cvPath,
+        sede,
+        salario_acuerdo: salarioAcuerdo,
       })
       .select()
       .single();
@@ -128,6 +132,21 @@ export async function POST(req: NextRequest) {
       } catch {
         // El match con IA es un plus, no un requisito para postular.
       }
+    }
+
+    // 4. Descarte por desacuerdo salarial — corre después (y por fuera) del
+    // match de CV para que siempre gane: un candidato que no acepta el
+    // salario ofertado se descarta sin importar qué tan bien calce su CV.
+    if (salarioAcuerdo === false) {
+      const monto = (vacante as Vacante).salario_pregunta?.monto;
+      await supabaseAdmin
+        .from("mindeval_candidatos")
+        .update({
+          etapa_actual: "descartado",
+          estado: "descartado",
+          motivo_descarte: `No está de acuerdo con el salario ofertado${monto ? ` ($${monto})` : ""}`,
+        })
+        .eq("id", candidato.id);
     }
 
     return NextResponse.json({ ok: true, candidato_id: candidato.id, match_pct: matchPct });
