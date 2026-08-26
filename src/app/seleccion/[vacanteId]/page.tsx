@@ -72,6 +72,7 @@ export default function ProcesoVacante() {
   const [resultadoRecalculo, setResultadoRecalculo] = useState("");
 
   const [cerrandoProceso, setCerrandoProceso] = useState(false);
+  const [descargandoCv, setDescargandoCv] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (verificando) return;
@@ -400,6 +401,24 @@ export default function ProcesoVacante() {
     }
   }
 
+  async function descargarCv(candidatoId: string) {
+    setDescargandoCv((prev) => new Set(prev).add(candidatoId));
+    try {
+      const res = await fetch(`/api/mindeval-cv-descarga/${candidatoId}`, { headers: await authHeaders() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo descargar el CV");
+    } finally {
+      setDescargandoCv((prev) => {
+        const next = new Set(prev);
+        next.delete(candidatoId);
+        return next;
+      });
+    }
+  }
+
   if (verificando || loading) return null;
   if (error || !vacante) {
     return <div style={{ padding: 40, textAlign: "center", color: "#C4402F" }}>{error}</div>;
@@ -668,7 +687,7 @@ export default function ProcesoVacante() {
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
                   <th style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }} />
-                  {["#", "Candidato", "% Idoneidad", "Etapa actual", "STEN", "SENESCYT", "Acciones"].map((h) => (
+                  {["#", "Candidato", "Teléfono", "% Idoneidad", "Etapa actual", "STEN", "SENESCYT", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>
                       {h}
                     </th>
@@ -697,6 +716,7 @@ export default function ProcesoVacante() {
                           </span>
                         )}
                       </td>
+                      <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.telefono || "—"}</td>
                       <td style={{ padding: "12px 20px" }}>
                         {c.idoneidad !== null ? (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -724,19 +744,39 @@ export default function ProcesoVacante() {
                         })()}
                       </td>
                       <td style={{ padding: "12px 20px" }}>
-                        <button
-                          onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${c.id}`)}
-                          style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
-                        >
-                          Ver perfil
-                        </button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${c.id}`)}
+                            style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
+                          >
+                            Ver perfil
+                          </button>
+                          {c.cv_url && (
+                            <button
+                              onClick={() => descargarCv(c.id)}
+                              disabled={descargandoCv.has(c.id)}
+                              style={{
+                                background: "transparent",
+                                color: NAVY,
+                                border: `1px solid ${NAVY}`,
+                                padding: "6px 14px",
+                                borderRadius: 6,
+                                fontSize: 11.5,
+                                cursor: descargandoCv.has(c.id) ? "not-allowed" : "pointer",
+                                opacity: descargandoCv.has(c.id) ? 0.6 : 1,
+                              }}
+                            >
+                              {descargandoCv.has(c.id) ? "…" : "Descargar CV"}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
                 {candidatos.length === 0 && (
                   <tr>
-                    <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
+                    <td colSpan={9} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
                       Sin candidatos todavía. Comparte el link de postulación o añade uno manualmente.
                     </td>
                   </tr>
