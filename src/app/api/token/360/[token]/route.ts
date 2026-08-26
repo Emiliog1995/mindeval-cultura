@@ -21,21 +21,21 @@ export async function GET(
     evaluados_360: { puesto_id?: string | null } | null;
   };
 
-  let indicadoresEsenciales: Array<{ id: string; indicador: string; meta: string }> = [];
+  let indicadoresEsenciales: Array<{ id: string; indicador: string; meta: string; formula: string | null }> = [];
   const esJefe = (tokenRow as { fuente?: string }).fuente === "jefe";
   const puestoId = evaluados_360?.puesto_id;
 
   if (esJefe && puestoId) {
     const { data: indicadores } = await supabaseAdmin
       .from("indicadores_puesto")
-      .select("id, indicador, meta, actividad:actividades_puesto!actividad_esencial_id(es_esencial)")
+      .select("id, indicador, meta, formula, actividad:actividades_puesto!actividad_esencial_id(es_esencial)")
       .eq("puesto_id", puestoId);
 
     indicadoresEsenciales = ((indicadores ?? []) as unknown as Array<{
-      id: string; indicador: string; meta: string; actividad: { es_esencial: boolean } | null;
+      id: string; indicador: string; meta: string; formula: string | null; actividad: { es_esencial: boolean } | null;
     }>)
       .filter((row) => row.actividad?.es_esencial === true)
-      .map(({ id, indicador, meta }) => ({ id, indicador, meta }));
+      .map(({ id, indicador, meta, formula }) => ({ id, indicador, meta, formula }));
   }
 
   return NextResponse.json({ token: tokenRow, evaluado: evaluados_360, indicadoresEsenciales });

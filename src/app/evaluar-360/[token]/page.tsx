@@ -19,6 +19,7 @@ interface IndicadorEsencialForm {
   id: string;
   indicador: string;
   meta: string;
+  formula: string | null;
 }
 
 const ESCALA_INDICADOR = [
@@ -204,6 +205,9 @@ export default function EvaluarToken360() {
             {indicadoresEsenciales.map((ind) => (
               <div key={ind.id} className="space-y-1.5">
                 <p className="text-xs text-gray-300">{ind.indicador}</p>
+                {ind.formula && (
+                  <p className="text-[10px] text-gray-500">Fórmula: {ind.formula}</p>
+                )}
                 <p className="text-[10px] text-gray-500">Meta: {ind.meta}</p>
                 <select
                   value={calificacionesIndicadores[ind.id] ?? 3}
