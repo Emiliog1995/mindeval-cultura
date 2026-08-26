@@ -64,7 +64,7 @@ function DashboardInner() {
 
   // ─── 360° (generación de links desde el dashboard) ─────────────────────
   const [modo360, setModo360] = useState<'individual' | 'masivo'>("individual");
-  const [datos360, setDatos360] = useState({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+  const [datos360, setDatos360] = useState({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "", puestoId: "" });
   const [personasEmpresa, setPersonasEmpresa] = useState<PersonaConPuesto[]>([]);
   const [personaId, setPersonaId] = useState("");
   const [textoMasivo360, setTextoMasivo360] = useState("");
@@ -107,7 +107,7 @@ function DashboardInner() {
   function handleSeleccionarPersona(id: string) {
     setPersonaId(id);
     if (id === "" || id === "manual") {
-      setDatos360((prev) => ({ ...prev, nombre: "", cargo: "", departamento: "", jefe: "" }));
+      setDatos360((prev) => ({ ...prev, nombre: "", cargo: "", departamento: "", jefe: "", puestoId: "" }));
       return;
     }
     const p = personasEmpresa.find((x) => x.id === id);
@@ -118,6 +118,7 @@ function DashboardInner() {
       cargo: p.cargo ?? "",
       departamento: p.departamento ?? "",
       jefe: p.jefe ?? "",
+      puestoId: p.puesto_id ?? "",
     }));
   }
 
@@ -146,6 +147,7 @@ function DashboardInner() {
         departamento: datos360.departamento,
         empresa: nombreEmpresaSeleccionada,
         empresa_id: nuevaEmpresaId || undefined,
+        puesto_id: datos360.puestoId || undefined,
         jefe: datos360.jefe || undefined,
       });
       const fuentes: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
@@ -155,7 +157,7 @@ function DashboardInner() {
 
       setEvaluados360((prev) => [{ evaluado, empresa: nombreEmpresaSeleccionada, links }, ...prev]);
       setExpandido360(evaluado.id);
-      setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "" });
+      setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "", puestoId: "" });
       setPersonaId("");
     } catch (e) {
       setError360(e instanceof Error ? e.message : "Error al generar los links de evaluación 360°");
