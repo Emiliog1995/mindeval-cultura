@@ -20,6 +20,7 @@ import { getClimaLevelColor, type ClimaResult } from "@/lib/clima-scoring";
 import SaludOrganizacionalTab from "@/components/SaludOrganizacionalTab";
 import RadarRiesgoTab from "@/components/RadarRiesgoTab";
 import Eval360DashboardPreview from "@/components/360/Eval360DashboardPreview";
+import PeriodoSelect from "@/components/360/PeriodoSelect";
 
 type Tab = "docs" | "clima" | "salud" | "alertas" | "sesiones" | "eval360";
 const TABS_VALIDOS: Tab[] = ["docs", "clima", "salud", "alertas", "sesiones", "eval360"];
@@ -154,6 +155,7 @@ function DashboardInner() {
         empresa: nombreEmpresaSeleccionada,
         empresa_id: nuevaEmpresaId || undefined,
         puesto_id: datos360.puestoId || undefined,
+        persona_id: personaId && personaId !== "manual" ? personaId : undefined,
         jefe: datos360.jefe || undefined,
       });
       const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentesAplicables);
@@ -393,45 +395,80 @@ function DashboardInner() {
 
   if (verificando) return null;
 
+  const FONT_SYSTEM = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  const EASE_APPLE = "cubic-bezier(0.16, 1, 0.3, 1)";
+  const CARD_SHADOW = "0 1px 2px rgba(10,26,50,0.04), 0 12px 28px -14px rgba(10,26,50,0.14)";
+  const CARD_BORDER = "1px solid #e8ecf2";
+  const KPI_ICONS: Record<string, string> = {
+    "Evaluados (muestra)": "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+    "Total en BD": "M4 7c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zm0 0v10c0 1.66 3.58 3 8 3s8-1.34 8-3V7M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3",
+    "Promedio Global": "M9 17V9m6 8V5M4 21h16M4 17v.01M4 9V21",
+    "Último ingreso": "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  };
+
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
+    <div className="min-h-screen" style={{ background: "#f0f4f8", fontFamily: FONT_SYSTEM }}>
+      <style jsx>{`
+        @keyframes cardIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .card-in { animation: cardIn 0.4s ${EASE_APPLE} both; }
+      `}</style>
 
-      {/* Header */}
-      <header style={{ background: "#0A1A32" }} className="py-4 px-6 shadow-lg">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div>
-            <span style={{ color: "#10b981" }} className="text-xl font-bold tracking-wide">MINDTALENT</span>
-            <p className="text-white text-xs mt-0.5 opacity-70">Dashboard de Consultor</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div>
-              <label className="block text-white opacity-60" style={{ fontSize: 10, fontWeight: 600, marginBottom: 2 }}>Empresa</label>
-              <select
-                value={nuevaEmpresaId}
-                onChange={(e) => setNuevaEmpresaId(e.target.value)}
-                className="rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ background: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.2)" }}
+      {/* Header + navegación — una sola pieza navy, sin la costura tab/contenido de antes */}
+      <header style={{ background: "linear-gradient(160deg, #0A1A32 0%, #14224a 100%)" }} className="pt-5 pb-0 px-6 shadow-lg">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between pb-5">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "rgba(16,185,129,0.18)", border: "1.5px solid rgba(16,185,129,0.35)" }}
               >
-                <option value="" style={{ color: "#111" }}>Todas las empresas</option>
-                {empresas.map((emp) => (
-                  <option key={emp.id} value={emp.id} style={{ color: "#111" }}>{emp.nombre}</option>
-                ))}
-              </select>
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#10b981" opacity="0.3"/>
+                  <path d="M9 12l2 2 4-4" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div>
+                <span style={{ color: "#10b981", letterSpacing: "0.02em" }} className="text-lg font-bold leading-none">MINDTALENT</span>
+                <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>Dashboard de Consultor</p>
+              </div>
             </div>
-            <button
-              onClick={async () => { await cerrarSesion(); router.push("/"); }}
-              className="px-4 py-2 rounded-lg text-sm font-semibold text-white border border-white border-opacity-30 hover:border-opacity-60 transition"
-            >
-              Cerrar sesión
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <select
+                  value={nuevaEmpresaId}
+                  onChange={(e) => setNuevaEmpresaId(e.target.value)}
+                  className="appearance-none rounded-lg pl-3 pr-8 py-2 text-sm font-medium outline-none cursor-pointer"
+                  style={{ background: "rgba(255,255,255,0.08)", color: "white", border: "1px solid rgba(255,255,255,0.14)", colorScheme: "dark", transition: `border-color 200ms ${EASE_APPLE}, background 200ms ${EASE_APPLE}` }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#10b981"; e.currentTarget.style.background = "rgba(255,255,255,0.14)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.14)"; e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+                >
+                  <option value="" style={{ color: "#111" }}>Todas las empresas</option>
+                  {empresas.map((emp) => (
+                    <option key={emp.id} value={emp.id} style={{ color: "#111" }}>{emp.nombre}</option>
+                  ))}
+                </select>
+                <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.5)">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              <button
+                onClick={async () => { await cerrarSesion(); router.push("/"); }}
+                className="px-4 py-2 rounded-lg text-sm font-semibold active:scale-95"
+                style={{ color: "rgba(255,255,255,0.75)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", transition: `background 200ms ${EASE_APPLE}, color 200ms ${EASE_APPLE}, transform 150ms ${EASE_APPLE}` }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "rgba(255,255,255,0.75)"; }}
+              >
+                Cerrar sesión
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
 
-      {/* Tab switcher */}
-      <div style={{ background: "#1E2D5A" }} className="px-6">
-        <div className="max-w-6xl mx-auto flex gap-1 pt-3">
+          {/* Segmented control de navegación */}
+          <div className="flex gap-1 pb-3 overflow-x-auto" style={{ background: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 4, width: "fit-content" }}>
           {(["docs", "clima", "salud", "sesiones", "eval360"] as Tab[]).map((tab) => {
             const labels: Record<Tab, string> = {
               docs:     "Cultura DOCS",
@@ -446,18 +483,29 @@ function DashboardInner() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className="px-5 py-2.5 text-sm font-semibold rounded-t-lg transition-all"
+                className="relative px-4 py-2 text-sm font-semibold rounded-lg whitespace-nowrap"
                 style={{
-                  background: isActive ? (tab === "eval360" ? "#10b981" : "#f0f4f8") : "transparent",
-                  color:      isActive ? "#0A1A32" : "#10b981",
+                  background: isActive ? "#ffffff" : "transparent",
+                  color:      isActive ? "#0A1A32" : "rgba(255,255,255,0.6)",
+                  boxShadow:  isActive ? "0 2px 8px rgba(0,0,0,0.18)" : "none",
+                  transition: `background 250ms ${EASE_APPLE}, color 250ms ${EASE_APPLE}, box-shadow 250ms ${EASE_APPLE}`,
                 }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = "rgba(255,255,255,0.9)"; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
               >
                 {labels[tab]}
+                {isActive && (
+                  <span
+                    className="absolute left-1/2 -translate-x-1/2 rounded-full"
+                    style={{ bottom: -9, width: 14, height: 3, background: "#F9B912" }}
+                  />
+                )}
               </button>
             );
           })}
+          </div>
         </div>
-      </div>
+      </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 
@@ -474,21 +522,33 @@ function DashboardInner() {
                 { label: "Promedio Global",     value: globalProm },
                 { label: "Último ingreso",      value: evaluacionesEmpresa[0] ? new Date(evaluacionesEmpresa[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
-                <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
-                  <p className="text-2xl font-bold" style={{ color: "#0A1A32" }}>{value}</p>
-                  <p className="text-xs text-gray-500 mt-1">{label}</p>
+                <div
+                  key={label}
+                  className="card-in bg-white rounded-2xl p-5 flex items-center gap-4"
+                  style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(16,185,129,0.1)" }}>
+                    <svg width="18" height="18" fill="none" stroke="#059669" viewBox="0 0 24 24" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d={KPI_ICONS[label]} />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold leading-tight" style={{ color: "#0A1A32", fontVariantNumeric: "tabular-nums" }}>{value}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{label}</p>
+                  </div>
                 </div>
               ))}
             </div>
 
             {/* Filtros */}
-            <div className="bg-white rounded-2xl shadow p-5 flex flex-wrap gap-4 items-end">
+            <div className="card-in bg-white rounded-2xl p-5 flex flex-wrap gap-4 items-end" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Filtrar por Área</label>
                 <select
                   value={filtroArea}
                   onChange={(e) => setFiltroArea(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 text-gray-900"
+                  style={{ colorScheme: "light" }}
                 >
                   <option value="">Todas las áreas</option>
                   {areas.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -499,7 +559,8 @@ function DashboardInner() {
                 <select
                   value={filtroCargo}
                   onChange={(e) => setFiltroCargo(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 text-gray-900"
+                  style={{ colorScheme: "light" }}
                 >
                   <option value="">Todos los cargos</option>
                   {cargos.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -517,7 +578,7 @@ function DashboardInner() {
                 <button
                   onClick={exportarExcel}
                   disabled={!filtradas.length}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-80 active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 transition-[opacity,transform] duration-150"
                   style={{ background: "#10b981", color: "#0A1A32" }}
                 >
                   Exportar Excel
@@ -527,7 +588,7 @@ function DashboardInner() {
 
             {/* Radar organizacional */}
             {radarData && (
-              <div className="bg-white rounded-2xl shadow p-6">
+              <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
                 <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                   Perfil Organizacional — Promedio de la muestra ({filtradas.length} evaluados)
                 </h2>
@@ -544,27 +605,37 @@ function DashboardInner() {
             )}
 
             {/* Tabla de evaluados */}
-            <div className="bg-white rounded-2xl shadow p-6">
+            <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                 Listado de Evaluados{filtradas.length !== evaluacionesEmpresa.length && ` (${filtradas.length} de ${evaluacionesEmpresa.length})`}
               </h2>
 
               {cargando ? (
-                <div className="text-center py-10">
-                  <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
-                  <p className="text-gray-500 text-sm mt-3">Cargando...</p>
+                <div className="text-center py-14">
+                  <div className="w-7 h-7 border-[3px] rounded-full animate-spin mx-auto" style={{ borderColor: "#e5e7eb", borderTopColor: "#10b981" }} />
+                  <p className="text-gray-400 text-sm mt-3">Cargando evaluaciones…</p>
                 </div>
               ) : filtradas.length === 0 ? (
-                <p className="text-center text-gray-400 py-10 text-sm">
-                  {evaluaciones.length === 0 ? "Aún no hay evaluaciones registradas." : "Ningún evaluado coincide con los filtros."}
-                </p>
+                <div className="text-center py-14">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "#f0f4f8" }}>
+                    <svg width="22" height="22" fill="none" stroke="#9ca3af" viewBox="0 0 24 24" strokeWidth={1.6}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 text-sm font-medium">
+                    {evaluaciones.length === 0 ? "Aún no hay evaluaciones registradas" : "Ningún evaluado coincide con los filtros"}
+                  </p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    {evaluaciones.length === 0 ? "Genera un link de evaluación desde “Programar evaluaciones”." : "Prueba a limpiar los filtros de área o cargo."}
+                  </p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ background: "#0A1A32" }}>
                         {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Implicación", "Consistencia", "Adaptabilidad", "Misión", ""].map((h) => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap uppercase" style={{ color: "#10b981", letterSpacing: "0.04em" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -572,21 +643,26 @@ function DashboardInner() {
                       {filtradas.map((e, i) => {
                         const s = e.scores as ScoringResult;
                         return (
-                          <tr key={e.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                          <tr key={e.id} className={`${i % 2 === 0 ? "bg-gray-50/60" : "bg-white"} hover:bg-emerald-50/40 transition-colors duration-150`}>
                             <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                               {new Date(e.created_at).toLocaleDateString("es-EC")}
                             </td>
                             <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{e.nombre}</td>
                             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{e.cargo}</td>
                             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{e.area}</td>
-                            <td className="px-3 py-2 font-bold" style={{ color: getLevelColor(e.nivel ?? "") }}>
+                            <td className="px-3 py-2 font-bold tabular-nums" style={{ color: getLevelColor(e.nivel ?? "") }}>
                               {(e.score_global ?? 0).toFixed(2)}
                             </td>
-                            <td className="px-3 py-2 text-xs font-semibold whitespace-nowrap" style={{ color: getLevelColor(e.nivel ?? "") }}>
-                              {e.nivel}
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <span
+                                className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                                style={{ background: `${getLevelColor(e.nivel ?? "")}18`, color: getLevelColor(e.nivel ?? "") }}
+                              >
+                                {e.nivel}
+                              </span>
                             </td>
                             {s.dimensions.map((d) => (
-                              <td key={d.code} className="px-3 py-2 text-center" style={{ color: getLevelColor(d.level) }}>
+                              <td key={d.code} className="px-3 py-2 text-center tabular-nums" style={{ color: getLevelColor(d.level) }}>
                                 {d.mean.toFixed(2)}
                               </td>
                             ))}
@@ -631,21 +707,33 @@ function DashboardInner() {
                 { label: "Promedio Global",     value: globalClima },
                 { label: "Último ingreso",      value: climaDataEmpresa[0] ? new Date(climaDataEmpresa[0].created_at).toLocaleDateString("es-EC") : "-" },
               ].map(({ label, value }) => (
-                <div key={label} className="bg-white rounded-2xl shadow p-5 text-center">
-                  <p className="text-2xl font-bold" style={{ color: "#0A1A32" }}>{value}</p>
-                  <p className="text-xs text-gray-500 mt-1">{label}</p>
+                <div
+                  key={label}
+                  className="card-in bg-white rounded-2xl p-5 flex items-center gap-4"
+                  style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(16,185,129,0.1)" }}>
+                    <svg width="18" height="18" fill="none" stroke="#059669" viewBox="0 0 24 24" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d={KPI_ICONS[label]} />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl font-bold leading-tight" style={{ color: "#0A1A32", fontVariantNumeric: "tabular-nums" }}>{value}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{label}</p>
+                  </div>
                 </div>
               ))}
             </div>
 
             {/* Filtros */}
-            <div className="bg-white rounded-2xl shadow p-5 flex flex-wrap gap-4 items-end">
+            <div className="card-in bg-white rounded-2xl p-5 flex flex-wrap gap-4 items-end" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Filtrar por Área</label>
                 <select
                   value={filtroAreaClima}
                   onChange={(e) => setFiltroAreaClima(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 text-gray-900"
+                  style={{ colorScheme: "light" }}
                 >
                   <option value="">Todas las áreas</option>
                   {areasClima.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -656,7 +744,8 @@ function DashboardInner() {
                 <select
                   value={filtroCargoClima}
                   onChange={(e) => setFiltroCargoClima(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 text-gray-900"
+                  style={{ colorScheme: "light" }}
                 >
                   <option value="">Todos los cargos</option>
                   {cargosClima.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -674,7 +763,7 @@ function DashboardInner() {
                 <button
                   onClick={exportarExcelClima}
                   disabled={!climaFiltrada.length}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                  className="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-80 active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 transition-[opacity,transform] duration-150"
                   style={{ background: "#10b981", color: "#0A1A32" }}
                 >
                   Exportar Excel
@@ -684,7 +773,7 @@ function DashboardInner() {
 
             {/* Radar clima */}
             {radarDataClima && (
-              <div className="bg-white rounded-2xl shadow p-6">
+              <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
                 <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                   Perfil de Clima Laboral — Promedio organizacional ({climaFiltrada.length} respuestas)
                 </h2>
@@ -701,27 +790,37 @@ function DashboardInner() {
             )}
 
             {/* Tabla evaluados clima */}
-            <div className="bg-white rounded-2xl shadow p-6">
+            <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                 Listado de Evaluados{climaFiltrada.length !== climaDataEmpresa.length && ` (${climaFiltrada.length} de ${climaDataEmpresa.length})`}
               </h2>
 
               {cargandoClima ? (
-                <div className="text-center py-10">
-                  <div className="w-8 h-8 border-4 rounded-full animate-spin mx-auto" style={{ borderColor: "#0A1A32", borderTopColor: "#10b981" }} />
-                  <p className="text-gray-500 text-sm mt-3">Cargando...</p>
+                <div className="text-center py-14">
+                  <div className="w-7 h-7 border-[3px] rounded-full animate-spin mx-auto" style={{ borderColor: "#e5e7eb", borderTopColor: "#10b981" }} />
+                  <p className="text-gray-400 text-sm mt-3">Cargando respuestas…</p>
                 </div>
               ) : climaFiltrada.length === 0 ? (
-                <p className="text-center text-gray-400 py-10 text-sm">
-                  {climaData.length === 0 ? "Aún no hay respuestas de clima registradas." : "Ningún evaluado coincide con los filtros."}
-                </p>
+                <div className="text-center py-14">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "#f0f4f8" }}>
+                    <svg width="22" height="22" fill="none" stroke="#9ca3af" viewBox="0 0 24 24" strokeWidth={1.6}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 text-sm font-medium">
+                    {climaData.length === 0 ? "Aún no hay respuestas de clima registradas" : "Ningún evaluado coincide con los filtros"}
+                  </p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    {climaData.length === 0 ? "Genera un link de encuesta desde “Programar evaluaciones”." : "Prueba a limpiar los filtros de área o cargo."}
+                  </p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ background: "#0A1A32" }}>
                         {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo", ""].map((h) => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap uppercase" style={{ color: "#10b981", letterSpacing: "0.04em" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -729,21 +828,26 @@ function DashboardInner() {
                       {climaFiltrada.map((r, i) => {
                         const s = r.scores as ClimaResult;
                         return (
-                          <tr key={r.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                          <tr key={r.id} className={`${i % 2 === 0 ? "bg-gray-50/60" : "bg-white"} hover:bg-emerald-50/40 transition-colors duration-150`}>
                             <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                               {new Date(r.created_at).toLocaleDateString("es-EC")}
                             </td>
                             <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{r.nombre ?? "—"}</td>
                             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.cargo ?? "—"}</td>
                             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.area ?? "—"}</td>
-                            <td className="px-3 py-2 font-bold" style={{ color: getClimaLevelColor(r.nivel ?? "") }}>
+                            <td className="px-3 py-2 font-bold tabular-nums" style={{ color: getClimaLevelColor(r.nivel ?? "") }}>
                               {(r.score_global ?? 0).toFixed(2)}
                             </td>
-                            <td className="px-3 py-2 text-xs font-semibold whitespace-nowrap" style={{ color: getClimaLevelColor(r.nivel ?? "") }}>
-                              {r.nivel}
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <span
+                                className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                                style={{ background: `${getClimaLevelColor(r.nivel ?? "")}18`, color: getClimaLevelColor(r.nivel ?? "") }}
+                              >
+                                {r.nivel}
+                              </span>
                             </td>
                             {s.dimensions.map((d) => (
-                              <td key={d.code} className="px-3 py-2 text-center" style={{ color: getClimaLevelColor(d.level) }}>
+                              <td key={d.code} className="px-3 py-2 text-center tabular-nums" style={{ color: getClimaLevelColor(d.level) }}>
                                 {d.mean.toFixed(2)}
                               </td>
                             ))}
@@ -792,7 +896,7 @@ function DashboardInner() {
         {activeTab === "sesiones" && (
           <>
             {/* Crear nueva sesión */}
-            <div className="bg-white rounded-2xl shadow p-6">
+            <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>Nueva sesión de evaluación</h2>
               <div className="flex flex-wrap gap-4 items-end">
                 <div>
@@ -800,7 +904,8 @@ function DashboardInner() {
                   <select
                     value={nuevaTipo}
                     onChange={(e) => setNuevaTipo(e.target.value as 'cultura' | 'clima' | '360')}
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 text-gray-900"
+                    style={{ colorScheme: "light" }}
                   >
                     <option value="cultura">Cultura DOCS</option>
                     <option value="clima">Clima Laboral</option>
@@ -840,7 +945,8 @@ function DashboardInner() {
                         value={personaId}
                         onChange={(e) => handleSeleccionarPersona(e.target.value)}
                         disabled={!nuevaEmpresaId}
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-56 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-56 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                        style={{ colorScheme: "light" }}
                       >
                         <option value="">
                           {!nuevaEmpresaId
@@ -865,7 +971,7 @@ function DashboardInner() {
                           value={datos360.nombre}
                           onChange={(e) => setDatos360((p) => ({ ...p, nombre: e.target.value }))}
                           placeholder="Nombre completo"
-                          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-48 text-gray-900"
+                          className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-48 text-gray-900"
                         />
                       </div>
                     )}
@@ -876,7 +982,7 @@ function DashboardInner() {
                         value={datos360.cargo}
                         onChange={(e) => setDatos360((p) => ({ ...p, cargo: e.target.value }))}
                         placeholder="Cargo"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-40 text-gray-900"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-40 text-gray-900"
                       />
                     </div>
                     <div>
@@ -886,7 +992,7 @@ function DashboardInner() {
                         value={datos360.departamento}
                         onChange={(e) => setDatos360((p) => ({ ...p, departamento: e.target.value }))}
                         placeholder="Departamento"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-40 text-gray-900"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-40 text-gray-900"
                       />
                     </div>
                     <div>
@@ -896,17 +1002,15 @@ function DashboardInner() {
                         value={datos360.jefe}
                         onChange={(e) => setDatos360((p) => ({ ...p, jefe: e.target.value }))}
                         placeholder="Opcional"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-36 text-gray-900"
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-36 text-gray-900"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Período *</label>
-                      <input
-                        type="text"
+                      <PeriodoSelect
                         value={datos360.periodo}
-                        onChange={(e) => setDatos360((p) => ({ ...p, periodo: e.target.value }))}
-                        placeholder="ej: 2026-S1"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-32 text-gray-900"
+                        onChange={(v) => setDatos360((p) => ({ ...p, periodo: v }))}
+                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-32 text-gray-900"
                       />
                     </div>
                   </>
@@ -915,12 +1019,10 @@ function DashboardInner() {
                 {nuevaTipo === "360" && modo360 === "masivo" && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Período *</label>
-                    <input
-                      type="text"
+                    <PeriodoSelect
                       value={datos360.periodo}
-                      onChange={(e) => setDatos360((p) => ({ ...p, periodo: e.target.value }))}
-                      placeholder="ej: 2026-S1"
-                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none w-32 text-gray-900"
+                      onChange={(v) => setDatos360((p) => ({ ...p, periodo: v }))}
+                      className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 w-32 text-gray-900"
                     />
                   </div>
                 )}
@@ -929,7 +1031,7 @@ function DashboardInner() {
                   <button
                     onClick={handleCrearSesion}
                     disabled={creandoSesion}
-                    className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                    className="px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-80 active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 transition-[opacity,transform] duration-150"
                     style={{ background: "#0A1A32", color: "#10b981" }}
                   >
                     {creandoSesion ? "Creando..." : "Generar link"}
@@ -947,13 +1049,13 @@ function DashboardInner() {
                     onChange={(e) => setTextoMasivo360(e.target.value)}
                     rows={6}
                     placeholder={"Juan Pérez, Supervisor, Ventas, María López\nAna Torres, Analista, Finanzas, Carlos Ruiz"}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-900 font-mono"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#10b981] focus:ring-2 focus:ring-[#10b981]/15 transition-[border-color,box-shadow] duration-200 text-gray-900 font-mono"
                   />
                   <div className="flex items-center gap-3 mt-3">
                     <button
                       onClick={handleGenerarMasivo360}
                       disabled={creandoSesion}
-                      className="px-5 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                      className="px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-80 active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 transition-[opacity,transform] duration-150"
                       style={{ background: "#0A1A32", color: "#10b981" }}
                     >
                       {progresoMasivo360 ? `Generando ${progresoMasivo360.hecho}/${progresoMasivo360.total}…` : "Generar todos los links"}
@@ -983,7 +1085,7 @@ function DashboardInner() {
 
             {/* Evaluaciones 360° generadas */}
             {evaluados360.length > 0 && (
-              <div className="bg-white rounded-2xl shadow p-6">
+              <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-base font-bold" style={{ color: "#0A1A32" }}>
                     Evaluaciones 360° generadas ({evaluados360.length})
@@ -1037,25 +1139,33 @@ function DashboardInner() {
             )}
 
             {/* Listado de sesiones */}
-            <div className="bg-white rounded-2xl shadow p-6">
+            <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
                 Sesiones creadas ({sesiones.length})
               </h2>
               {sesiones.length === 0 ? (
-                <p className="text-center text-gray-400 py-8 text-sm">No hay sesiones creadas aún.</p>
+                <div className="text-center py-10">
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: "#f0f4f8" }}>
+                    <svg width="20" height="20" fill="none" stroke="#9ca3af" viewBox="0 0 24 24" strokeWidth={1.6}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-600 text-sm font-medium">No hay sesiones creadas aún</p>
+                  <p className="text-gray-400 text-xs mt-1">Usa el formulario de arriba para generar el primer link.</p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ background: "#0A1A32" }}>
                         {["Fecha", "Tipo", "Empresa", "Estado", "Link de participante", ""].map((h) => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap" style={{ color: "#10b981" }}>{h}</th>
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap uppercase" style={{ color: "#10b981", letterSpacing: "0.04em" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {sesiones.map((s, i) => (
-                        <tr key={s.id} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                        <tr key={s.id} className={`${i % 2 === 0 ? "bg-gray-50/60" : "bg-white"} hover:bg-emerald-50/40 transition-colors duration-150`}>
                           <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                             {new Date(s.created_at).toLocaleDateString("es-EC")}
                           </td>
@@ -1102,8 +1212,8 @@ function DashboardInner() {
 
       {/* ── Modal de confirmación de eliminación ── */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm px-4">
+          <div className="card-in bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
             <h3 className="text-base font-bold mb-2" style={{ color: "#0A1A32" }}>
               ¿Eliminar registro?
             </h3>

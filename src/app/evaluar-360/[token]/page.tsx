@@ -42,6 +42,7 @@ export default function EvaluarToken360() {
   const [competencias, setCompetencias] = useState<CompetenciasMap>(emptyCompetencias());
   const [potencial, setPotencial] = useState<PotencialMap>(emptyPotencial());
   const [calificacionesIndicadores, setCalificacionesIndicadores] = useState<Record<string, number>>({});
+  const [tocados, setTocados] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch(`/api/token/360/${token}`)
@@ -71,18 +72,54 @@ export default function EvaluarToken360() {
       .finally(() => setCargando(false));
   }, [token]);
 
+  function marcarTocado(clave: string) {
+    setTocados((prev) => {
+      if (prev.has(clave)) return prev;
+      const next = new Set(prev);
+      next.add(clave);
+      return next;
+    });
+  }
+
   function setComp(key: CompetenciaKey, val: number) {
     setCompetencias((prev) => ({ ...prev, [key]: val }));
+    marcarTocado(`comp:${key}`);
   }
   function setPot(key: PotencialKey, val: number) {
     setPotencial((prev) => ({ ...prev, [key]: val }));
+    marcarTocado(`pot:${key}`);
   }
   function setIndicador(id: string, val: number) {
     setCalificacionesIndicadores((prev) => ({ ...prev, [id]: val }));
+    marcarTocado(`ind:${id}`);
+  }
+
+  function camposFaltantes(): string[] {
+    if (!data) return [];
+    const esJefe = data.token.fuente === "jefe";
+    const faltan: string[] = [];
+
+    for (const c of COMPETENCIAS_360) {
+      if (!tocados.has(`comp:${c.key}`)) faltan.push(c.label);
+    }
+    if (esJefe) {
+      for (const p of POTENCIAL_CRITERIOS) {
+        if (!tocados.has(`pot:${p.key}`)) faltan.push(p.label);
+      }
+      for (const ind of indicadoresEsenciales) {
+        if (!tocados.has(`ind:${ind.id}`)) faltan.push(ind.indicador);
+      }
+    }
+    return faltan;
   }
 
   async function handleEnviar() {
     if (!data) return;
+    const faltan = camposFaltantes();
+    if (faltan.length > 0) {
+      setError(`Falta calificar: ${faltan.join(", ")}.`);
+      return;
+    }
     setEnviando(true);
     setError("");
     try {
@@ -160,7 +197,10 @@ export default function EvaluarToken360() {
           <p className="text-xs text-gray-500">Competencias (1.0 – 5.0)</p>
           {COMPETENCIAS_360.map((comp) => (
             <div key={comp.key} className="flex items-center gap-3">
-              <span className="text-xs text-gray-300 w-40 shrink-0">{comp.label}</span>
+              <span className="text-xs text-gray-300 w-40 shrink-0 flex items-center gap-1">
+                {comp.label}
+                {!tocados.has(`comp:${comp.key}`) && <span className="text-amber-400" title="Sin calificar">●</span>}
+              </span>
               <input
                 type="range" min={1} max={5} step={0.1}
                 value={competencias[comp.key]}
@@ -179,7 +219,10 @@ export default function EvaluarToken360() {
             <p className="text-xs text-gray-500">Potencial (1.0 – 5.0)</p>
             {POTENCIAL_CRITERIOS.map((crit) => (
               <div key={crit.key} className="flex items-center gap-3">
-                <span className="text-xs text-gray-300 w-40 shrink-0">{crit.label}</span>
+                <span className="text-xs text-gray-300 w-40 shrink-0 flex items-center gap-1">
+                  {crit.label}
+                  {!tocados.has(`pot:${crit.key}`) && <span className="text-amber-400" title="Sin calificar">●</span>}
+                </span>
                 <input
                   type="range" min={1} max={5} step={0.1}
                   value={potencial[crit.key]}
@@ -204,7 +247,10 @@ export default function EvaluarToken360() {
             </div>
             {indicadoresEsenciales.map((ind) => (
               <div key={ind.id} className="space-y-1.5">
-                <p className="text-xs text-gray-300">{ind.indicador}</p>
+                <p className="text-xs text-gray-300 flex items-center gap-1">
+                  {ind.indicador}
+                  {!tocados.has(`ind:${ind.id}`) && <span className="text-amber-400" title="Sin calificar">●</span>}
+                </p>
                 {ind.formula && (
                   <p className="text-[10px] text-gray-500">Fórmula: {ind.formula}</p>
                 )}

@@ -19,6 +19,19 @@ export const POTENCIAL_CRITERIOS = [
 
 export type PotencialKey = typeof POTENCIAL_CRITERIOS[number]['key'];
 
+// El período es la llave que une tokens ↔ respuestas ↔ indicadores. Se
+// ofrece como select con candidatos calculados (en vez de texto libre) para
+// que dos personas no terminen usando '2026' y '2025-2026' para el mismo
+// ciclo — sin asumir que todo cliente evalúa por semestre calendario.
+export function periodosSugeridos(fecha: Date = new Date()): string[] {
+  const anio = fecha.getFullYear();
+  const semestre = fecha.getMonth() < 6 ? 1 : 2;
+  const actual = `${anio}-S${semestre}`;
+  const siguiente = semestre === 1 ? `${anio}-S2` : `${anio + 1}-S1`;
+  const anterior = semestre === 1 ? `${anio - 1}-S2` : `${anio}-S1`;
+  return [actual, siguiente, anterior, `${anio}`];
+}
+
 export type FuenteEvaluacion =
   | 'autoevaluacion'
   | 'jefe'
@@ -50,6 +63,7 @@ export interface Evaluado360 {
   empresa?: string;
   empresa_id?: string;
   puesto_id?: string;
+  persona_id?: string;
   jefe?: string;
   fecha_ingreso?: string;
   created_at: string;
@@ -133,6 +147,7 @@ export interface ResultadoConsolidado360 {
   colorDesempeno: string;
   puntajePotencial: number;
   nivelPotencial: NivelPotencial;
+  potencialPendiente: boolean;
   cuadrante: number;
   nombreCuadrante: string;
   accionCuadrante: string;

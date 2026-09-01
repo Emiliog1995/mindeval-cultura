@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   crear360Evaluado, crear360Evaluacion, crearTokens360,
-  listarEmpresas, listarPuestosPorEmpresa,
-  type Empresa, type PuestoResumen,
+  listarEmpresas, listarPuestosPorEmpresa, listarPersonasConPuestoPorEmpresa, calcularFuentesAplicables,
+  type Empresa, type PuestoResumen, type PersonaConPuesto,
 } from "@/lib/supabase";
 import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, type FuenteEvaluacion, type CompetenciaKey, type PotencialKey } from "@/lib/360-types";
 import { calcularPuntaje360, clasificarNivelDesempeno } from "@/lib/360-scoring";
 import type { Evaluacion360, Token360 } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import PeriodoSelect from "@/components/360/PeriodoSelect";
 
 const FUENTES: Array<{ key: FuenteEvaluacion; label: string; peso: string }> = [
   { key: "autoevaluacion",  label: "Autoevaluación",   peso: "10%" },
@@ -45,18 +46,46 @@ export default function NuevaEvaluacion360() {
   });
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [puestos, setPuestos] = useState<PuestoResumen[]>([]);
+  const [personasEmpresa, setPersonasEmpresa] = useState<PersonaConPuesto[]>([]);
+  const [personaId, setPersonaId] = useState("");
+  const FUENTES_FIJAS: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
+  const [fuentesAplicables, setFuentesAplicables] = useState<FuenteEvaluacion[]>(FUENTES_FIJAS);
 
   useEffect(() => {
     listarEmpresas().then(setEmpresas).catch(() => setEmpresas([]));
   }, []);
 
   useEffect(() => {
+    setPersonaId("");
+    setFuentesAplicables(FUENTES_FIJAS);
     if (!datos.empresaId) {
       setPuestos([]);
+      setPersonasEmpresa([]);
       return;
     }
     listarPuestosPorEmpresa(datos.empresaId).then(setPuestos).catch(() => setPuestos([]));
+    listarPersonasConPuestoPorEmpresa(datos.empresaId).then(setPersonasEmpresa).catch(() => setPersonasEmpresa([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datos.empresaId]);
+
+  function handleSeleccionarPersona(id: string) {
+    setPersonaId(id);
+    if (id === "" || id === "manual") {
+      setFuentesAplicables(FUENTES_FIJAS);
+      return;
+    }
+    const p = personasEmpresa.find((x) => x.id === id);
+    if (!p) return;
+    setDatos((prev) => ({
+      ...prev,
+      nombre: p.nombre,
+      cargo: p.cargo ?? "",
+      departamento: p.departamento ?? "",
+      jefe: p.jefe ?? "",
+      puestoId: p.puesto_id ?? "",
+    }));
+    setFuentesAplicables(calcularFuentesAplicables(p, personasEmpresa));
+  }
 
   const [calificaciones, setCalificaciones] = useState<Record<FuenteEvaluacion, CompetenciasMap>>({
     autoevaluacion:  emptyCompetencias(),
@@ -78,13 +107,13 @@ export default function NuevaEvaluacion360() {
     setPotencial((prev) => ({ ...prev, [key]: val }));
   }
 
-  // Cálculo en tiempo real
-  const evsPrevias: Omit<Evaluacion360, "id" | "created_at">[] = FUENTES.map((f) => ({
+  // Cálculo en tiempo real — solo con las fuentes que aplican a este puesto
+  const evsPrevias: Omit<Evaluacion360, "id" | "created_at">[] = fuentesAplicables.map((key) => ({
     evaluado_id: "preview",
     periodo: datos.periodo || "preview",
-    fuente: f.key,
-    competencias: calificaciones[f.key],
-    potencial: f.key === "jefe" ? potencial : undefined,
+    fuente: key,
+    competencias: calificaciones[key],
+    potencial: key === "jefe" ? potencial : undefined,
   }));
   const { puntaje360 } = calcularPuntaje360(evsPrevias as Evaluacion360[]);
   const { nivel, color } = clasificarNivelDesempeno(puntaje360);
@@ -104,18 +133,19 @@ export default function NuevaEvaluacion360() {
         empresa: datos.empresa || undefined,
         empresa_id: datos.empresaId || undefined,
         puesto_id: datos.puestoId || undefined,
+        persona_id: personaId && personaId !== "manual" ? personaId : undefined,
         jefe: datos.jefe || undefined,
         fecha_ingreso: datos.fecha_ingreso || undefined,
       });
 
       await Promise.all(
-        FUENTES.map((f) =>
+        fuentesAplicables.map((key) =>
           crear360Evaluacion({
             evaluado_id: evaluado.id,
             periodo: datos.periodo,
-            fuente: f.key,
-            competencias: calificaciones[f.key],
-            potencial: f.key === "jefe" ? potencial : undefined,
+            fuente: key,
+            competencias: calificaciones[key],
+            potencial: key === "jefe" ? potencial : undefined,
             puntaje_total: undefined,
             nivel: undefined,
           })
@@ -145,6 +175,7 @@ export default function NuevaEvaluacion360() {
         empresa: datos.empresa || undefined,
         empresa_id: datos.empresaId || undefined,
         puesto_id: datos.puestoId || undefined,
+        persona_id: personaId && personaId !== "manual" ? personaId : undefined,
         jefe: datos.jefe || undefined,
         fecha_ingreso: datos.fecha_ingreso || undefined,
       });
@@ -152,7 +183,7 @@ export default function NuevaEvaluacion360() {
       const tokens: Token360[] = await crearTokens360(
         evaluado.id,
         datos.periodo,
-        FUENTES.map((f) => f.key),
+        fuentesAplicables,
       );
 
       const base = typeof window !== "undefined" ? window.location.origin : "";
@@ -189,24 +220,6 @@ export default function NuevaEvaluacion360() {
         {vista === "datos" && (
           <div className="bg-[#1e2a42] rounded-xl p-6 border border-[#2d3a50] space-y-4">
             <h2 className="text-white font-semibold">Datos del evaluado</h2>
-            {[
-              { field: "nombre",         label: "Nombre completo *",   type: "text" },
-              { field: "cargo",          label: "Cargo *",             type: "text" },
-              { field: "departamento",   label: "Departamento *",      type: "text" },
-              { field: "jefe",           label: "Jefe directo",        type: "text" },
-              { field: "fecha_ingreso",  label: "Fecha de ingreso",    type: "date" },
-              { field: "periodo",        label: "Período de evaluación * (ej: 2025-S1)", type: "text" },
-            ].map(({ field, label, type }) => (
-              <div key={field}>
-                <label className="block text-xs text-gray-400 mb-1">{label}</label>
-                <input
-                  type={type}
-                  value={datos[field as keyof typeof datos]}
-                  onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
-                  className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
-                />
-              </div>
-            ))}
 
             <div>
               <label className="block text-xs text-gray-400 mb-1">Empresa</label>
@@ -221,6 +234,56 @@ export default function NuevaEvaluacion360() {
                 <option value="">Sin empresa</option>
                 {empresas.map((emp) => <option key={emp.id} value={emp.id}>{emp.nombre}</option>)}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Evaluado</label>
+              <select
+                value={personaId}
+                onChange={(e) => handleSeleccionarPersona(e.target.value)}
+                disabled={!datos.empresaId}
+                className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf] disabled:opacity-50"
+              >
+                <option value="">
+                  {!datos.empresaId ? "Elige una empresa primero" : personasEmpresa.length ? "Selecciona de la nómina..." : "Sin nómina cargada"}
+                </option>
+                {personasEmpresa.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}{p.cargo ? ` — ${p.cargo}` : ""}</option>
+                ))}
+                <option value="manual">+ Escribir manualmente</option>
+              </select>
+              {personaId && personaId !== "manual" && (
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Se generarán {fuentesAplicables.length} link(s) según el organigrama de este puesto.
+                </p>
+              )}
+            </div>
+
+            {[
+              { field: "nombre",         label: "Nombre completo *",   type: "text" },
+              { field: "cargo",          label: "Cargo *",             type: "text" },
+              { field: "departamento",   label: "Departamento *",      type: "text" },
+              { field: "jefe",           label: "Jefe directo",        type: "text" },
+              { field: "fecha_ingreso",  label: "Fecha de ingreso",    type: "date" },
+            ].map(({ field, label, type }) => (
+              <div key={field}>
+                <label className="block text-xs text-gray-400 mb-1">{label}</label>
+                <input
+                  type={type}
+                  value={datos[field as keyof typeof datos]}
+                  onChange={(e) => setDatos((p) => ({ ...p, [field]: e.target.value }))}
+                  className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
+                />
+              </div>
+            ))}
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Período de evaluación *</label>
+              <PeriodoSelect
+                value={datos.periodo}
+                onChange={(v) => setDatos((p) => ({ ...p, periodo: v }))}
+                className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#2dd4bf]"
+              />
             </div>
 
             <div>
@@ -331,7 +394,7 @@ export default function NuevaEvaluacion360() {
               </div>
             </div>
 
-            {FUENTES.map((fuente) => (
+            {FUENTES.filter((f) => fuentesAplicables.includes(f.key)).map((fuente) => (
               <div key={fuente.key} className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] overflow-hidden">
                 <button
                   onClick={() => setFuenteAbierta(fuenteAbierta === fuente.key ? ("" as FuenteEvaluacion) : fuente.key)}

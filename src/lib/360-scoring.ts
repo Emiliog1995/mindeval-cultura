@@ -134,6 +134,7 @@ export function construirResultadoBase360(
   colorDesempeno: string;
   puntajePotencial: number;
   nivelPotencial: NivelPotencial;
+  potencialPendiente: boolean;
   cuadrante: number;
   nombreCuadrante: string;
   accionCuadrante: string;
@@ -142,6 +143,11 @@ export function construirResultadoBase360(
 } {
   const { puntajesPorCompetencia, puntaje360 } = calcularPuntaje360(evaluaciones);
   const jefeEv = evaluaciones.find((e) => e.fuente === 'jefe');
+  const potencialPendiente = !jefeEv?.potencial;
+  // Sin evaluación del jefe no hay dato real de potencial. Se usa 'MEDIO' solo
+  // como valor neutro interno para no romper el cálculo del cuadrante — los
+  // consumidores de este resultado deben revisar `potencialPendiente` antes
+  // de mostrar el nivel, el puntaje o la posición en la Matriz de 9 Cajas.
   const { puntaje: puntajePotencial, nivel: nivelPotencial } = jefeEv?.potencial
     ? calcularPotencial(jefeEv.potencial)
     : { puntaje: 0, nivel: 'MEDIO' as NivelPotencial };
@@ -161,6 +167,7 @@ export function construirResultadoBase360(
     colorDesempeno,
     puntajePotencial,
     nivelPotencial,
+    potencialPendiente,
     cuadrante: cuadranteInfo.numero,
     nombreCuadrante: cuadranteInfo.nombre,
     accionCuadrante: cuadranteInfo.accion,

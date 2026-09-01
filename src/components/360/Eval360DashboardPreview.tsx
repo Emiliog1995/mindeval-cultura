@@ -49,8 +49,12 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
     cargar();
   }, [empresaId]);
 
-  const zonaVerde = resultados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
-  const zonaRoja  = resultados.filter((r) => [1, 2].includes(r.cuadrante)).length;
+  // Sin evaluación del jefe no hay potencial real: se excluyen del Nine Box y
+  // de las estadísticas por cuadrante para no mostrar posiciones inventadas.
+  const conPotencial = resultados.filter((r) => !r.potencialPendiente);
+
+  const zonaVerde = conPotencial.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
+  const zonaRoja  = conPotencial.filter((r) => [1, 2].includes(r.cuadrante)).length;
   const promOrg   = resultados.length
     ? resultados.reduce((s, r) => s + r.puntajeDesempenoFinal, 0) / resultados.length
     : 0;
@@ -65,7 +69,7 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
       })).sort((a, b) => b.brecha - a.brecha)[0]
     : null;
 
-  const nineBoxData = resultados.map((r) => ({
+  const nineBoxData = conPotencial.map((r) => ({
     nombre: r.evaluado.nombre,
     cuadrante: r.cuadrante,
     puntaje360: r.puntajeDesempenoFinal,
@@ -97,8 +101,8 @@ export default function Eval360DashboardPreview({ empresaId }: { empresaId?: str
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total evaluados", value: resultados.length, color: "#2dd4bf" },
-          { label: "Zona verde (6,8,9)", value: `${resultados.length ? Math.round(zonaVerde / resultados.length * 100) : 0}%`, color: "#10b981" },
-          { label: "Zona roja (1,2)", value: `${resultados.length ? Math.round(zonaRoja / resultados.length * 100) : 0}%`, color: "#ef4444" },
+          { label: "Zona verde (6,8,9)", value: `${conPotencial.length ? Math.round(zonaVerde / conPotencial.length * 100) : 0}%`, color: "#10b981" },
+          { label: "Zona roja (1,2)", value: `${conPotencial.length ? Math.round(zonaRoja / conPotencial.length * 100) : 0}%`, color: "#ef4444" },
           { label: "Promedio org — Desempeño", value: promOrg.toFixed(2), color: "#10b981" },
         ].map((kpi) => (
           <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">

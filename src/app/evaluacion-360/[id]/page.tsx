@@ -157,7 +157,7 @@ export default function EvaluadoIndividualPage() {
   }
 
   const { evaluado, periodo, puntaje360, nivelDesempeno, colorDesempeno,
-          puntajePotencial, nivelPotencial, cuadrante, nombreCuadrante,
+          puntajePotencial, nivelPotencial, potencialPendiente, cuadrante, nombreCuadrante,
           accionCuadrante, colorCuadrante, puntajesPorCompetencia, brechas,
           cumplimientoIndicadores, puntajeDesempenoFinal, indicadoresEsenciales } = resultado;
 
@@ -167,7 +167,9 @@ export default function EvaluadoIndividualPage() {
     meta: c.meta,
   }));
 
-  const nineBoxData = [{
+  // Sin evaluación del jefe no hay potencial real: no se dibuja un punto
+  // inventado en la matriz.
+  const nineBoxData = potencialPendiente ? [] : [{
     nombre: evaluado.nombre,
     cuadrante,
     puntaje360: puntajeDesempenoFinal,
@@ -215,8 +217,8 @@ export default function EvaluadoIndividualPage() {
           {[
             { label: "Desempeño final", value: puntajeDesempenoFinal.toFixed(2), color: colorDesempeno },
             { label: "Nivel desempeño", value: nivelDesempeno, color: colorDesempeno },
-            { label: "Puntaje potencial", value: puntajePotencial.toFixed(2), color: "#2dd4bf" },
-            { label: "Nivel potencial", value: nivelPotencial, color: "#2dd4bf" },
+            { label: "Puntaje potencial", value: potencialPendiente ? "—" : puntajePotencial.toFixed(2), color: potencialPendiente ? "#6b7280" : "#2dd4bf" },
+            { label: "Nivel potencial", value: potencialPendiente ? "Pendiente" : nivelPotencial, color: potencialPendiente ? "#6b7280" : "#2dd4bf" },
           ].map((kpi) => (
             <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
               <p className="text-xs text-gray-400 mb-1">{kpi.label}</p>
@@ -257,22 +259,32 @@ export default function EvaluadoIndividualPage() {
         )}
 
         {/* Cuadrante Nine Box */}
-        <div
-          className="rounded-xl px-5 py-4 border border-[#2d3a50] flex items-center justify-between"
-          style={{ backgroundColor: colorCuadrante + "22", borderColor: colorCuadrante + "55" }}
-        >
-          <div>
+        {potencialPendiente ? (
+          <div className="rounded-xl px-5 py-4 border border-[#2d3a50] bg-[#1e2a42]">
             <p className="text-xs text-gray-400">Cuadrante Nine Box</p>
-            <p className="text-white font-bold text-base">{cuadrante} · {nombreCuadrante}</p>
-            <p className="text-sm text-gray-300 mt-0.5">{accionCuadrante}</p>
+            <p className="text-white font-bold text-base">Pendiente</p>
+            <p className="text-sm text-gray-400 mt-0.5">
+              Falta la evaluación del Jefe Directo — sin ella no hay puntaje de potencial ni posición real en la Matriz de 9 Cajas.
+            </p>
           </div>
-          <span
-            className="text-4xl font-black opacity-30"
-            style={{ color: colorCuadrante }}
+        ) : (
+          <div
+            className="rounded-xl px-5 py-4 border border-[#2d3a50] flex items-center justify-between"
+            style={{ backgroundColor: colorCuadrante + "22", borderColor: colorCuadrante + "55" }}
           >
-            {cuadrante}
-          </span>
-        </div>
+            <div>
+              <p className="text-xs text-gray-400">Cuadrante Nine Box</p>
+              <p className="text-white font-bold text-base">{cuadrante} · {nombreCuadrante}</p>
+              <p className="text-sm text-gray-300 mt-0.5">{accionCuadrante}</p>
+            </div>
+            <span
+              className="text-4xl font-black opacity-30"
+              style={{ color: colorCuadrante }}
+            >
+              {cuadrante}
+            </span>
+          </div>
+        )}
 
         {/* Radar + Nine Box */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -285,7 +297,11 @@ export default function EvaluadoIndividualPage() {
 
           <div className="bg-[#1e2a42] rounded-xl p-5 border border-[#2d3a50]">
             <h2 className="text-white font-semibold mb-3 text-sm">Posición Nine Box</h2>
-            <NineBoxMatrix colaboradores={nineBoxData} />
+            {potencialPendiente ? (
+              <p className="text-xs text-gray-500">Se mostrará cuando el Jefe Directo complete su evaluación.</p>
+            ) : (
+              <NineBoxMatrix colaboradores={nineBoxData} />
+            )}
           </div>
         </div>
 

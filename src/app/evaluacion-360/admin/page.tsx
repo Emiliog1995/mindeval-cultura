@@ -66,13 +66,18 @@ export default function Admin360Page() {
     return true;
   });
 
-  const zonaVerde = filtrados.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
-  const zonaRoja  = filtrados.filter((r) => [1, 2].includes(r.cuadrante)).length;
+  // Sin evaluación del jefe no hay potencial real: se excluyen del Nine Box y
+  // de las estadísticas por cuadrante para no mostrar posiciones inventadas.
+  const conPotencial = filtrados.filter((r) => !r.potencialPendiente);
+  const pendientesPotencial = filtrados.filter((r) => r.potencialPendiente).length;
+
+  const zonaVerde = conPotencial.filter((r) => [6, 8, 9].includes(r.cuadrante)).length;
+  const zonaRoja  = conPotencial.filter((r) => [1, 2].includes(r.cuadrante)).length;
   const promOrg   = filtrados.length
     ? filtrados.reduce((s, r) => s + r.puntajeDesempenoFinal, 0) / filtrados.length
     : 0;
 
-  const nineBoxData = filtrados.map((r) => ({
+  const nineBoxData = conPotencial.map((r) => ({
     nombre:    r.evaluado.nombre,
     cuadrante: r.cuadrante,
     puntaje360: r.puntajeDesempenoFinal,
@@ -139,8 +144,8 @@ export default function Admin360Page() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total evaluados",    value: filtrados.length,  color: "#2dd4bf" },
-            { label: "% Zona verde (6,8,9)", value: `${filtrados.length ? Math.round(zonaVerde / filtrados.length * 100) : 0}%`, color: "#10b981" },
-            { label: "% Zona roja (1,2)",  value: `${filtrados.length ? Math.round(zonaRoja  / filtrados.length * 100) : 0}%`, color: "#ef4444" },
+            { label: "% Zona verde (6,8,9)", value: `${conPotencial.length ? Math.round(zonaVerde / conPotencial.length * 100) : 0}%`, color: "#10b981" },
+            { label: "% Zona roja (1,2)",  value: `${conPotencial.length ? Math.round(zonaRoja  / conPotencial.length * 100) : 0}%`, color: "#ef4444" },
             { label: "Promedio org 360°",  value: promOrg.toFixed(2), color: "#10b981" },
           ].map((kpi) => (
             <div key={kpi.label} className="bg-[#1e2a42] rounded-xl p-4 border border-[#2d3a50]">
@@ -208,7 +213,12 @@ export default function Admin360Page() {
         {/* Nine Box organizacional */}
         {filtrados.length > 0 && (
           <div className="bg-[#1e2a42] rounded-xl p-5 border border-[#2d3a50]">
-            <h2 className="text-white font-semibold mb-4 text-sm">Matriz Nine Box organizacional ({filtrados.length} evaluados)</h2>
+            <h2 className="text-white font-semibold mb-4 text-sm">Matriz Nine Box organizacional ({conPotencial.length} evaluados)</h2>
+            {pendientesPotencial > 0 && (
+              <p className="text-[11px] text-amber-400 mb-3">
+                {pendientesPotencial} evaluado(s) no aparecen aquí porque su Jefe Directo aún no completó la evaluación.
+              </p>
+            )}
             <NineBoxMatrix
               colaboradores={nineBoxData}
               onSelect={(nombre) => {

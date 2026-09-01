@@ -21,7 +21,7 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const { evaluado, periodo, puntaje360, cumplimientoIndicadores, puntajeDesempenoFinal,
               nivelDesempeno, puntajePotencial,
-              nivelPotencial, nombreCuadrante, accionCuadrante,
+              nivelPotencial, potencialPendiente, nombreCuadrante, accionCuadrante,
               brechas, pdi, indicadoresEsenciales } = resultado;
 
       const PRIMARY = [26, 32, 53] as [number, number, number];
@@ -60,13 +60,13 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.text(puntajeDesempenoFinal.toFixed(2), 56, 70, { align: "center" });
-      doc.text(puntajePotencial.toFixed(2), 153, 70, { align: "center" });
+      doc.text(potencialPendiente ? "—" : puntajePotencial.toFixed(2), 153, 70, { align: "center" });
 
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(100, 116, 139);
       doc.text(`Desempeño final — ${nivelDesempeno}`, 56, 76, { align: "center" });
-      doc.text(`Potencial — ${nivelPotencial}`, 153, 76, { align: "center" });
+      doc.text(potencialPendiente ? "Potencial — pendiente evaluación del jefe" : `Potencial — ${nivelPotencial}`, 153, 76, { align: "center" });
       doc.setFontSize(7);
       doc.text(
         cumplimientoIndicadores !== null
@@ -81,10 +81,16 @@ export default function ExportPDF360({ resultado, narrativa, radarRef }: Props) 
       doc.setTextColor(...PRIMARY);
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
-      doc.text(`Nine Box: Cuadrante ${resultado.cuadrante} — ${nombreCuadrante}`, 105, 96, { align: "center" });
+      doc.text(
+        potencialPendiente ? "Nine Box: pendiente (falta evaluación del Jefe Directo)" : `Nine Box: Cuadrante ${resultado.cuadrante} — ${nombreCuadrante}`,
+        105, 96, { align: "center" },
+      );
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.text(`Acción recomendada: ${accionCuadrante}`, 105, 100, { align: "center" });
+      doc.text(
+        potencialPendiente ? "El potencial y la posición en la matriz se calculan cuando el jefe complete su evaluación." : `Acción recomendada: ${accionCuadrante}`,
+        105, 100, { align: "center" },
+      );
 
       // Intenta captura del radar
       let yAfterRadar = 108;
