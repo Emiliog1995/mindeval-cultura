@@ -375,16 +375,22 @@ export interface PuestoResumen {
   id: string;
   nombre_puesto: string;
   area: string;
+  supervisado_por: string | null;
+  supervisa_a: string | null;
+  tiene_cliente_interno: boolean;
 }
 
 export async function listarPuestosPorEmpresa(empresaId: string): Promise<PuestoResumen[]> {
   const { data, error } = await supabase
     .from('puestos')
-    .select('id, nombre_puesto, area')
+    .select('id, nombre_puesto, area, supervisado_por, supervisa_a, tiene_cliente_interno')
     .eq('empresa_id', empresaId)
     .order('nombre_puesto');
   if (error) throw new Error(error.message);
-  return (data ?? []) as PuestoResumen[];
+  return ((data ?? []) as Array<PuestoResumen & { tiene_cliente_interno: boolean | null }>).map((p) => ({
+    ...p,
+    tiene_cliente_interno: p.tiene_cliente_interno ?? false,
+  }));
 }
 
 export async function listarIndicadoresEsencialesDePuesto(puestoId: string): Promise<IndicadorEsencial[]> {
