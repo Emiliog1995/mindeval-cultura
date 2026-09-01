@@ -362,6 +362,7 @@ export default function EvaluadoIndividualPage() {
             periodo={periodo}
             cuadrante={nombreCuadrante}
             pdiInicial={resultado.pdi}
+            resultado={resultado}
             onGuardado={(pdi: Pdi360) =>
               setResultado((prev) => prev ? { ...prev, pdi } : prev)
             }

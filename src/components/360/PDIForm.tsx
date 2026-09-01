@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { upsert360Pdi, type Pdi360 } from "@/lib/supabase";
+import type { ResultadoConsolidado360 } from "@/lib/360-types";
+import { authHeaders } from "@/lib/auth-headers";
 
 interface Props {
   evaluadoId: string;
@@ -9,6 +11,13 @@ interface Props {
   cuadrante: string;
   pdiInicial?: Pdi360;
   onGuardado: (pdi: Pdi360) => void;
+  resultado: ResultadoConsolidado360;
+}
+
+interface SugerenciaPDI {
+  areas: Array<{ area_mejora: string; objetivo_smart: string; accion: string }>;
+  plazo: string;
+  indicador: string;
 }
 
 const PLAZO_OPTIONS = ["1 mes", "3 meses", "6 meses", "12 meses"];
@@ -25,7 +34,7 @@ const CUADRANTE_COLORS: Record<string, string> = {
   RIESGO:                   "#ef4444",
 };
 
-export default function PDIForm({ evaluadoId, periodo, cuadrante, pdiInicial, onGuardado }: Props) {
+export default function PDIForm({ evaluadoId, periodo, cuadrante, pdiInicial, onGuardado, resultado }: Props) {
   const [form, setForm] = useState({
     area_mejora_1:    pdiInicial?.area_mejora_1    ?? "",
     objetivo_smart_1: pdiInicial?.objetivo_smart_1 ?? "",
@@ -42,6 +51,40 @@ export default function PDIForm({ evaluadoId, periodo, cuadrante, pdiInicial, on
   const [open, setOpen] = useState<number[]>([1]);
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
+  const [sugiriendo, setSugiriendo] = useState(false);
+  const [errorSugerencia, setErrorSugerencia] = useState("");
+  const [sugerido, setSugerido] = useState(false);
+
+  async function sugerirConIA() {
+    setSugiriendo(true);
+    setErrorSugerencia("");
+    try {
+      const res = await fetch("/api/360-pdi-sugerido", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ resultado }),
+      });
+      const json: SugerenciaPDI & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error al generar la sugerencia");
+
+      setForm((prev) => {
+        const next = { ...prev, plazo: json.plazo || prev.plazo, indicador: json.indicador || prev.indicador };
+        json.areas?.slice(0, 3).forEach((a, i) => {
+          const n = i + 1;
+          next[`area_mejora_${n}` as keyof typeof next] = a.area_mejora ?? "";
+          next[`objetivo_smart_${n}` as keyof typeof next] = a.objetivo_smart ?? "";
+          next[`accion_${n}` as keyof typeof next] = a.accion ?? "";
+        });
+        return next;
+      });
+      setOpen([1, 2, 3]);
+      setSugerido(true);
+    } catch (e) {
+      setErrorSugerencia(e instanceof Error ? e.message : "Error desconocido");
+    } finally {
+      setSugiriendo(false);
+    }
+  }
 
   function toggle(n: number) {
     setOpen((prev) => prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]);
@@ -67,12 +110,41 @@ export default function PDIForm({ evaluadoId, periodo, cuadrante, pdiInicial, on
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <h3 className="text-white font-semibold">Plan de Desarrollo Individual</h3>
-        <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: color + "22", color, border: `1px solid ${color}` }}>
-          {cuadrante}
-        </span>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <h3 className="text-white font-semibold">Plan de Desarrollo Individual</h3>
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold" style={{ backgroundColor: color + "22", color, border: `1px solid ${color}` }}>
+            {cuadrante}
+          </span>
+        </div>
+        <button
+          onClick={sugerirConIA}
+          disabled={sugiriendo}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60"
+          style={{ backgroundColor: "#10b981", color: "#0A1A32" }}
+        >
+          {sugiriendo ? (
+            <>
+              <span className="inline-block w-3 h-3 border-2 border-[#0A1A32]/30 border-t-[#0A1A32] rounded-full animate-spin" />
+              Generando…
+            </>
+          ) : (
+            "✨ Sugerir con IA"
+          )}
+        </button>
       </div>
+
+      {errorSugerencia && (
+        <div className="bg-red-900/30 border border-red-500/40 rounded-lg px-4 py-3 text-red-300 text-sm">
+          {errorSugerencia}
+        </div>
+      )}
+
+      {sugerido && (
+        <p className="text-[11px] text-gray-500">
+          Sugerencia generada con IA a partir de las brechas y el cuadrante de esta persona. Revisa, ajusta y valida cada campo antes de guardar el plan definitivo.
+        </p>
+      )}
 
       {[1, 2, 3].map((n) => (
         <div key={n} className="border border-[#2d3a50] rounded-lg overflow-hidden">
