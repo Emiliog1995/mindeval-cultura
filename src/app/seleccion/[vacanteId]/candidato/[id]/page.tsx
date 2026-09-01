@@ -26,7 +26,7 @@ const btnPrimario: React.CSSProperties = { background: NAVY, color: "#FFFFFF", b
 const btnGold: React.CSSProperties = { background: GOLD, color: NAVY, border: "none", padding: "9px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" };
 const inputStyle: React.CSSProperties = { padding: "8px 10px", border: "1.5px solid #D5DCEB", borderRadius: 7, fontSize: 12.5, boxSizing: "border-box" };
 
-interface PsicoRow { bateria: string; sten: number | null; percentil: number | null }
+interface PsicoRow { bateria: string; sten: number | null; puntaje_estandar: number | null; percentil: number | null }
 interface DatoBarra { clave: string; nombre: string; valor: number }
 
 const NOMBRE_TEST_PSICOMETRICO: Record<"16pf5" | "kostick" | "disc" | "valanti", string> = {
@@ -86,6 +86,12 @@ export default function PerfilCandidatoPage() {
   const [cedulaEditada, setCedulaEditada] = useState("");
   const [guardandoCedula, setGuardandoCedula] = useState(false);
 
+  const [editandoContacto, setEditandoContacto] = useState(false);
+  const [emailEditado, setEmailEditado] = useState("");
+  const [telefonoEditado, setTelefonoEditado] = useState("");
+  const [guardandoContacto, setGuardandoContacto] = useState(false);
+  const [errorContacto, setErrorContacto] = useState("");
+
   const [sesiones, setSesiones] = useState<SesionPrueba[]>([]);
   const [fechaAgendar, setFechaAgendar] = useState<Record<TipoSesionPrueba, string>>({ psicometrica: "", tecnica: "", assessment: "" });
   const [agendando, setAgendando] = useState<Record<TipoSesionPrueba, boolean>>({ psicometrica: false, tecnica: false, assessment: false });
@@ -109,7 +115,7 @@ export default function PerfilCandidatoPage() {
 
     const [{ data: match }, { data: ps }, { data: tec }, { data: asse }, { data: entr }, { data: verif }] = await Promise.all([
       supabase.from("mindeval_cv_matches").select("match_pct, razones").eq("candidato_id", params.id).order("generado_en", { ascending: false }).limit(1),
-      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id),
+      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil").eq("candidato_id", params.id),
       supabase.from("mindeval_pruebas_tecnicas").select("puntaje_total, modo, preguntas_snapshot, respuestas_banco").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
       supabase.from("mindeval_assessment_evaluaciones").select("id, ejercicio, competencia, puntaje, evaluador").eq("candidato_id", params.id),
       supabase.from("mindeval_entrevistas").select("fecha, entrevistadores, resultado, notas").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
@@ -142,7 +148,7 @@ export default function PerfilCandidatoPage() {
     // completó su prueba agendada (el reclutador nunca ve el examen en vivo,
     // solo el resultado guardado por /api/mindeval-prueba/[token]).
     const [{ data: ps2 }, { data: tec2 }] = await Promise.all([
-      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id),
+      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil").eq("candidato_id", params.id),
       supabase
         .from("mindeval_pruebas_tecnicas")
         .select("puntaje_total, modo, preguntas_snapshot, respuestas_banco")
@@ -198,9 +204,20 @@ export default function PerfilCandidatoPage() {
     setTimeout(() => setLinkCopiado(null), 2000);
   }
 
+  /**
+   * Antes esta función solo tocaba etapa_actual, dejando `estado` (activo/
+   * descartado/contratado) desincronizado -- un candidato descartado desde
+   * este selector seguía contando como "activo" para la lógica de avance
+   * automático (avanzarASenescytSiAplica exige estado='activo'), y uno
+   * reactivado desde acá quedaba con estado='descartado' aunque su etapa ya
+   * no lo fuera, así que nunca volvía a avanzar solo, sin ningún error
+   * visible (auditoría 2026-09, I-3).
+   */
   async function moverEtapa(nueva: EtapaCandidato) {
-    await supabase.from("mindeval_candidatos").update({ etapa_actual: nueva }).eq("id", params.id);
-    setCandidato((prev) => (prev ? { ...prev, etapa_actual: nueva } : prev));
+    const estado: Candidato["estado"] = nueva === "descartado" ? "descartado" : nueva === "contratado" ? "contratado" : "activo";
+    const patch = estado === "activo" ? { etapa_actual: nueva, estado, motivo_descarte: null } : { etapa_actual: nueva, estado };
+    await supabase.from("mindeval_candidatos").update(patch).eq("id", params.id);
+    setCandidato((prev) => (prev ? { ...prev, ...patch } : prev));
   }
 
   /**
@@ -222,6 +239,31 @@ export default function PerfilCandidatoPage() {
       setEditandoCedula(false);
     } finally {
       setGuardandoCedula(false);
+    }
+  }
+
+  /**
+   * Único lugar para corregir el correo/teléfono de un candidato (auditoría
+   * 2026-09) -- antes no existía ninguna pantalla donde hacerlo, así que un
+   * correo mal escrito al postular (ej. "gmail.con") dejaba al candidato
+   * permanentemente inalcanzable, sin ninguna forma de invitarlo a una
+   * prueba ni notificarle un resultado.
+   */
+  async function guardarContacto() {
+    const email = emailEditado.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrorContacto("Escribe un correo válido (ej. nombre@dominio.com).");
+      return;
+    }
+    setErrorContacto("");
+    setGuardandoContacto(true);
+    try {
+      const telefono = telefonoEditado.trim() || null;
+      await supabase.from("mindeval_candidatos").update({ email: email || null, telefono }).eq("id", params.id);
+      setCandidato((prev) => (prev ? { ...prev, email: email || null, telefono } : prev));
+      setEditandoContacto(false);
+    } finally {
+      setGuardandoContacto(false);
     }
   }
 
@@ -296,7 +338,7 @@ export default function PerfilCandidatoPage() {
           percentil: Math.round(((sten - 1) / 9) * 100),
         }));
       if (filas.length) await supabase.from("mindeval_pruebas_psicometricas").insert(filas);
-      const { data: ps } = await supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, percentil").eq("candidato_id", params.id);
+      const { data: ps } = await supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil").eq("candidato_id", params.id);
       setPsicoGuardados(ps ?? []);
       setPsico({});
       await revisarAvanceSenescyt();
@@ -531,10 +573,12 @@ export default function PerfilCandidatoPage() {
   const patronDisc = codigoSegmentoDisc ? PATRONES_DISC[codigoSegmentoDisc] : undefined;
   const textosPatronDisc = patronDisc ? TEXTOS_PATRON_DISC[patronDisc] : undefined;
 
+  // El puntaje estándar de VALANTI vive en su propia columna, no en `sten`
+  // (ver mindeval-valanti-puntaje-estandar.sql) -- auditoría 2026-09, C-2.
   const datosValanti: DatoBarra[] = (Object.keys(NOMBRES_ESCALA_VALANTI) as EscalaVALANTI[])
     .map((escala) => {
       const fila = psicoGuardados.find((p) => p.bateria === `valanti_${escala}`);
-      return fila ? { clave: escala as string, nombre: NOMBRES_ESCALA_VALANTI[escala], valor: fila.sten ?? 0 } : null;
+      return fila ? { clave: escala as string, nombre: NOMBRES_ESCALA_VALANTI[escala], valor: fila.puntaje_estandar ?? 0 } : null;
     })
     .filter((d): d is DatoBarra => d !== null);
 
@@ -693,6 +737,49 @@ export default function PerfilCandidatoPage() {
                     style={{ background: "transparent", color: "#8FA0CC", border: "1px solid #3A4A7A", padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
                   >
                     {candidato.cedula ? "Corregir" : "Registrar"}
+                  </button>
+                </>
+              )}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#A9B6D8", marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {editandoContacto ? (
+                <>
+                  <input
+                    value={emailEditado}
+                    placeholder="correo@ejemplo.com"
+                    onChange={(e) => setEmailEditado(e.target.value)}
+                    style={{ padding: "4px 8px", borderRadius: 6, border: "1.5px solid #3A4A7A", fontSize: 12, width: 190 }}
+                  />
+                  <input
+                    value={telefonoEditado}
+                    placeholder="Teléfono"
+                    onChange={(e) => setTelefonoEditado(e.target.value)}
+                    style={{ padding: "4px 8px", borderRadius: 6, border: "1.5px solid #3A4A7A", fontSize: 12, width: 130 }}
+                  />
+                  <button onClick={guardarContacto} disabled={guardandoContacto} style={{ background: GOLD, color: NAVY, border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                    {guardandoContacto ? "…" : "Guardar"}
+                  </button>
+                  <button onClick={() => { setEditandoContacto(false); setErrorContacto(""); }} style={{ background: "transparent", color: "#A9B6D8", border: "1px solid #3A4A7A", padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>
+                    Cancelar
+                  </button>
+                  {errorContacto && <span style={{ color: "#FF8A78", fontSize: 11, width: "100%" }}>{errorContacto}</span>}
+                </>
+              ) : (
+                <>
+                  <span>
+                    Correo: {candidato.email ?? <span style={{ color: "#FF8A78" }}>sin registrar (no podrá recibir invitaciones por correo)</span>}
+                    {candidato.telefono ? ` · Tel: ${candidato.telefono}` : ""}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setEmailEditado(candidato.email ?? "");
+                      setTelefonoEditado(candidato.telefono ?? "");
+                      setErrorContacto("");
+                      setEditandoContacto(true);
+                    }}
+                    style={{ background: "transparent", color: "#8FA0CC", border: "1px solid #3A4A7A", padding: "2px 8px", borderRadius: 6, fontSize: 10.5, cursor: "pointer" }}
+                  >
+                    {candidato.email ? "Corregir" : "Registrar"}
                   </button>
                 </>
               )}
@@ -891,7 +978,7 @@ export default function PerfilCandidatoPage() {
                       : p.bateria.startsWith("disc_")
                         ? `Segmento ${p.sten}/7`
                         : p.bateria.startsWith("valanti_")
-                          ? `Estándar ${p.sten}`
+                          ? `Estándar ${p.puntaje_estandar}`
                           : `STEN ${p.sten} · ${categoriaSten(p.sten ?? 0)}`}
                   </span>
                 </div>

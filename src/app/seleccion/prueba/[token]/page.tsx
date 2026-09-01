@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
@@ -14,6 +14,7 @@ interface DatosTecnicaCasoAbierto {
   modo: "caso_abierto";
   candidato_id: string;
   candidato_nombre: string;
+  iniciada_en: string;
   caso_generado: string;
   criterios: { analisis: number; estrategia: number; kpis: number; claridad: number };
 }
@@ -22,6 +23,7 @@ interface DatosTecnicaBanco {
   modo: "banco";
   candidato_id: string;
   candidato_nombre: string;
+  iniciada_en: string;
   preguntas: { id: string; enunciado: string; opciones: OpcionPregunta[] }[];
 }
 type DatosTecnica = DatosTecnicaCasoAbierto | DatosTecnicaBanco;
@@ -30,6 +32,7 @@ interface DatosPsicometricaPlaceholder {
   modo: "placeholder";
   candidato_id: string;
   candidato_nombre: string;
+  iniciada_en: string;
   items: Record<string, string[]>;
 }
 interface DatosPsicometricaReal {
@@ -37,6 +40,7 @@ interface DatosPsicometricaReal {
   modo: "real";
   candidato_id: string;
   candidato_nombre: string;
+  iniciada_en: string;
   tests: {
     "16pf5"?: { num: number; texto: string; opciones: { letra: "a" | "b" | "c"; texto: string }[] }[];
     kostick?: { num: number; a: string; b: string }[];
@@ -49,6 +53,7 @@ interface DatosAssessment {
   tipo: "assessment";
   candidato_id: string;
   candidato_nombre: string;
+  iniciada_en: string;
   ejercicios: { id: string; competencia: string; enunciado: string }[];
 }
 
@@ -56,6 +61,25 @@ interface InfoSesion {
   tipo: "tecnica" | "psicometrica" | "assessment";
   candidato_nombre: string;
   requiere_cedula: boolean;
+}
+
+// Snapshot de todas las respuestas en curso, para el autoguardado local (ver
+// claveBorrador). Todos los campos son opcionales porque solo aplican al
+// tipo/modo de examen que le tocó a este candidato.
+interface BorradorGuardado {
+  respuestaTecnica?: string;
+  respuestasBanco?: Record<string, string>;
+  respuestasPsico?: Record<string, number[]>;
+  respuestasAssessment?: Record<string, string>;
+  sexo16pf5?: "H" | "F" | "";
+  respuestas16pf5?: Record<number, "a" | "b" | "c">;
+  respuestasKostick?: Record<number, "a" | "b">;
+  respuestasDisc?: Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>;
+  respuestasValanti?: Record<number, 0 | 1 | 2 | 3>;
+}
+
+function claveBorrador(token: string): string {
+  return `mindeval-prueba-borrador-${token}`;
 }
 
 function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessment): number {
@@ -74,9 +98,33 @@ function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessme
   return datos.modo === "banco" ? 40 : 90;
 }
 
-function useCuentaRegresiva(minutos: number, activo: boolean, onAgotado: () => void) {
-  const [segundos, setSegundos] = useState(minutos * 60);
+/**
+ * Cronómetro anclado al servidor (auditoría 2026-09): antes, el estado
+ * inicial de React se fijaba en el primer render (cuando `datos` todavía era
+ * null y la duración por defecto era 30 min) y nunca se volvía a sincronizar
+ * -- toda prueba mostraba 30:00 sin importar su duración real, y recargar la
+ * página regalaba tiempo extra. Ahora recibe el total real en segundos y
+ * cuánto tiempo real ya pasó desde que el candidato desbloqueó el contenido
+ * (`iniciada_en`, fijado por el servidor) y se resincroniza cuando esos
+ * valores llegan.
+ *
+ * `onAgotado` se guarda en un ref actualizado en cada render (no en un
+ * efecto) para que, al agotarse el tiempo, el envío automático use SIEMPRE
+ * las respuestas más recientes -- antes, el efecto solo se suscribía una vez
+ * (cuando `activo` pasaba a true) y quedaba con un cierre de `enviar()` que
+ * apuntaba al estado vacío del primer render, así que el envío por tiempo
+ * agotado mandaba respuestas en blanco.
+ */
+function useCuentaRegresiva(segundosTotales: number, segundosTranscurridos: number, activo: boolean, onAgotado: () => void) {
+  const [segundos, setSegundos] = useState(Math.max(0, segundosTotales - segundosTranscurridos));
   const disparado = useRef(false);
+  const onAgotadoRef = useRef(onAgotado);
+  onAgotadoRef.current = onAgotado;
+
+  useEffect(() => {
+    setSegundos(Math.max(0, segundosTotales - segundosTranscurridos));
+    disparado.current = false;
+  }, [segundosTotales, segundosTranscurridos]);
 
   useEffect(() => {
     if (!activo) return;
@@ -84,18 +132,17 @@ function useCuentaRegresiva(minutos: number, activo: boolean, onAgotado: () => v
       setSegundos((s) => {
         if (s <= 1 && !disparado.current) {
           disparado.current = true;
-          onAgotado();
+          onAgotadoRef.current();
         }
         return Math.max(0, s - 1);
       });
     }, 1000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activo]);
 
   const mm = String(Math.floor(segundos / 60)).padStart(2, "0");
   const ss = String(segundos % 60).padStart(2, "0");
-  return `${mm}:${ss}`;
+  return { texto: `${mm}:${ss}`, segundos };
 }
 
 export default function PruebaTokenPage() {
@@ -106,6 +153,7 @@ export default function PruebaTokenPage() {
   const [datos, setDatos] = useState<DatosTecnica | DatosPsicometrica | DatosAssessment | null>(null);
   const [enviado, setEnviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [borradorRestaurado, setBorradorRestaurado] = useState(false);
 
   const [cedulaConfirmar, setCedulaConfirmar] = useState("");
   const [verificandoCedula, setVerificandoCedula] = useState(false);
@@ -161,12 +209,75 @@ export default function PruebaTokenPage() {
         });
         setRespuestasPsico(iniciales);
       }
+
+      // Restaura un borrador local si existe (recarga, cierre accidental de
+      // la pestaña, pérdida de conexión) -- ver el efecto de autoguardado
+      // más abajo. Best-effort: un borrador corrupto o ausente simplemente
+      // se ignora y el candidato empieza en blanco, igual que antes.
+      try {
+        const raw = localStorage.getItem(claveBorrador(token));
+        if (raw) {
+          const b: BorradorGuardado = JSON.parse(raw);
+          let huboRestauracion = false;
+          if (b.respuestaTecnica) { setRespuestaTecnica(b.respuestaTecnica); huboRestauracion = true; }
+          if (b.respuestasBanco && Object.keys(b.respuestasBanco).length) { setRespuestasBanco(b.respuestasBanco); huboRestauracion = true; }
+          if (b.respuestasAssessment && Object.keys(b.respuestasAssessment).length) { setRespuestasAssessment(b.respuestasAssessment); huboRestauracion = true; }
+          if (b.sexo16pf5) { setSexo16pf5(b.sexo16pf5); huboRestauracion = true; }
+          if (b.respuestas16pf5 && Object.keys(b.respuestas16pf5).length) { setRespuestas16pf5(b.respuestas16pf5); huboRestauracion = true; }
+          if (b.respuestasKostick && Object.keys(b.respuestasKostick).length) { setRespuestasKostick(b.respuestasKostick); huboRestauracion = true; }
+          if (b.respuestasDisc && Object.keys(b.respuestasDisc).length) { setRespuestasDisc(b.respuestasDisc); huboRestauracion = true; }
+          if (b.respuestasValanti && Object.keys(b.respuestasValanti).length) { setRespuestasValanti(b.respuestasValanti); huboRestauracion = true; }
+          if (b.respuestasPsico && Object.keys(b.respuestasPsico).length) { setRespuestasPsico(b.respuestasPsico); huboRestauracion = true; }
+          if (huboRestauracion) setBorradorRestaurado(true);
+        }
+      } catch {
+        // localStorage no disponible o borrador corrupto -- se ignora.
+      }
     } catch (e) {
       setErrorCedula(e instanceof Error ? e.message : "No se pudo verificar tu cédula.");
     } finally {
       setVerificandoCedula(false);
     }
   }
+
+  // Autoguardado local: cada cambio en las respuestas se persiste al toque
+  // en este navegador, por token. Antes todo el examen vivía solo en
+  // useState -- recargar, perder conexión o que el navegador mate la
+  // pestaña (común en celular) borraba el intento completo sin aviso.
+  // best-effort: si falla (modo privado, cuota llena) el examen sigue
+  // funcionando igual, solo sin autoguardado.
+  useEffect(() => {
+    if (!datos || enviado) return;
+    try {
+      const snapshot: BorradorGuardado = {
+        respuestaTecnica,
+        respuestasBanco,
+        respuestasPsico,
+        respuestasAssessment,
+        sexo16pf5,
+        respuestas16pf5,
+        respuestasKostick,
+        respuestasDisc,
+        respuestasValanti,
+      };
+      localStorage.setItem(claveBorrador(token), JSON.stringify(snapshot));
+    } catch {
+      // ver comentario arriba.
+    }
+  }, [
+    token,
+    datos,
+    enviado,
+    respuestaTecnica,
+    respuestasBanco,
+    respuestasPsico,
+    respuestasAssessment,
+    sexo16pf5,
+    respuestas16pf5,
+    respuestasKostick,
+    respuestasDisc,
+    respuestasValanti,
+  ]);
 
   async function enviar() {
     if (!datos) return;
@@ -205,6 +316,11 @@ export default function PruebaTokenPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setEnviado(true);
+      try {
+        localStorage.removeItem(claveBorrador(token));
+      } catch {
+        // ver comentario del autoguardado.
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo enviar la prueba.");
     } finally {
@@ -212,8 +328,14 @@ export default function PruebaTokenPage() {
     }
   }
 
-  const duracion = datos ? duracionMinutos(datos) : 30;
-  const tiempo = useCuentaRegresiva(duracion, !!datos && !enviado, () => enviar());
+  const duracionSegundos = (datos ? duracionMinutos(datos) : 30) * 60;
+  // Se calcula una sola vez cuando llega `iniciada_en` (no en cada tick) --
+  // es el ancla real contra la que se mide el tiempo restante.
+  const segundosTranscurridos = useMemo(() => {
+    if (!datos?.iniciada_en) return 0;
+    return Math.max(0, Math.floor((Date.now() - new Date(datos.iniciada_en).getTime()) / 1000));
+  }, [datos?.iniciada_en]);
+  const { texto: tiempo, segundos: segundosRestantes } = useCuentaRegresiva(duracionSegundos, segundosTranscurridos, !!datos && !enviado, () => enviar());
 
   if (cargando) return null;
 
@@ -301,13 +423,35 @@ export default function PruebaTokenPage() {
             {datos.tipo === "tecnica" ? "Prueba Técnica" : datos.tipo === "assessment" ? "Assessment Center" : "Prueba Psicométrica"}
           </div>
         </div>
-        <div style={{ marginLeft: "auto", background: "rgba(255,255,255,0.1)", padding: "8px 16px", borderRadius: 8, fontSize: 16, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+        <div
+          style={{
+            marginLeft: "auto",
+            background: segundosRestantes <= 120 ? "#C4402F" : "rgba(255,255,255,0.1)",
+            padding: "8px 16px",
+            borderRadius: 8,
+            fontSize: 16,
+            fontWeight: 800,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           ⏱ {tiempo}
         </div>
       </div>
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem" }}>
         {error && <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
+
+        {segundosRestantes > 0 && segundosRestantes <= 120 && (
+          <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 700 }}>
+            Quedan menos de 2 minutos. Al llegar a 00:00 se enviarán tus respuestas automáticamente tal como estén.
+          </div>
+        )}
+
+        {borradorRestaurado && (
+          <div style={{ background: "#FFFBEF", color: "#8A6400", border: "1px solid #F3E0AE", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 12.5 }}>
+            Recuperamos tus respuestas anteriores en este dispositivo. Revísalas antes de continuar.
+          </div>
+        )}
 
         <div style={{ fontSize: 11, color: "#A9B6D8", marginBottom: 16 }}>
           Tus respuestas se tratan conforme a nuestro{" "}

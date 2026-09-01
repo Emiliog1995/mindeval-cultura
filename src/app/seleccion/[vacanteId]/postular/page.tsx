@@ -54,6 +54,14 @@ export default function PostularPage() {
       setError("Escribe tu número de cédula (10 dígitos).");
       return;
     }
+    // Todo el proceso posterior a la postulación (invitaciones a pruebas,
+    // resultados, correo de rechazo) depende de este correo -- antes se
+    // podía postular sin uno o con uno mal escrito, y no había forma de
+    // corregirlo después (auditoría 2026-09, C-8).
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Escribe un correo válido (ej. nombre@dominio.com) -- lo necesitamos para invitarte a las siguientes etapas.");
+      return;
+    }
     if (vacante?.sedes && vacante.sedes.length > 0 && !sede) {
       setError("Selecciona la sede a la que estás postulando.");
       return;
@@ -172,7 +180,7 @@ export default function PostularPage() {
             onChange={(e) => setCedula(e.target.value.replace(/\D/g, "").slice(0, 10))}
           />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <input style={inputStyle} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input style={inputStyle} type="email" placeholder="Email *" value={email} onChange={(e) => setEmail(e.target.value)} />
             <input style={inputStyle} placeholder="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

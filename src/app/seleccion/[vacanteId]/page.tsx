@@ -160,6 +160,14 @@ export default function ProcesoVacante() {
 
   async function altaCandidato() {
     if (!nuevoNombre.trim()) return;
+    // El correo sigue siendo opcional en el alta manual (a diferencia de la
+    // postulación pública) -- un reclutador puede registrar a alguien de un
+    // referido antes de tener su contacto completo. Si lo escribe, sí debe
+    // ser válido (auditoría 2026-09, C-8).
+    if (nuevoEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevoEmail.trim())) {
+      setErrorAlta("Escribe un correo válido (ej. nombre@dominio.com) o deja el campo vacío.");
+      return;
+    }
     setErrorAlta("");
     setGuardandoAlta(true);
     try {

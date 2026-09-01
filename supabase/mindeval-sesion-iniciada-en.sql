@@ -1,0 +1,15 @@
+-- MINDEVAL SELECCIÓN -- ancla temporal real para el cronómetro del examen
+-- Ejecutar en Supabase -> SQL Editor (proyecto mindeval-cultura)
+-- Idempotente. Aditivo: columna nullable, no toca filas existentes.
+--
+-- Por qué: el cronómetro del portal del candidato (/seleccion/prueba/[token])
+-- vivía solo en el estado de React, arrancando siempre desde la duración
+-- completa. Recargar la página, o simplemente el bug de que el estado
+-- inicial del cronómetro quedaba fijo en 30 minutos (el valor por defecto
+-- antes de que llegaran los datos reales), le regalaba tiempo extra al
+-- candidato en cada recarga. Esta columna guarda el momento real en que el
+-- candidato desbloqueó el contenido (POST /api/mindeval-prueba/[token]/
+-- contenido, primera vez que la sesión pasa de 'programada' a 'en_curso') --
+-- el servidor calcula desde ahí cuánto tiempo real ha pasado y se lo manda
+-- al navegador, que ya no puede fingir que acaba de empezar recargando.
+ALTER TABLE mindeval_sesiones_prueba ADD COLUMN IF NOT EXISTS iniciada_en TIMESTAMPTZ;

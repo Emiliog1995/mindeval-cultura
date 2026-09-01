@@ -129,6 +129,10 @@ export interface PruebaPsicometrica {
   candidato_id: string;
   bateria: string;
   sten: number | null;
+  // Puntaje estándar (media 50/DE 10) de VALANTI -- no cabe en `sten`
+  // (acotado 0-10 por CHECK, pensado para 16PF-5/KOSTICK/DISC). Ver
+  // mindeval-valanti-puntaje-estandar.sql.
+  puntaje_estandar?: number | null;
   percentil: number | null;
   aplicada_en: string;
 }
@@ -234,6 +238,11 @@ export interface SesionPrueba {
   fecha_programada: string;
   estado: EstadoSesionPrueba;
   completada_en?: string | null;
+  // Momento real en que el candidato desbloqueó el contenido (primera vez
+  // que la sesión pasa a 'en_curso') — ancla el cronómetro del portal para
+  // que una recarga no le regale tiempo extra. Ver
+  // mindeval-sesion-iniciada-en.sql.
+  iniciada_en?: string | null;
   ejercicios_snapshot?: EjercicioBanco[] | null;
   created_at: string;
 }

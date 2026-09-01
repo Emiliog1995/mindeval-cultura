@@ -58,6 +58,13 @@ export async function POST(req: NextRequest) {
     if (!cedula || !/^\d{10}$/.test(cedula)) {
       return NextResponse.json({ error: "La cédula debe tener 10 dígitos" }, { status: 400 });
     }
+    // Todo el proceso posterior (invitaciones, resultados, rechazo) depende
+    // de este correo -- el formulario público ya lo exige y valida en el
+    // cliente, esta es la misma regla del lado del servidor, nunca solo
+    // confianza en el navegador (auditoría 2026-09, C-8).
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Escribe un correo válido" }, { status: 400 });
+    }
     if (!consentimientoLopdp) {
       return NextResponse.json({ error: "Debes aceptar el Aviso de Privacidad para postular" }, { status: 400 });
     }

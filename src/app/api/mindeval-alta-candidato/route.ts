@@ -46,6 +46,11 @@ export async function POST(req: NextRequest) {
     if (cedula && !/^\d{10}$/.test(cedula)) {
       return NextResponse.json({ error: "La cédula debe tener 10 dígitos" }, { status: 400 });
     }
+    // Opcional en el alta manual (a diferencia de la postulación pública),
+    // pero si viene debe ser un correo real -- auditoría 2026-09, C-8.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: "Escribe un correo válido" }, { status: 400 });
+    }
 
     let cvTexto = "";
     if (cvPath) {

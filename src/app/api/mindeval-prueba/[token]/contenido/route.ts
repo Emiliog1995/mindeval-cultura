@@ -12,6 +12,11 @@ import type { EjercicioBanco, PreguntaBanco, Vacante } from "@/lib/mindeval-type
 
 const EXPIRACION_DIAS = 7;
 
+// generarCasoTecnico (caso técnico abierto) llama a Claude y puede superar
+// el límite por defecto de las funciones serverless de Vercel con un cold
+// start -- mismo motivo que maxDuration en /api/mindeval-postular.
+export const maxDuration = 60;
+
 function sesionExpirada(sesion: { fecha_programada: string; estado: string }): boolean {
   if (sesion.estado === "completada") return false;
   const limite = new Date(sesion.fecha_programada).getTime() + EXPIRACION_DIAS * 24 * 60 * 60_000;
@@ -35,209 +40,241 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!permitido) return rateLimitResponse();
 
   const { token } = await params;
-  const { cedula }: { cedula?: string } = await req.json().catch(() => ({}));
 
-  const { data: sesion, error } = await supabaseAdmin
-    .from("mindeval_sesiones_prueba")
-    .select("*, mindeval_candidatos(nombre_completo, cedula)")
-    .eq("token", token)
-    .maybeSingle();
+  try {
+    const { cedula }: { cedula?: string } = await req.json().catch(() => ({}));
 
-  if (error || !sesion) {
-    return NextResponse.json({ error: "Link no válido" }, { status: 404 });
-  }
-  if (sesion.estado === "completada") {
-    return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
-  }
-  if (sesionExpirada(sesion)) {
-    return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
-  }
-  if (new Date(sesion.fecha_programada).getTime() > Date.now() + 30 * 60_000) {
-    return NextResponse.json({ error: "Esta prueba todavía no está disponible. Vuelve a la hora agendada." }, { status: 403 });
-  }
-  // Misma ventana que GET /api/mindeval-prueba/[token] (30 min antes a 1 hora
-  // después) -- se repite acá porque este endpoint es el que de verdad
-  // entrega el contenido; GET solo informa si hace falta cédula. No aplica
-  // si ya está "en_curso": un candidato que ya desbloqueó la prueba y
-  // recarga la página cerca de que se le acabe el tiempo no debe quedar
-  // bloqueado a mitad de su propio intento.
-  if (sesion.estado !== "en_curso" && Date.now() > new Date(sesion.fecha_programada).getTime() + 60 * 60_000) {
-    return NextResponse.json(
-      { error: "Ya pasó la hora agendada para esta prueba. Contacta al reclutador para que te reagende un nuevo horario." },
-      { status: 403 }
-    );
-  }
+    const { data: sesion, error } = await supabaseAdmin
+      .from("mindeval_sesiones_prueba")
+      .select("*, mindeval_candidatos(nombre_completo, cedula)")
+      .eq("token", token)
+      .maybeSingle();
 
-  const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;
-  if (cedulaRegistrada && cedulaRegistrada !== (cedula ?? "").trim()) {
-    return NextResponse.json({ error: "La cédula no coincide con la registrada para este candidato." }, { status: 403 });
-  }
+    if (error || !sesion) {
+      return NextResponse.json({ error: "Link no válido" }, { status: 404 });
+    }
+    if (sesion.estado === "completada") {
+      return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
+    }
+    if (sesionExpirada(sesion)) {
+      return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
+    }
+    if (new Date(sesion.fecha_programada).getTime() > Date.now() + 30 * 60_000) {
+      return NextResponse.json({ error: "Esta prueba todavía no está disponible. Vuelve a la hora agendada." }, { status: 403 });
+    }
+    // Misma ventana que GET /api/mindeval-prueba/[token] (30 min antes a 1 hora
+    // después) -- se repite acá porque este endpoint es el que de verdad
+    // entrega el contenido; GET solo informa si hace falta cédula. No aplica
+    // si ya está "en_curso": un candidato que ya desbloqueó la prueba y
+    // recarga la página cerca de que se le acabe el tiempo no debe quedar
+    // bloqueado a mitad de su propio intento.
+    if (sesion.estado !== "en_curso" && Date.now() > new Date(sesion.fecha_programada).getTime() + 60 * 60_000) {
+      return NextResponse.json(
+        { error: "Ya pasó la hora agendada para esta prueba. Contacta al reclutador para que te reagende un nuevo horario." },
+        { status: 403 }
+      );
+    }
 
-  const { data: vacante } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).single();
+    const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;
+    if (cedulaRegistrada && cedulaRegistrada !== (cedula ?? "").trim()) {
+      return NextResponse.json({ error: "La cédula no coincide con la registrada para este candidato." }, { status: 403 });
+    }
 
-  if (sesion.estado === "programada") {
-    await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "en_curso" }).eq("id", sesion.id);
-  }
+    const { data: vacante } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).single();
 
-  if (sesion.tipo === "tecnica") {
-    const modoTecnica = (vacante as Vacante | null)?.modo_tecnica ?? "caso_abierto";
+    // Ancla real del cronómetro (ver mindeval-sesion-iniciada-en.sql): se fija
+    // la primera vez que el candidato desbloquea el contenido y nunca se
+    // vuelve a mover -- el navegador calcula el tiempo restante contra esta
+    // marca, no contra el momento en que se abrió/recargó la pestaña.
+    const iniciadaEn: string = sesion.iniciada_en ?? new Date().toISOString();
+    if (sesion.estado === "programada") {
+      await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "en_curso", iniciada_en: iniciadaEn }).eq("id", sesion.id);
+    } else if (!sesion.iniciada_en) {
+      // Sesión legado que ya estaba en_curso antes de esta columna existir --
+      // se fija ahora mismo en vez de dejarla en null (mejor aproximación
+      // disponible, igual criterio que el backfill de created_at en
+      // mindeval-seleccion-etapa8-senescyt-masivo.sql).
+      await supabaseAdmin.from("mindeval_sesiones_prueba").update({ iniciada_en: iniciadaEn }).eq("id", sesion.id);
+    }
 
-    if (modoTecnica === "banco") {
+    if (sesion.tipo === "tecnica") {
+      const modoTecnica = (vacante as Vacante | null)?.modo_tecnica ?? "caso_abierto";
+
+      if (modoTecnica === "banco") {
+        const { data: existente } = await supabaseAdmin
+          .from("mindeval_pruebas_tecnicas")
+          .select("*")
+          .eq("candidato_id", sesion.candidato_id)
+          .eq("modo", "banco")
+          .is("respuestas_banco", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let preguntasSnapshot: PreguntaBanco[];
+        if (existente) {
+          preguntasSnapshot = existente.preguntas_snapshot ?? [];
+        } else {
+          const { data: activas } = await supabaseAdmin
+            .from("mindeval_banco_preguntas")
+            .select("*")
+            .eq("vacante_id", sesion.vacante_id)
+            .eq("estado", "activa")
+            .order("orden", { ascending: true });
+
+          if (!activas || activas.length === 0) {
+            return NextResponse.json(
+              { error: "Esta vacante todavía no tiene preguntas técnicas activas. Contacta al reclutador." },
+              { status: 409 }
+            );
+          }
+
+          preguntasSnapshot = activas as PreguntaBanco[];
+          const { error: insErr } = await supabaseAdmin.from("mindeval_pruebas_tecnicas").insert({
+            candidato_id: sesion.candidato_id,
+            modo: "banco",
+            preguntas_snapshot: preguntasSnapshot,
+            corregido_por: "ia",
+          });
+          if (insErr) {
+            return NextResponse.json({ error: "No se pudo preparar tu prueba. Intenta de nuevo en un momento." }, { status: 500 });
+          }
+        }
+
+        const preguntas = preguntasSnapshot.map((p) => ({ id: p.id, enunciado: p.enunciado, opciones: p.opciones }));
+
+        return NextResponse.json({
+          tipo: "tecnica",
+          modo: "banco",
+          candidato_id: sesion.candidato_id,
+          candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
+          iniciada_en: iniciadaEn,
+          preguntas,
+        });
+      }
+
       const { data: existente } = await supabaseAdmin
         .from("mindeval_pruebas_tecnicas")
         .select("*")
         .eq("candidato_id", sesion.candidato_id)
-        .eq("modo", "banco")
-        .is("respuestas_banco", null)
+        .eq("modo", "caso_abierto")
+        .is("respuesta_candidato", null)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      let preguntasSnapshot: PreguntaBanco[];
       if (existente) {
-        preguntasSnapshot = existente.preguntas_snapshot ?? [];
-      } else {
-        const { data: activas } = await supabaseAdmin
-          .from("mindeval_banco_preguntas")
-          .select("*")
-          .eq("vacante_id", sesion.vacante_id)
-          .eq("estado", "activa")
-          .order("orden", { ascending: true });
-
-        if (!activas || activas.length === 0) {
-          return NextResponse.json(
-            { error: "Esta vacante todavía no tiene preguntas técnicas activas. Contacta al reclutador." },
-            { status: 409 }
-          );
-        }
-
-        preguntasSnapshot = activas as PreguntaBanco[];
-        await supabaseAdmin.from("mindeval_pruebas_tecnicas").insert({
+        return NextResponse.json({
+          tipo: "tecnica",
+          modo: "caso_abierto",
           candidato_id: sesion.candidato_id,
-          modo: "banco",
-          preguntas_snapshot: preguntasSnapshot,
-          corregido_por: "ia",
+          candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
+          iniciada_en: iniciadaEn,
+          caso_generado: existente.caso_generado,
+          criterios: existente.criterios,
         });
       }
 
-      const preguntas = preguntasSnapshot.map((p) => ({ id: p.id, enunciado: p.enunciado, opciones: p.opciones }));
-
-      return NextResponse.json({
-        tipo: "tecnica",
-        modo: "banco",
+      const perfil = await resolverPerfilCargo(supabaseAdmin, vacante as Vacante);
+      const caso = await generarCasoTecnico((vacante as Vacante).titulo, perfil);
+      const { error: insErr } = await supabaseAdmin.from("mindeval_pruebas_tecnicas").insert({
         candidato_id: sesion.candidato_id,
-        candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
-        preguntas,
+        modo: "caso_abierto",
+        caso_generado: caso.caso_generado,
+        criterios: caso.criterios,
+        corregido_por: "ia",
       });
-    }
+      if (insErr) {
+        return NextResponse.json({ error: "No se pudo preparar tu prueba. Intenta de nuevo en un momento." }, { status: 500 });
+      }
 
-    const { data: existente } = await supabaseAdmin
-      .from("mindeval_pruebas_tecnicas")
-      .select("*")
-      .eq("candidato_id", sesion.candidato_id)
-      .eq("modo", "caso_abierto")
-      .is("respuesta_candidato", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existente) {
       return NextResponse.json({
         tipo: "tecnica",
         modo: "caso_abierto",
         candidato_id: sesion.candidato_id,
         candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
-        caso_generado: existente.caso_generado,
-        criterios: existente.criterios,
+        iniciada_en: iniciadaEn,
+        caso_generado: caso.caso_generado,
+        criterios: caso.criterios,
       });
     }
 
-    const perfil = await resolverPerfilCargo(supabaseAdmin, vacante as Vacante);
-    const caso = await generarCasoTecnico((vacante as Vacante).titulo, perfil);
-    await supabaseAdmin.from("mindeval_pruebas_tecnicas").insert({
-      candidato_id: sesion.candidato_id,
-      modo: "caso_abierto",
-      caso_generado: caso.caso_generado,
-      criterios: caso.criterios,
-      corregido_por: "ia",
-    });
+    if (sesion.tipo === "assessment") {
+      let snapshot = (sesion.ejercicios_snapshot as EjercicioBanco[] | null) ?? null;
+      if (!snapshot) {
+        const { data: activos } = await supabaseAdmin
+          .from("mindeval_banco_ejercicios")
+          .select("*")
+          .eq("vacante_id", sesion.vacante_id)
+          .eq("estado", "activa")
+          .order("orden", { ascending: true });
 
-    return NextResponse.json({
-      tipo: "tecnica",
-      modo: "caso_abierto",
-      candidato_id: sesion.candidato_id,
-      candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
-      caso_generado: caso.caso_generado,
-      criterios: caso.criterios,
-    });
-  }
+        if (!activos || activos.length === 0) {
+          return NextResponse.json(
+            { error: "Esta vacante todavía no tiene ejercicios de assessment activos. Contacta al reclutador." },
+            { status: 409 }
+          );
+        }
 
-  if (sesion.tipo === "assessment") {
-    let snapshot = (sesion.ejercicios_snapshot as EjercicioBanco[] | null) ?? null;
-    if (!snapshot) {
-      const { data: activos } = await supabaseAdmin
-        .from("mindeval_banco_ejercicios")
-        .select("*")
-        .eq("vacante_id", sesion.vacante_id)
-        .eq("estado", "activa")
-        .order("orden", { ascending: true });
-
-      if (!activos || activos.length === 0) {
-        return NextResponse.json(
-          { error: "Esta vacante todavía no tiene ejercicios de assessment activos. Contacta al reclutador." },
-          { status: 409 }
-        );
+        snapshot = activos as EjercicioBanco[];
+        const { error: updErr } = await supabaseAdmin.from("mindeval_sesiones_prueba").update({ ejercicios_snapshot: snapshot }).eq("id", sesion.id);
+        if (updErr) {
+          return NextResponse.json({ error: "No se pudo preparar tu prueba. Intenta de nuevo en un momento." }, { status: 500 });
+        }
       }
 
-      snapshot = activos as EjercicioBanco[];
-      await supabaseAdmin.from("mindeval_sesiones_prueba").update({ ejercicios_snapshot: snapshot }).eq("id", sesion.id);
+      const ejercicios = snapshot.map((e) => ({ id: e.id, competencia: e.competencia, enunciado: e.enunciado }));
+
+      return NextResponse.json({
+        tipo: "assessment",
+        candidato_id: sesion.candidato_id,
+        candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
+        iniciada_en: iniciadaEn,
+        ejercicios,
+      });
     }
 
-    const ejercicios = snapshot.map((e) => ({ id: e.id, competencia: e.competencia, enunciado: e.enunciado }));
+    const testsActivos = (vacante as Vacante | null)?.tests_psicometricos ?? [];
 
-    return NextResponse.json({
-      tipo: "assessment",
-      candidato_id: sesion.candidato_id,
-      candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
-      ejercicios,
-    });
-  }
+    if (testsActivos.length > 0) {
+      const tests: Record<string, unknown> = {};
+      if (testsActivos.includes("16pf5")) {
+        tests["16pf5"] = ITEMS_16PF5.map((it) => ({
+          num: it.num,
+          texto: it.texto,
+          opciones: it.opciones.map((o) => ({ letra: o.letra, texto: o.texto })),
+        }));
+      }
+      if (testsActivos.includes("kostick")) {
+        tests["kostick"] = ITEMS_KOSTICK.map((it) => ({ num: it.num, a: it.a, b: it.b }));
+      }
+      if (testsActivos.includes("disc")) {
+        tests["disc"] = ITEMS_DISC.map((it) => ({ num: it.num, palabras: it.palabras.map((p) => p.texto) }));
+      }
+      if (testsActivos.includes("valanti")) {
+        tests["valanti"] = ITEMS_VALANTI.map((it) => ({ num: it.num, fraseA: it.fraseA, fraseB: it.fraseB }));
+      }
 
-  const testsActivos = (vacante as Vacante | null)?.tests_psicometricos ?? [];
-
-  if (testsActivos.length > 0) {
-    const tests: Record<string, unknown> = {};
-    if (testsActivos.includes("16pf5")) {
-      tests["16pf5"] = ITEMS_16PF5.map((it) => ({
-        num: it.num,
-        texto: it.texto,
-        opciones: it.opciones.map((o) => ({ letra: o.letra, texto: o.texto })),
-      }));
-    }
-    if (testsActivos.includes("kostick")) {
-      tests["kostick"] = ITEMS_KOSTICK.map((it) => ({ num: it.num, a: it.a, b: it.b }));
-    }
-    if (testsActivos.includes("disc")) {
-      tests["disc"] = ITEMS_DISC.map((it) => ({ num: it.num, palabras: it.palabras.map((p) => p.texto) }));
-    }
-    if (testsActivos.includes("valanti")) {
-      tests["valanti"] = ITEMS_VALANTI.map((it) => ({ num: it.num, fraseA: it.fraseA, fraseB: it.fraseB }));
+      return NextResponse.json({
+        tipo: "psicometrica",
+        modo: "real",
+        candidato_id: sesion.candidato_id,
+        candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
+        iniciada_en: iniciadaEn,
+        tests,
+      });
     }
 
     return NextResponse.json({
       tipo: "psicometrica",
-      modo: "real",
+      modo: "placeholder",
       candidato_id: sesion.candidato_id,
       candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
-      tests,
+      iniciada_en: iniciadaEn,
+      items: ITEMS_EJEMPLO,
     });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "No se pudo cargar tu prueba";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  return NextResponse.json({
-    tipo: "psicometrica",
-    modo: "placeholder",
-    candidato_id: sesion.candidato_id,
-    candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
-    items: ITEMS_EJEMPLO,
-  });
 }

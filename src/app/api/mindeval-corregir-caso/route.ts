@@ -3,6 +3,9 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { requireAuth } from "@/lib/require-auth";
 import { corregirCasoTecnico } from "@/lib/mindeval-ia";
 
+// Llama a Claude -- mismo motivo que maxDuration en /api/mindeval-postular.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const authError = await requireAuth(req, "seleccion");
   if (authError) return authError;

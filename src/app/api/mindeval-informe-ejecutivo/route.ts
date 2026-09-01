@@ -8,6 +8,11 @@ import type { Candidato } from "@/lib/mindeval-types";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// El Informe Final es un texto largo generado por Claude -- puede superar
+// el límite por defecto de las funciones serverless de Vercel con un cold
+// start, mismo motivo que maxDuration en /api/mindeval-postular.
+export const maxDuration = 60;
+
 interface DatoEscala { nombre: string; valor: number }
 
 type EstadoSenescyt = "pendiente" | "registrado" | "sin_registro";
@@ -43,14 +48,20 @@ const NOTA_DE_ALCANCE =
   "Los resultados de instrumentos de elección forzada (Kostick, DISC, VALANTI) expresan prioridad relativa, no diagnóstico individual. Este informe se generó antes de la entrevista y no la sustituye ni constituye una evaluación clínica.";
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAuth(req, "seleccion");
-  if (authError) return authError;
-
   const { permitido } = checkRateLimit(req, "mindeval-informe-ejecutivo");
   if (!permitido) return rateLimitResponse();
 
   try {
     const input: InformeInput = await req.json();
+
+    // A diferencia del resto de rutas del módulo, esta no lee la base de
+    // datos (recibe los puntajes ya calculados en el body) -- por eso no
+    // filtraba por empresa como las demás. No es una fuga de datos ajenos,
+    // pero rompía el patrón "toda ruta de Selección valida el recurso
+    // contra la empresa de la cuenta" (auditoría 2026-09).
+    const authError = await requireAuth(req, "seleccion", { candidatoId: input?.candidato?.id });
+    if (authError) return authError;
+
     const {
       candidato, titulo_vacante, matchCv, estadoSenescyt, stenPromedio, tecnicaTotal, assessmentPromedio,
       datos16pf5, datosKostick, datosDisc, patronDisc, textosPatronDisc, datosValanti,

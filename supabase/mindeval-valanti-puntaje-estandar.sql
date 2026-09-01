@@ -1,0 +1,18 @@
+-- MINDEVAL SELECCIÓN -- columna separada para el puntaje estándar de VALANTI
+-- Ejecutar en Supabase -> SQL Editor (proyecto mindeval-cultura)
+-- Idempotente. Aditivo: columna nullable, no toca filas existentes.
+--
+-- Por qué: mindeval_pruebas_psicometricas.sten tiene
+-- CHECK (sten between 0 and 10) desde mindeval-seleccion-etapa6.sql (pensado
+-- para el decatipo 1-10 del 16PF-5 y el conteo 0-9 del KOSTICK). El puntaje
+-- estándar de VALANTI es tipo T (media 50 / DE 10, rango real ~20-80) y se
+-- estaba insertando directo en `sten` -- cada fila de VALANTI viola el
+-- CHECK y el insert completo del lote de psicométricas falla (incluye
+-- 16PF-5 y KOSTICK del mismo envío, aunque esos sí eran válidos). Un
+-- candidato con VALANTI activo nunca lograba guardar ningún resultado
+-- psicométrico.
+--
+-- Esta columna nueva guarda el puntaje estándar de VALANTI sin tocar el
+-- rango de `sten` (que sigue exclusivo de 16PF-5/KOSTICK/DISC). Las filas de
+-- VALANTI se insertan ahora con sten = null.
+ALTER TABLE mindeval_pruebas_psicometricas ADD COLUMN IF NOT EXISTS puntaje_estandar NUMERIC;

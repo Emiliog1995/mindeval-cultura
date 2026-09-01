@@ -166,6 +166,13 @@ CREATE POLICY "modulo_autorizado" ON empresas_mdt
     usuario_tiene_modulo('manual_puestos') OR usuario_tiene_modulo('nomina')
     OR (usuario_tiene_modulo('seleccion') AND usuario_empresa_id() IS NULL)
   );
+-- Faltaba este DROP IF EXISTS -- a diferencia del resto de policies de este
+-- script, esta se creaba sin limpiar primero, así que reejecutar el script
+-- (ej. tras corregir algo más arriba) fallaba con "policy already exists" en
+-- la ÚLTIMA sentencia -- y como Supabase corre el script completo como una
+-- sola transacción, ese error revertía TODO lo demás que el script ya había
+-- aplicado bien. Idempotente ahora (auditoría 2026-09).
+DROP POLICY IF EXISTS "seleccion_select_propia_empresa" ON empresas_mdt;
 CREATE POLICY "seleccion_select_propia_empresa" ON empresas_mdt
   FOR SELECT TO authenticated
   USING (usuario_tiene_modulo('seleccion') AND usuario_empresa_id() IS NOT NULL AND id = usuario_empresa_id());

@@ -46,7 +46,15 @@ export async function enviarInvitacionPrueba(params: {
     return { ok: false, error: "RESEND_API_KEY no configurada" };
   }
 
-  const fecha = new Date(params.fechaProgramada).toLocaleString("es-EC", { dateStyle: "full", timeStyle: "short" });
+  // Esta función corre en el servidor de Vercel (zona UTC) -- sin
+  // timeZone explícito, toLocaleString("es-EC", ...) solo cambiaba el
+  // idioma del texto, no el huso horario, y el correo anunciaba la hora 5
+  // horas adelantada a la real en Ecuador (auditoría 2026-09, I-1).
+  const fecha = new Date(params.fechaProgramada).toLocaleString("es-EC", {
+    dateStyle: "full",
+    timeStyle: "short",
+    timeZone: "America/Guayaquil",
+  });
   const label = LABEL_TIPO[params.tipo];
   const nombreCandidato = escapeHtml(params.nombreCandidato);
   const tituloVacante = escapeHtml(params.tituloVacante);
@@ -64,7 +72,7 @@ export async function enviarInvitacionPrueba(params: {
           te invitamos a rendir tu <strong>${label}</strong>.
         </p>
         <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
-          <strong>Fecha y hora programada:</strong> ${fecha}
+          <strong>Fecha y hora programada:</strong> ${fecha} (hora Ecuador)
         </p>
         <div style="text-align: center; margin: 28px 0;">
           <a href="${params.link}" style="background: ${GOLD}; color: ${NAVY}; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; display: inline-block;">

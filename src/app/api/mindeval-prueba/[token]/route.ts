@@ -11,6 +11,12 @@ import type { EjercicioBanco, SesionPrueba } from "@/lib/mindeval-types";
 // meses después). El reclutador puede volver a agendarla si hace falta.
 const EXPIRACION_DIAS = 7;
 
+// La corrección con IA (caso técnico abierto, ejercicios de assessment) y el
+// Informe Ejecutivo pueden superar el límite por defecto de las funciones
+// serverless de Vercel con un cold start o una respuesta larga -- mismo
+// motivo que maxDuration en /api/mindeval-postular.
+export const maxDuration = 60;
+
 function sesionExpirada(sesion: { fecha_programada: string; estado: string }): boolean {
   if (sesion.estado === "completada") return false;
   const limite = new Date(sesion.fecha_programada).getTime() + EXPIRACION_DIAS * 24 * 60 * 60_000;
@@ -81,232 +87,281 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   });
 }
 
+/**
+ * Guarda la respuesta final y cierra la sesión. Regla estricta en toda esta
+ * función (auditoría 2026-09): si CUALQUIER escritura falla, se responde un
+ * error accionable y la sesión NO se marca 'completada' -- antes, un error
+ * de Supabase silencioso (ej. una fila que viola un CHECK) dejaba al
+ * candidato ver "Prueba enviada" con el enlace ya cerrado y ningún resultado
+ * guardado. Dejar el enlace vivo permite reintentar; para técnica eso es
+ * seguro (el siguiente intento vuelve a encontrar la fila con
+ * respuesta_candidato/respuestas_banco todavía en null). Para
+ * psicométricas/assessment un reintento tras un fallo tardío (ya insertado,
+ * falla solo el cierre de la sesión) podría en teoría duplicar filas -- caso
+ * extremo que no bloquea este arreglo, el defecto que resuelve (resultados
+ * perdidos en silencio) es muchísimo más grave y frecuente.
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { permitido } = checkRateLimit(req, "mindeval-prueba");
   if (!permitido) return rateLimitResponse();
 
   const { token } = await params;
-  const body = await req.json();
 
-  const { data: sesion, error } = await supabaseAdmin
-    .from("mindeval_sesiones_prueba")
-    .select("*, mindeval_candidatos(nombre_completo)")
-    .eq("token", token)
-    .maybeSingle();
+  try {
+    const body = await req.json();
 
-  if (error || !sesion) {
-    return NextResponse.json({ error: "Link no válido" }, { status: 404 });
-  }
-  if (sesion.estado === "completada") {
-    return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
-  }
-  if (sesionExpirada(sesion)) {
-    if (sesion.estado !== "expirada") {
-      await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
-    }
-    return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
-  }
-
-  const s = sesion as SesionPrueba;
-  const nombreCandidato = (sesion as unknown as { mindeval_candidatos?: { nombre_completo?: string } }).mindeval_candidatos?.nombre_completo ?? "el candidato";
-
-  const { data: vacanteCortes } = await supabaseAdmin
-    .from("mindeval_vacantes")
-    .select("corte_sten, corte_tecnica, tests_psicometricos")
-    .eq("id", s.vacante_id)
-    .single();
-
-  if (s.tipo === "tecnica") {
-    // El intento pendiente puede estar en cualquiera de los dos modos —
-    // el filtro cubre ambos casos de "todavía sin calificar" a la vez.
-    const { data: prueba } = await supabaseAdmin
-      .from("mindeval_pruebas_tecnicas")
-      .select("*")
-      .eq("candidato_id", s.candidato_id)
-      .or("and(modo.eq.caso_abierto,respuesta_candidato.is.null),and(modo.eq.banco,respuestas_banco.is.null)")
-      .order("created_at", { ascending: false })
-      .limit(1)
+    const { data: sesion, error } = await supabaseAdmin
+      .from("mindeval_sesiones_prueba")
+      .select("*, mindeval_candidatos(nombre_completo)")
+      .eq("token", token)
       .maybeSingle();
 
-    if (!prueba) {
-      return NextResponse.json({ error: "No se encontró la prueba asignada a esta sesión" }, { status: 404 });
+    if (error || !sesion) {
+      return NextResponse.json({ error: "Link no válido" }, { status: 404 });
+    }
+    if (sesion.estado === "completada") {
+      return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
+    }
+    if (sesionExpirada(sesion)) {
+      if (sesion.estado !== "expirada") {
+        await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
+      }
+      return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
     }
 
-    if (prueba.modo === "banco") {
-      const { respuestas }: { respuestas: { pregunta_id: string; opcion_elegida: string }[] } = body;
+    const s = sesion as SesionPrueba;
+    const nombreCandidato = (sesion as unknown as { mindeval_candidatos?: { nombre_completo?: string } }).mindeval_candidatos?.nombre_completo ?? "el candidato";
+
+    const { data: vacanteCortes } = await supabaseAdmin
+      .from("mindeval_vacantes")
+      .select("corte_sten, corte_tecnica, tests_psicometricos")
+      .eq("id", s.vacante_id)
+      .single();
+
+    const errorGuardado = () =>
+      NextResponse.json(
+        { error: "No se pudieron guardar tus respuestas por un problema del servidor. Tu enlace sigue activo -- vuelve a intentarlo." },
+        { status: 500 }
+      );
+
+    if (s.tipo === "tecnica") {
+      // El intento pendiente puede estar en cualquiera de los dos modos —
+      // el filtro cubre ambos casos de "todavía sin calificar" a la vez.
+      const { data: prueba } = await supabaseAdmin
+        .from("mindeval_pruebas_tecnicas")
+        .select("*")
+        .eq("candidato_id", s.candidato_id)
+        .or("and(modo.eq.caso_abierto,respuesta_candidato.is.null),and(modo.eq.banco,respuestas_banco.is.null)")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!prueba) {
+        return NextResponse.json({ error: "No se encontró la prueba asignada a esta sesión" }, { status: 404 });
+      }
+
+      if (prueba.modo === "banco") {
+        const { respuestas }: { respuestas: { pregunta_id: string; opcion_elegida: string }[] } = body;
+        if (!respuestas?.length) {
+          return NextResponse.json({ error: "Faltan respuestas" }, { status: 400 });
+        }
+
+        const { detalle, puntaje_objetivo } = calificarBanco(prueba.preguntas_snapshot ?? [], respuestas);
+
+        const { error: updErr } = await supabaseAdmin
+          .from("mindeval_pruebas_tecnicas")
+          .update({ respuestas_banco: detalle, puntaje_objetivo })
+          .eq("id", prueba.id);
+        if (updErr) return errorGuardado();
+      } else {
+        const { respuesta_candidato }: { respuesta_candidato: string } = body;
+        if (!respuesta_candidato?.trim()) {
+          return NextResponse.json({ error: "Falta la respuesta" }, { status: 400 });
+        }
+
+        const correccion = await corregirCasoTecnico(prueba.caso_generado, prueba.criterios, respuesta_candidato);
+
+        const { error: updErr } = await supabaseAdmin
+          .from("mindeval_pruebas_tecnicas")
+          .update({
+            respuesta_candidato,
+            puntaje_analisis: correccion.puntaje_analisis,
+            puntaje_estrategia: correccion.puntaje_estrategia,
+            puntaje_kpis: correccion.puntaje_kpis,
+            puntaje_claridad: correccion.puntaje_claridad,
+          })
+          .eq("id", prueba.id);
+        if (updErr) return errorGuardado();
+      }
+    } else if (s.tipo === "assessment") {
+      const { respuestas }: { respuestas: { ejercicio_id: string; respuesta: string }[] } = body;
       if (!respuestas?.length) {
         return NextResponse.json({ error: "Faltan respuestas" }, { status: 400 });
       }
 
-      const { detalle, puntaje_objetivo } = calificarBanco(prueba.preguntas_snapshot ?? [], respuestas);
+      const snapshot = (s.ejercicios_snapshot ?? []) as EjercicioBanco[];
+      // Se corrigen todos los ejercicios en paralelo -- antes se hacía uno a
+      // la vez (un assessment de 4-5 ejercicios podía tardar minutos en
+      // serie y superar el límite de la función serverless).
+      const filas = (
+        await Promise.all(
+          respuestas.map(async (r) => {
+            const ejercicio = snapshot.find((e) => e.id === r.ejercicio_id);
+            if (!ejercicio) return null;
+            const correccion = await corregirEjercicioAssessment(ejercicio.enunciado, ejercicio.criterios_evaluacion, r.respuesta);
+            return {
+              candidato_id: s.candidato_id,
+              sesion_id: s.id,
+              ejercicio: ejercicio.enunciado,
+              competencia: ejercicio.competencia,
+              puntaje: correccion.puntaje,
+              evaluador: "ia",
+              notas: correccion.notas,
+            };
+          })
+        )
+      ).filter((f): f is NonNullable<typeof f> => f !== null);
 
-      await supabaseAdmin
-        .from("mindeval_pruebas_tecnicas")
-        .update({ respuestas_banco: detalle, puntaje_objetivo })
-        .eq("id", prueba.id);
+      const { error: insErr } = await supabaseAdmin.from("mindeval_assessment_evaluaciones").insert(filas);
+      if (insErr) return errorGuardado();
+    } else if ((vacanteCortes?.tests_psicometricos ?? []).length > 0) {
+      const testsActivos: string[] = vacanteCortes!.tests_psicometricos;
+      const { sexo, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti }: {
+        sexo?: "H" | "F";
+        respuestas16pf5?: { num: number; letra: "a" | "b" | "c" }[];
+        respuestasKostick?: { num: number; eleccion: "a" | "b" }[];
+        respuestasDisc?: { num: number; mas: 1 | 2 | 3 | 4; menos: 1 | 2 | 3 | 4 }[];
+        respuestasValanti?: { num: number; puntosFraseA: 0 | 1 | 2 | 3 }[];
+      } = body;
+
+      const filas: {
+        candidato_id: string;
+        bateria: string;
+        sten: number | null;
+        puntaje_estandar?: number;
+        percentil: number | null;
+        respuestas: unknown;
+      }[] = [];
+
+      if (testsActivos.includes("16pf5")) {
+        if (!sexo || !respuestas16pf5?.length) {
+          return NextResponse.json({ error: "Faltan el sexo o las respuestas del 16PF-5" }, { status: 400 });
+        }
+        const puntajes = calificar16PF5(respuestas16pf5, sexo);
+        for (const p of puntajes) {
+          if (p.decatipo === null) continue;
+          filas.push({
+            candidato_id: s.candidato_id,
+            bateria: `16pf5_${p.escala}`,
+            sten: p.decatipo,
+            percentil: p.percentil,
+            respuestas: { sexo, puntoBruto: p.puntoBruto, respuestas: respuestas16pf5 },
+          });
+        }
+      }
+
+      if (testsActivos.includes("kostick")) {
+        if (!respuestasKostick?.length) {
+          return NextResponse.json({ error: "Faltan las respuestas del KOSTICK" }, { status: 400 });
+        }
+        const puntajes = calificarKostick(respuestasKostick);
+        for (const p of puntajes) {
+          filas.push({
+            candidato_id: s.candidato_id,
+            bateria: `kostick_${p.factor}`,
+            sten: p.conteo,
+            percentil: null,
+            respuestas: { respuestas: respuestasKostick },
+          });
+        }
+      }
+
+      if (testsActivos.includes("disc")) {
+        if (!respuestasDisc?.length) {
+          return NextResponse.json({ error: "Faltan las respuestas del DISC" }, { status: 400 });
+        }
+        const resultado = calificarDISC(respuestasDisc);
+        for (const p of resultado.puntajes) {
+          filas.push({
+            candidato_id: s.candidato_id,
+            bateria: `disc_${p.rasgo}`,
+            sten: p.segmento,
+            percentil: null,
+            respuestas: { puntoBruto: p.puntoBruto, patron: resultado.patron, respuestas: respuestasDisc },
+          });
+        }
+      }
+
+      if (testsActivos.includes("valanti")) {
+        if (!respuestasValanti?.length) {
+          return NextResponse.json({ error: "Faltan las respuestas del VALANTI" }, { status: 400 });
+        }
+        const resultado = calificarVALANTI(respuestasValanti, nombreCandidato);
+        for (const p of resultado.puntajes) {
+          filas.push({
+            candidato_id: s.candidato_id,
+            bateria: `valanti_${p.escala}`,
+            // El puntaje estándar de VALANTI (media 50/DE 10) no cabe en
+            // `sten` (CHECK 0-10, pensado para 16PF-5/KOSTICK/DISC) -- va en
+            // su propia columna. Ver mindeval-valanti-puntaje-estandar.sql.
+            sten: null,
+            puntaje_estandar: p.puntajeEstandar,
+            percentil: null,
+            respuestas: {
+              puntoBruto: p.puntoBruto,
+              nivel: p.nivel,
+              distanciaOrganizacion: p.distanciaOrganizacion,
+              areaMasImportante: resultado.areaMasImportante,
+              areaMenosImportante: resultado.areaMenosImportante,
+              respuestas: respuestasValanti,
+            },
+          });
+        }
+      }
+
+      if (!filas.length) {
+        return NextResponse.json({ error: "No se pudo calificar ninguna prueba activa" }, { status: 400 });
+      }
+
+      const { error: insErr } = await supabaseAdmin.from("mindeval_pruebas_psicometricas").insert(filas);
+      if (insErr) return errorGuardado();
     } else {
-      const { respuesta_candidato }: { respuesta_candidato: string } = body;
-      if (!respuesta_candidato?.trim()) {
-        return NextResponse.json({ error: "Falta la respuesta" }, { status: 400 });
+      const { respuestas }: { respuestas: Record<string, number[]> } = body;
+      if (!respuestas || !Object.keys(respuestas).length) {
+        return NextResponse.json({ error: "Faltan respuestas" }, { status: 400 });
       }
 
-      const correccion = await corregirCasoTecnico(prueba.caso_generado, prueba.criterios, respuesta_candidato);
-
-      await supabaseAdmin
-        .from("mindeval_pruebas_tecnicas")
-        .update({
-          respuesta_candidato,
-          puntaje_analisis: correccion.puntaje_analisis,
-          puntaje_estrategia: correccion.puntaje_estrategia,
-          puntaje_kpis: correccion.puntaje_kpis,
-          puntaje_claridad: correccion.puntaje_claridad,
-        })
-        .eq("id", prueba.id);
-    }
-  } else if (s.tipo === "assessment") {
-    const { respuestas }: { respuestas: { ejercicio_id: string; respuesta: string }[] } = body;
-    if (!respuestas?.length) {
-      return NextResponse.json({ error: "Faltan respuestas" }, { status: 400 });
-    }
-
-    const snapshot = (s.ejercicios_snapshot ?? []) as EjercicioBanco[];
-    const filas = [];
-    for (const r of respuestas) {
-      const ejercicio = snapshot.find((e) => e.id === r.ejercicio_id);
-      if (!ejercicio) continue;
-      const correccion = await corregirEjercicioAssessment(ejercicio.enunciado, ejercicio.criterios_evaluacion, r.respuesta);
-      filas.push({
-        candidato_id: s.candidato_id,
-        sesion_id: s.id,
-        ejercicio: ejercicio.enunciado,
-        competencia: ejercicio.competencia,
-        puntaje: correccion.puntaje,
-        evaluador: "ia",
-        notas: correccion.notas,
+      const filas = Object.entries(respuestas).map(([bateria, valores]) => {
+        const promedio = valores.reduce((a, b) => a + b, 0) / valores.length; // escala 1-5
+        const sten = Math.max(1, Math.min(10, Math.round(((promedio - 1) / 4) * 9) + 1));
+        return {
+          candidato_id: s.candidato_id,
+          bateria,
+          sten,
+          percentil: Math.round(((sten - 1) / 9) * 100),
+          respuestas: valores,
+        };
       });
+
+      const { error: insErr } = await supabaseAdmin.from("mindeval_pruebas_psicometricas").insert(filas);
+      if (insErr) return errorGuardado();
     }
 
-    await supabaseAdmin.from("mindeval_assessment_evaluaciones").insert(filas);
-  } else if ((vacanteCortes?.tests_psicometricos ?? []).length > 0) {
-    const testsActivos: string[] = vacanteCortes!.tests_psicometricos;
-    const { sexo, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti }: {
-      sexo?: "H" | "F";
-      respuestas16pf5?: { num: number; letra: "a" | "b" | "c" }[];
-      respuestasKostick?: { num: number; eleccion: "a" | "b" }[];
-      respuestasDisc?: { num: number; mas: 1 | 2 | 3 | 4; menos: 1 | 2 | 3 | 4 }[];
-      respuestasValanti?: { num: number; puntosFraseA: 0 | 1 | 2 | 3 }[];
-    } = body;
-
-    const filas: { candidato_id: string; bateria: string; sten: number; percentil: number | null; respuestas: unknown }[] = [];
-
-    if (testsActivos.includes("16pf5")) {
-      if (!sexo || !respuestas16pf5?.length) {
-        return NextResponse.json({ error: "Faltan el sexo o las respuestas del 16PF-5" }, { status: 400 });
-      }
-      const puntajes = calificar16PF5(respuestas16pf5, sexo);
-      for (const p of puntajes) {
-        if (p.decatipo === null) continue;
-        filas.push({
-          candidato_id: s.candidato_id,
-          bateria: `16pf5_${p.escala}`,
-          sten: p.decatipo,
-          percentil: p.percentil,
-          respuestas: { sexo, puntoBruto: p.puntoBruto, respuestas: respuestas16pf5 },
-        });
-      }
+    // No-op si la sesión era de assessment (etapa_actual ya no está en
+    // psicométricas/tecnica en ese punto) o si falta el otro puntaje todavía.
+    if (vacanteCortes) {
+      await avanzarASenescytSiAplica(supabaseAdmin, s.candidato_id, vacanteCortes);
     }
 
-    if (testsActivos.includes("kostick")) {
-      if (!respuestasKostick?.length) {
-        return NextResponse.json({ error: "Faltan las respuestas del KOSTICK" }, { status: 400 });
-      }
-      const puntajes = calificarKostick(respuestasKostick);
-      for (const p of puntajes) {
-        filas.push({
-          candidato_id: s.candidato_id,
-          bateria: `kostick_${p.factor}`,
-          sten: p.conteo,
-          percentil: null,
-          respuestas: { respuestas: respuestasKostick },
-        });
-      }
-    }
+    const { error: cierreErr } = await supabaseAdmin
+      .from("mindeval_sesiones_prueba")
+      .update({ estado: "completada", completada_en: new Date().toISOString() })
+      .eq("id", s.id);
+    if (cierreErr) return errorGuardado();
 
-    if (testsActivos.includes("disc")) {
-      if (!respuestasDisc?.length) {
-        return NextResponse.json({ error: "Faltan las respuestas del DISC" }, { status: 400 });
-      }
-      const resultado = calificarDISC(respuestasDisc);
-      for (const p of resultado.puntajes) {
-        filas.push({
-          candidato_id: s.candidato_id,
-          bateria: `disc_${p.rasgo}`,
-          sten: p.segmento,
-          percentil: null,
-          respuestas: { puntoBruto: p.puntoBruto, patron: resultado.patron, respuestas: respuestasDisc },
-        });
-      }
-    }
-
-    if (testsActivos.includes("valanti")) {
-      if (!respuestasValanti?.length) {
-        return NextResponse.json({ error: "Faltan las respuestas del VALANTI" }, { status: 400 });
-      }
-      const resultado = calificarVALANTI(respuestasValanti, nombreCandidato);
-      for (const p of resultado.puntajes) {
-        filas.push({
-          candidato_id: s.candidato_id,
-          bateria: `valanti_${p.escala}`,
-          sten: p.puntajeEstandar,
-          percentil: null,
-          respuestas: {
-            puntoBruto: p.puntoBruto,
-            nivel: p.nivel,
-            distanciaOrganizacion: p.distanciaOrganizacion,
-            areaMasImportante: resultado.areaMasImportante,
-            areaMenosImportante: resultado.areaMenosImportante,
-            respuestas: respuestasValanti,
-          },
-        });
-      }
-    }
-
-    if (!filas.length) {
-      return NextResponse.json({ error: "No se pudo calificar ninguna prueba activa" }, { status: 400 });
-    }
-
-    await supabaseAdmin.from("mindeval_pruebas_psicometricas").insert(filas);
-  } else {
-    const { respuestas }: { respuestas: Record<string, number[]> } = body;
-    if (!respuestas || !Object.keys(respuestas).length) {
-      return NextResponse.json({ error: "Faltan respuestas" }, { status: 400 });
-    }
-
-    const filas = Object.entries(respuestas).map(([bateria, valores]) => {
-      const promedio = valores.reduce((a, b) => a + b, 0) / valores.length; // escala 1-5
-      const sten = Math.max(1, Math.min(10, Math.round(((promedio - 1) / 4) * 9) + 1));
-      return {
-        candidato_id: s.candidato_id,
-        bateria,
-        sten,
-        percentil: Math.round(((sten - 1) / 9) * 100),
-        respuestas: valores,
-      };
-    });
-
-    await supabaseAdmin.from("mindeval_pruebas_psicometricas").insert(filas);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "No se pudo enviar la prueba";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  // No-op si la sesión era de assessment (etapa_actual ya no está en
-  // psicométricas/tecnica en ese punto) o si falta el otro puntaje todavía.
-  if (vacanteCortes) {
-    await avanzarASenescytSiAplica(supabaseAdmin, s.candidato_id, vacanteCortes);
-  }
-
-  await supabaseAdmin
-    .from("mindeval_sesiones_prueba")
-    .update({ estado: "completada", completada_en: new Date().toISOString() })
-    .eq("id", s.id);
-
-  return NextResponse.json({ ok: true });
 }
