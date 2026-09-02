@@ -3,6 +3,30 @@ import { Resend } from "resend";
 import type { TipoSesionPrueba } from "./mindeval-types";
 import { VENTANA_HORAS, limiteDeAcceso, formatoEcuador } from "@/lib/mindeval-ventana-prueba";
 
+/**
+ * Remitente configurado. Antes esto era `process.env.RESEND_FROM ?? "MindEval
+ * <onboarding@resend.dev>"` — el dominio sandbox de Resend, que SOLO entrega
+ * a la dirección del titular de la cuenta y rechaza cualquier envío a un
+ * tercero. Si la variable faltaba en Vercel, el sistema no fallaba: enviaba
+ * al sandbox, la API rechazaba el correo del candidato, y el proceso se
+ * detenía sin que nadie entendiera por qué (auditoría 2026-09, C-1).
+ *
+ * Ahora la ausencia de la variable es un error explícito y accionable, del
+ * mismo modo que ya lo era la falta de RESEND_API_KEY. Es preferible que el
+ * reclutador vea "falta configurar el remitente" en el panel a que crea que
+ * la invitación salió cuando no salió.
+ */
+function remitente(): { from: string } | { error: string } {
+  const from = process.env.RESEND_FROM;
+  if (!from?.trim()) {
+    return { error: "Falta configurar RESEND_FROM con un dominio verificado. Sin eso los correos no llegan a los candidatos." };
+  }
+  if (/@resend\.dev\s*>?\s*$/i.test(from)) {
+    return { error: "RESEND_FROM apunta al dominio de pruebas de Resend (@resend.dev), que solo entrega correo al titular de la cuenta. Configura un dominio propio verificado." };
+  }
+  return { from };
+}
+
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
 
@@ -46,6 +70,8 @@ export async function enviarInvitacionPrueba(params: {
   if (!process.env.RESEND_API_KEY) {
     return { ok: false, error: "RESEND_API_KEY no configurada" };
   }
+  const emisor = remitente();
+  if ("error" in emisor) return { ok: false, error: emisor.error };
 
   // Esta función corre en el servidor de Vercel (zona UTC) -- sin
   // timeZone explícito, toLocaleString("es-EC", ...) solo cambiaba el
@@ -103,7 +129,7 @@ export async function enviarInvitacionPrueba(params: {
 
   try {
     const { error } = await getResend().emails.send({
-      from: process.env.RESEND_FROM ?? "MindEval <onboarding@resend.dev>",
+      from: emisor.from,
       to: params.to,
       subject: `Invitación a tu ${label} — ${params.tituloVacante}`,
       html,
@@ -128,6 +154,8 @@ export async function enviarNoSeleccionado(params: {
   if (!process.env.RESEND_API_KEY) {
     return { ok: false, error: "RESEND_API_KEY no configurada" };
   }
+  const emisor = remitente();
+  if ("error" in emisor) return { ok: false, error: emisor.error };
 
   const nombreCandidato = escapeHtml(params.nombreCandidato);
   const tituloVacante = escapeHtml(params.tituloVacante);
@@ -158,7 +186,7 @@ export async function enviarNoSeleccionado(params: {
 
   try {
     const { error } = await getResend().emails.send({
-      from: process.env.RESEND_FROM ?? "MindEval <onboarding@resend.dev>",
+      from: emisor.from,
       to: params.to,
       subject: `Resultado de tu postulación — ${params.tituloVacante}`,
       html,

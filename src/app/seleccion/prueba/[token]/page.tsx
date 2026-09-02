@@ -57,10 +57,18 @@ interface DatosAssessment {
   ejercicios: { id: string; competencia: string; enunciado: string }[];
 }
 
+interface BloqueComposicion {
+  nombre: string;
+  items: number;
+  formato: string;
+}
+
 interface InfoSesion {
   tipo: "tecnica" | "psicometrica" | "assessment";
   candidato_nombre: string;
   requiere_cedula: boolean;
+  composicion?: { duracion_minutos: number; bloques: BloqueComposicion[] };
+  ya_iniciada?: boolean;
 }
 
 // Snapshot de todas las respuestas en curso, para el autoguardado local (ver
@@ -154,6 +162,10 @@ export default function PruebaTokenPage() {
   const [enviado, setEnviado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [borradorRestaurado, setBorradorRestaurado] = useState(false);
+  // El candidato pasaba de confirmar su cédula directo a 185 ítems, sin saber
+  // cuántas pruebas eran, cuánto duraban ni qué pasaba si algo fallaba
+  // (auditoría 2026-09, M-1).
+  const [instruccionesVistas, setInstruccionesVistas] = useState(false);
 
   const [cedulaConfirmar, setCedulaConfirmar] = useState("");
   const [verificandoCedula, setVerificandoCedula] = useState(false);
@@ -180,9 +192,13 @@ export default function PruebaTokenPage() {
       })
       .then((d: InfoSesion) => {
         setInfo(d);
-        // si no hay cédula registrada para este candidato, no hay nada que
-        // confirmar — se entrega el contenido directo, igual que antes.
-        if (!d.requiere_cedula) desbloquearContenido("");
+        // Quien ya había empezado no vuelve a pasar por las instrucciones:
+        // su cronómetro corre desde antes y bloquearlo sería regalarle el
+        // tiempo a una pantalla que ya leyó.
+        if (d.ya_iniciada) {
+          setInstruccionesVistas(true);
+          if (!d.requiere_cedula) desbloquearContenido("");
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false));
@@ -328,6 +344,61 @@ export default function PruebaTokenPage() {
     }
   }
 
+  /**
+   * Cuánto lleva respondido y cuál es el primer ítem que falta. El botón de
+   * enviar ya se deshabilitaba cuando faltaba algo, pero no decía qué: en un
+   * test de 185 ítems eso era un botón gris y un candidato buscando a ojo
+   * cuál se le pasó (auditoría 2026-09, M-2).
+   */
+  const progreso = useMemo(() => {
+    if (!datos) return null;
+    let total = 0;
+    let respondidos = 0;
+    let primerPendiente: string | null = null;
+    const marcar = (id: string, ok: boolean) => {
+      total += 1;
+      if (ok) respondidos += 1;
+      else if (!primerPendiente) primerPendiente = id;
+    };
+
+    if (datos.tipo === "tecnica") {
+      if (datos.modo === "banco") {
+        datos.preguntas.forEach((p) => marcar(`item-banco-${p.id}`, !!respuestasBanco[p.id]));
+      } else {
+        marcar("item-tecnica", !!respuestaTecnica.trim());
+      }
+    } else if (datos.tipo === "assessment") {
+      datos.ejercicios.forEach((e) => marcar(`item-assess-${e.id}`, !!respuestasAssessment[e.id]?.trim()));
+    } else if (datos.modo === "real") {
+      datos.tests["16pf5"]?.forEach((it) => marcar(`item-16pf5-${it.num}`, !!respuestas16pf5[it.num]));
+      datos.tests.kostick?.forEach((it) => marcar(`item-kostick-${it.num}`, !!respuestasKostick[it.num]));
+      datos.tests.disc?.forEach((it) => {
+        const r = respuestasDisc[it.num];
+        marcar(`item-disc-${it.num}`, !!r?.mas && !!r?.menos);
+      });
+      datos.tests.valanti?.forEach((it) => marcar(`item-valanti-${it.num}`, respuestasValanti[it.num] !== undefined));
+    } else {
+      Object.entries(datos.items).forEach(([bateria, lista]) => {
+        lista.forEach((_, i) => marcar(`item-${bateria}-${i}`, respuestasPsico[bateria]?.[i] !== undefined && respuestasPsico[bateria]?.[i] !== null));
+      });
+    }
+
+    return { total, respondidos, primerPendiente: primerPendiente as string | null };
+  }, [datos, respuestasBanco, respuestaTecnica, respuestasAssessment, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti, respuestasPsico]);
+
+  function irAlPendiente() {
+    if (!progreso?.primerPendiente) return;
+    const el = document.getElementById(progreso.primerPendiente);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Resalta un momento el ítem, para que no haya que adivinar cuál era.
+    const previo = el.style.boxShadow;
+    el.style.boxShadow = `0 0 0 3px ${GOLD}`;
+    setTimeout(() => {
+      el.style.boxShadow = previo;
+    }, 1800);
+  }
+
   const duracionSegundos = (datos ? duracionMinutos(datos) : 30) * 60;
   // Se calcula una sola vez cuando llega `iniciada_en` (no en cada tick) --
   // es el ancla real contra la que se mide el tiempo restante.
@@ -343,6 +414,88 @@ export default function PruebaTokenPage() {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FA" }}>
         <div style={{ textAlign: "center", color: "#C4402F", maxWidth: 380, padding: 20 }}>{error}</div>
+      </div>
+    );
+  }
+
+  // Pantalla de instrucciones — va ANTES de confirmar la cédula, porque
+  // desbloquear el contenido es lo que arranca el cronómetro en el servidor.
+  if (info && !instruccionesVistas) {
+    const comp = info.composicion;
+    const totalItems = comp?.bloques.reduce((n, b) => n + b.items, 0) ?? 0;
+    const nombrePrueba =
+      info.tipo === "tecnica" ? "Prueba Técnica" : info.tipo === "assessment" ? "Assessment Center" : "Prueba Psicométrica";
+
+    return (
+      <div style={{ minHeight: "100vh", background: "#F4F6FA", padding: "2rem 1rem" }}>
+        <div style={{ maxWidth: 620, margin: "0 auto", background: "#FFFFFF", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ background: NAVY, color: "#FFFFFF", padding: "24px 28px" }}>
+            <div style={{ fontSize: 10, letterSpacing: 1.2, color: GOLD, fontWeight: 700 }}>MINDEVAL · BY MINDTALENT</div>
+            <h2 style={{ margin: "6px 0 4px", fontSize: 21 }}>Hola, {info.candidato_nombre}</h2>
+            <div style={{ color: "#A9B6D8", fontSize: 13.5 }}>Estás por rendir tu {nombrePrueba}</div>
+          </div>
+
+          <div style={{ padding: "24px 28px" }}>
+            {comp && comp.bloques.length > 0 && (
+              <>
+                <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 140px", background: "#F7F9FD", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>{comp.duracion_minutos} min</div>
+                    <div style={{ fontSize: 11.5, color: "#7C89A8" }}>Tiempo total</div>
+                  </div>
+                  <div style={{ flex: "1 1 140px", background: "#F7F9FD", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>{totalItems}</div>
+                    <div style={{ fontSize: 11.5, color: "#7C89A8" }}>Preguntas en total</div>
+                  </div>
+                  <div style={{ flex: "1 1 140px", background: "#F7F9FD", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: NAVY }}>{comp.bloques.length}</div>
+                    <div style={{ fontSize: 11.5, color: "#7C89A8" }}>{comp.bloques.length > 1 ? "Secciones" : "Sección"}</div>
+                  </div>
+                </div>
+
+                <h3 style={{ fontSize: 13.5, color: NAVY, margin: "0 0 10px" }}>Qué vas a responder</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                  {comp.bloques.map((b) => (
+                    <div key={b.nombre} style={{ border: "1px solid #E3E8F2", borderRadius: 10, padding: "11px 14px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>
+                        {b.nombre} <span style={{ color: "#7C89A8", fontWeight: 400 }}>· {b.items} {b.items === 1 ? "ítem" : "ítems"}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#7C89A8", marginTop: 3 }}>{b.formato}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <h3 style={{ fontSize: 13.5, color: NAVY, margin: "0 0 10px" }}>Antes de empezar</h3>
+            <ul style={{ margin: "0 0 20px", paddingLeft: 20, fontSize: 13, color: "#41507A", lineHeight: 1.75 }}>
+              <li><strong>El cronómetro arranca cuando continúes</strong> y no se detiene, ni siquiera si cierras la página. Empieza solo cuando tengas el tiempo completo disponible.</li>
+              <li>Tus respuestas se <strong>guardan solas en este dispositivo</strong> a medida que avanzas. Si se te corta el internet o se cierra la página, al volver a abrir el enlace las recuperas.</li>
+              <li>Si se acaba el tiempo, se envía automáticamente lo que hayas respondido.</li>
+              <li>No hay respuestas correctas ni incorrectas en las pruebas de personalidad: contesta lo primero que te salga, sin pensarlo demasiado.</li>
+              <li><strong>No se puede pegar texto</strong> dentro de la prueba. Si preparaste algo aparte, tendrás que escribirlo.</li>
+              <li>Hay <strong>monitoreo activo</strong> durante el intento. Puedes rendirla desde el celular sin problema: las interrupciones normales (una llamada, una notificación) no te perjudican.</li>
+            </ul>
+
+            <div style={{ background: "#F7F9FD", borderRadius: 10, padding: "12px 14px", fontSize: 12, color: "#7C89A8", marginBottom: 20 }}>
+              ¿Algo sale mal? Cierra y vuelve a abrir el enlace del correo — mientras tu tiempo no se haya agotado,
+              retomas donde ibas. Tus respuestas se tratan conforme a nuestro{" "}
+              <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+                Aviso de Privacidad
+              </a>.
+            </div>
+
+            <button
+              onClick={() => {
+                setInstruccionesVistas(true);
+                if (!info.requiere_cedula) desbloquearContenido("");
+              }}
+              style={{ width: "100%", background: GOLD, color: NAVY, border: "none", padding: "13px", borderRadius: 8, fontSize: 14.5, fontWeight: 800, cursor: "pointer" }}
+            >
+              Entendido, continuar
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -438,6 +591,42 @@ export default function PruebaTokenPage() {
         </div>
       </div>
 
+      {/* Progreso siempre a la vista: cuánto lleva, cuánto le falta y un
+          acceso directo al primer ítem sin responder. Va pegado bajo el
+          encabezado porque en un test de 185 ítems el candidato pasa la mayor
+          parte del tiempo lejos del botón de enviar (auditoría 2026-09, M-2). */}
+      {progreso && progreso.total > 1 && (
+        <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#FFFFFF", borderBottom: "1px solid #E3E8F2", padding: "10px 1.5rem" }}>
+          <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px", minWidth: 160 }}>
+              <div style={{ height: 8, borderRadius: 6, background: "#EDF0F7", overflow: "hidden" }}>
+                <div
+                  style={{
+                    width: `${Math.round((progreso.respondidos / progreso.total) * 100)}%`,
+                    height: "100%",
+                    background: progreso.respondidos === progreso.total ? "#12805C" : GOLD,
+                    transition: "width .25s ease",
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
+              {progreso.respondidos} / {progreso.total}
+            </div>
+            {progreso.primerPendiente ? (
+              <button
+                onClick={irAlPendiente}
+                style={{ background: "none", border: `1px solid ${NAVY}`, color: NAVY, fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 6, cursor: "pointer" }}
+              >
+                Te faltan {progreso.total - progreso.respondidos} → ir al siguiente
+              </button>
+            ) : (
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: "#12805C" }}>✓ Todo respondido</span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "1.5rem" }}>
         {error && <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
 
@@ -471,7 +660,7 @@ export default function PruebaTokenPage() {
         {datos.tipo === "tecnica" && datos.modo === "banco" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {datos.preguntas.map((p, i) => (
-              <div key={p.id} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+              <div key={p.id} id={`item-banco-${p.id}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
                 <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {p.enunciado}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {p.opciones.map((o) => (
@@ -536,7 +725,7 @@ export default function PruebaTokenPage() {
         ) : datos.tipo === "assessment" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {datos.ejercicios.map((e, i) => (
-              <div key={e.id} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+              <div key={e.id} id={`item-assess-${e.id}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
                 <div style={{ fontSize: 11, color: GOLD, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{e.competencia}</div>
                 <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {e.enunciado}</div>
                 <textarea
@@ -584,7 +773,7 @@ export default function PruebaTokenPage() {
                   </div>
                 </div>
                 {datos.tests["16pf5"]!.map((it, i) => (
-                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                  <div key={it.num} id={`item-16pf5-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {it.texto}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {it.opciones.map((o) => (
@@ -624,7 +813,7 @@ export default function PruebaTokenPage() {
                   Elige, de cada par, la frase que más se parezca a tu forma de ser.
                 </div>
                 {datos.tests.kostick.map((it, i) => (
-                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                  <div key={it.num} id={`item-kostick-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {([["a", it.a], ["b", it.b]] as const).map(([letra, texto]) => (
@@ -664,7 +853,7 @@ export default function PruebaTokenPage() {
                   En cada uno de los 28 grupos de 4 palabras, marca la que MÁS te representa y la que MENOS te representa.
                 </div>
                 {datos.tests.disc.map((it, i) => (
-                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                  <div key={it.num} id={`item-disc-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>Grupo {i + 1}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {it.palabras.map((palabra, idx) => {
@@ -745,7 +934,7 @@ export default function PruebaTokenPage() {
                   Reparte 3 puntos entre las dos frases de cada par, según qué tan importante es cada una para ti.
                 </div>
                 {datos.tests.valanti.map((it, i) => (
-                  <div key={it.num} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                  <div key={it.num} id={`item-valanti-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
                     <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {([0, 1, 2, 3] as const).map((puntosA) => {
@@ -818,7 +1007,7 @@ export default function PruebaTokenPage() {
                   {BATERIAS_EJEMPLO.find((b) => b.key === bateriaKey)?.nombre ?? bateriaKey}
                 </h3>
                 {items.map((texto, i) => (
-                  <div key={i} style={{ marginBottom: 14 }}>
+                  <div key={i} id={`item-${bateriaKey}-${i}`} style={{ marginBottom: 14 }}>
                     <div style={{ fontSize: 12.5, color: "#41507A", marginBottom: 6 }}>{texto}</div>
                     <div style={{ display: "flex", gap: 8 }}>
                       {[1, 2, 3, 4, 5].map((v) => (

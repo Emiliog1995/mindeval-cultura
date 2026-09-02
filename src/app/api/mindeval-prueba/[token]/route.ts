@@ -33,6 +33,80 @@ export const maxDuration = 60;
  * Cualquier otro avance de etapa (SENESCYT, assessment, entrevista, oferta)
  * sigue siendo decisión manual del reclutador.
  */
+/**
+ * Qué le espera al candidato, SIN entregar una sola pregunta: cuántos
+ * bloques, cuántos ítems tiene cada uno y cuánto dura en total. Alimenta la
+ * pantalla de instrucciones previa (auditoría 2026-09, M-1) — antes se
+ * pasaba de confirmar la cédula directo a 185 ítems, sin saber cuánto iba a
+ * tomar ni qué formato tenían las preguntas.
+ *
+ * Va en el GET a propósito: este endpoint nunca arranca el cronómetro. Si
+ * las instrucciones se mostraran después de desbloquear el contenido, leerlas
+ * le comería tiempo de examen al candidato.
+ *
+ * La duración replica la del portal (duracionMinutos en la página) — misma
+ * tabla, para que lo que se le promete sea exactamente lo que va a ver.
+ */
+async function composicion(sesion: { tipo: string; vacante_id: string }) {
+  const bloques: { nombre: string; items: number; formato: string }[] = [];
+
+  if (sesion.tipo === "assessment") {
+    const { count } = await supabaseAdmin
+      .from("mindeval_banco_ejercicios")
+      .select("id", { count: "exact", head: true })
+      .eq("vacante_id", sesion.vacante_id)
+      .eq("estado", "activa");
+    bloques.push({ nombre: "Ejercicios de Assessment Center", items: count ?? 0, formato: "Respuesta escrita a cada situación planteada" });
+    return { duracion_minutos: 45, bloques };
+  }
+
+  if (sesion.tipo === "tecnica") {
+    const { count } = await supabaseAdmin
+      .from("mindeval_banco_preguntas")
+      .select("id", { count: "exact", head: true })
+      .eq("vacante_id", sesion.vacante_id)
+      .eq("estado", "activa");
+    if ((count ?? 0) > 0) {
+      bloques.push({ nombre: "Preguntas técnicas", items: count ?? 0, formato: "Opción múltiple — una respuesta correcta por pregunta" });
+      return { duracion_minutos: 40, bloques };
+    }
+    bloques.push({ nombre: "Caso técnico", items: 1, formato: "Respuesta abierta y desarrollada" });
+    return { duracion_minutos: 90, bloques };
+  }
+
+  const { data: vacante } = await supabaseAdmin
+    .from("mindeval_vacantes")
+    .select("tests_psicometricos")
+    .eq("id", sesion.vacante_id)
+    .maybeSingle();
+  const activos: string[] = vacante?.tests_psicometricos ?? [];
+
+  if (!activos.length) {
+    const items = Object.values(ITEMS_EJEMPLO).reduce((n, arr) => n + arr.length, 0);
+    bloques.push({ nombre: "Cuestionario psicométrico", items, formato: "Escala de 1 a 5" });
+    return { duracion_minutos: 30, bloques };
+  }
+
+  let minutos = 0;
+  if (activos.includes("16pf5")) {
+    bloques.push({ nombre: "16PF-5 — Factores de personalidad", items: ITEMS_16PF5.length, formato: "Elige una de tres opciones (a, b o c)" });
+    minutos += 45;
+  }
+  if (activos.includes("kostick")) {
+    bloques.push({ nombre: "KOSTICK — Estilo de trabajo", items: ITEMS_KOSTICK.length, formato: "Elige cuál de las dos frases te describe mejor" });
+    minutos += 15;
+  }
+  if (activos.includes("disc")) {
+    bloques.push({ nombre: "DISC — Comportamiento", items: ITEMS_DISC.length, formato: "De cada grupo, marca la palabra que MÁS y la que MENOS te describe" });
+    minutos += 15;
+  }
+  if (activos.includes("valanti")) {
+    bloques.push({ nombre: "VALANTI — Valores", items: ITEMS_VALANTI.length, formato: "Reparte 3 puntos entre dos frases" });
+    minutos += 15;
+  }
+  return { duracion_minutos: minutos || 30, bloques };
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { permitido } = checkRateLimit(req, "mindeval-prueba");
   if (!permitido) return rateLimitResponse();
@@ -65,6 +139,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     tipo: sesion.tipo,
     candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
     requiere_cedula: !!sesion.mindeval_candidatos?.cedula,
+    composicion: await composicion(sesion),
+    // Si ya la había empezado, las instrucciones no vuelven a bloquearle el
+    // paso: su cronómetro ya está corriendo.
+    ya_iniciada: sesion.estado === "en_curso",
   });
 }
 
