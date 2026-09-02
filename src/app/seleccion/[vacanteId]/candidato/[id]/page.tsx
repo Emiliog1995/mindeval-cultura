@@ -14,7 +14,7 @@ import { NOMBRES_ESCALA_16PF5, type Escala16PF5 } from "@/lib/mindeval-16pf5";
 import { NOMBRES_FACTOR_KOSTICK, type FactorKostick } from "@/lib/mindeval-kostick";
 import { NOMBRES_RASGO_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, NOMBRES_CATEGORIA_TEXTO_DISC } from "@/lib/mindeval-disc";
 import { NOMBRES_ESCALA_VALANTI, type EscalaVALANTI } from "@/lib/mindeval-valanti";
-import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio } from "@/lib/mindeval-scoring";
+import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio, psicometricaIncompleta } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type PreguntaBanco, type RespuestaBancoDetalle, type SesionPrueba, type TipoSesionPrueba, type Vacante, type VerificacionTitulo } from "@/lib/mindeval-types";
 
@@ -26,7 +26,14 @@ const btnPrimario: React.CSSProperties = { background: NAVY, color: "#FFFFFF", b
 const btnGold: React.CSSProperties = { background: GOLD, color: NAVY, border: "none", padding: "9px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" };
 const inputStyle: React.CSSProperties = { padding: "8px 10px", border: "1.5px solid #D5DCEB", borderRadius: 7, fontSize: 12.5, boxSizing: "border-box" };
 
-interface PsicoRow { bateria: string; sten: number | null; puntaje_estandar: number | null; percentil: number | null }
+interface PsicoRow {
+  bateria: string;
+  sten: number | null;
+  puntaje_estandar: number | null;
+  percentil: number | null;
+  items_respondidos: number | null;
+  items_esperados: number | null;
+}
 interface DatoBarra { clave: string; nombre: string; valor: number }
 
 const NOMBRE_TEST_PSICOMETRICO: Record<"16pf5" | "kostick" | "disc" | "valanti", string> = {
@@ -115,7 +122,7 @@ export default function PerfilCandidatoPage() {
 
     const [{ data: match }, { data: ps }, { data: tec }, { data: asse }, { data: entr }, { data: verif }] = await Promise.all([
       supabase.from("mindeval_cv_matches").select("match_pct, razones").eq("candidato_id", params.id).order("generado_en", { ascending: false }).limit(1),
-      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil").eq("candidato_id", params.id),
+      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil, items_respondidos, items_esperados").eq("candidato_id", params.id),
       supabase.from("mindeval_pruebas_tecnicas").select("puntaje_total, modo, preguntas_snapshot, respuestas_banco").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
       supabase.from("mindeval_assessment_evaluaciones").select("id, ejercicio, competencia, puntaje, evaluador").eq("candidato_id", params.id),
       supabase.from("mindeval_entrevistas").select("fecha, entrevistadores, resultado, notas").eq("candidato_id", params.id).order("created_at", { ascending: false }).limit(1),
@@ -148,7 +155,7 @@ export default function PerfilCandidatoPage() {
     // completó su prueba agendada (el reclutador nunca ve el examen en vivo,
     // solo el resultado guardado por /api/mindeval-prueba/[token]).
     const [{ data: ps2 }, { data: tec2 }] = await Promise.all([
-      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil").eq("candidato_id", params.id),
+      supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil, items_respondidos, items_esperados").eq("candidato_id", params.id),
       supabase
         .from("mindeval_pruebas_tecnicas")
         .select("puntaje_total, modo, preguntas_snapshot, respuestas_banco")
@@ -338,7 +345,7 @@ export default function PerfilCandidatoPage() {
           percentil: Math.round(((sten - 1) / 9) * 100),
         }));
       if (filas.length) await supabase.from("mindeval_pruebas_psicometricas").insert(filas);
-      const { data: ps } = await supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil").eq("candidato_id", params.id);
+      const { data: ps } = await supabase.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, percentil, items_respondidos, items_esperados").eq("candidato_id", params.id);
       setPsicoGuardados(ps ?? []);
       setPsico({});
       await revisarAvanceSenescyt();
@@ -541,8 +548,30 @@ export default function PerfilCandidatoPage() {
   // excluyen del promedio.
   const stenPromedio = promedio(
     psicoGuardados
-      .filter((p) => p.sten !== null && !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_") && !p.bateria.startsWith("valanti_"))
+      .filter(
+        (p) =>
+          p.sten !== null &&
+          !p.bateria.startsWith("kostick_") &&
+          !p.bateria.startsWith("disc_") &&
+          !p.bateria.startsWith("valanti_") &&
+          // una prueba enviada por tiempo agotado tiene el decatipo calculado
+          // sobre un puntaje bruto parcial -- se conserva y se muestra, pero
+          // no entra a ningún promedio (auditoría 2026-09, A-1).
+          !psicometricaIncompleta(p)
+      )
       .map((p) => p.sten as number)
+  );
+
+  // Baterías que el candidato no alcanzó a terminar, para avisarlo arriba de
+  // los gráficos en vez de dejar que se lean como resultados normales.
+  const psicoIncompletas = psicoGuardados.filter((p) => psicometricaIncompleta(p));
+  const resumenIncompletas = Array.from(
+    new Map(
+      psicoIncompletas.map((p) => [
+        p.bateria.split("_")[0],
+        { test: p.bateria.split("_")[0], respondidos: p.items_respondidos, esperados: p.items_esperados },
+      ])
+    ).values()
   );
 
   // orden canónico de las claves (el de NOMBRES_*, no el de llegada de la DB) para que el gráfico se lea igual siempre.
@@ -869,6 +898,28 @@ export default function PerfilCandidatoPage() {
           )}
 
           {renderAgendamiento("psicometrica")}
+
+          {resumenIncompletas.length > 0 && (
+            <div style={{ background: "#FFF6DE", border: "1px solid #F3E0AE", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#8A6400", marginBottom: 6 }}>
+                ⚠ Prueba enviada sin terminar — resultado no interpretable
+              </div>
+              <div style={{ fontSize: 12.5, color: "#8A6400", lineHeight: 1.6 }}>
+                {resumenIncompletas.map((r) => (
+                  <div key={r.test}>
+                    <strong>{NOMBRE_TEST_PSICOMETRICO[r.test as keyof typeof NOMBRE_TEST_PSICOMETRICO] ?? r.test}</strong>: respondió{" "}
+                    {r.respondidos} de {r.esperados} ítems.
+                  </div>
+                ))}
+                <div style={{ marginTop: 8 }}>
+                  Al candidato se le acabó el tiempo. Los decatipos de abajo se calcularon sobre un puntaje bruto
+                  parcial, así que <strong>no son comparables con los de un test completo</strong>: quedan fuera del
+                  promedio STEN, del % de idoneidad y del avance automático a SENESCYT. Si quieres un resultado
+                  válido, reagenda la prueba desde el bloque de arriba.
+                </div>
+              </div>
+            </div>
+          )}
 
           {datos16pf5.length > 0 && (
             <div style={{ marginBottom: 18 }}>

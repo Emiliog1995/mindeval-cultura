@@ -1,0 +1,26 @@
+-- MINDEVAL SELECCIÓN -- marcar las pruebas psicométricas incompletas
+-- Ejecutar en Supabase -> SQL Editor (proyecto mindeval-cultura)
+-- Idempotente. Aditivo: columnas nullable, no toca filas existentes.
+--
+-- Por qué: cuando a un candidato se le acaba el tiempo, el portal envía las
+-- respuestas que alcanzó a marcar. calificar16PF5() suma únicamente los
+-- ítems respondidos, así que un 16PF-5 con 100 de 185 ítems produce puntajes
+-- brutos bajos y, por lo tanto, decatipos artificialmente bajos -- que hasta
+-- ahora se guardaban sin ninguna marca, indistinguibles de un test completo.
+-- El reclutador veía un perfil de apariencia normal pero sin validez, y el
+-- avance automático a SENESCYT comparaba esos números falsos contra el corte
+-- de la vacante.
+--
+-- Con estas dos columnas cada fila sabe sobre cuántos ítems se calculó:
+--   items_respondidos < items_esperados  -> prueba incompleta
+-- Las filas incompletas se conservan (el candidato sí dedicó ese tiempo y su
+-- evidencia no se tira), pero quedan fuera de todo cálculo agregado
+-- (promedio STEN, % de idoneidad, avance automático) y se muestran marcadas
+-- en la ficha del candidato. La decisión de qué hacer con ellas es del
+-- reclutador, no automática.
+--
+-- NULL en ambas columnas = fila anterior a este cambio, de completitud
+-- desconocida. Se tratan como completas para no alterar retroactivamente
+-- procesos ya cerrados.
+ALTER TABLE mindeval_pruebas_psicometricas ADD COLUMN IF NOT EXISTS items_respondidos INT;
+ALTER TABLE mindeval_pruebas_psicometricas ADD COLUMN IF NOT EXISTS items_esperados INT;

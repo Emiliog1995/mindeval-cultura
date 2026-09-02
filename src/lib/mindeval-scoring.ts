@@ -49,6 +49,29 @@ export function promedio(nums: number[]): number | undefined {
   return nums.reduce((s, n) => s + n, 0) / nums.length;
 }
 
+export interface FilaCompletitudPsicometrica {
+  items_respondidos?: number | null;
+  items_esperados?: number | null;
+}
+
+/**
+ * Una prueba psicométrica está incompleta cuando el candidato respondió
+ * menos ítems de los que tenía la batería — típicamente porque se le acabó
+ * el tiempo y el portal envió lo que había. Su decatipo se calculó sobre un
+ * puntaje bruto parcial, así que NO es interpretable ni comparable contra el
+ * corte de la vacante: se conserva como evidencia de que rindió, pero queda
+ * fuera de todo cálculo agregado (ver mindeval-psicometricas-completitud.sql).
+ *
+ * Filas anteriores a esa migración tienen ambas columnas en NULL: se tratan
+ * como completas, para no invalidar retroactivamente procesos ya cerrados.
+ */
+export function psicometricaIncompleta(fila: FilaCompletitudPsicometrica): boolean {
+  const { items_respondidos: respondidos, items_esperados: esperados } = fila;
+  if (respondidos === null || respondidos === undefined) return false;
+  if (esperados === null || esperados === undefined) return false;
+  return respondidos < esperados;
+}
+
 /**
  * Descarte automático de CV: por debajo del corte definido en la vacante, o
  * por incumplir una competencia dura marcada como excluyente en el Manual
@@ -112,16 +135,21 @@ export async function avanzarASenescytSiAplica(
   if (candidato.etapa_actual !== "psicometricas" && candidato.etapa_actual !== "tecnica") return false;
 
   const [{ data: psico }, { data: tecnica }] = await Promise.all([
-    db.from("mindeval_pruebas_psicometricas").select("bateria, sten").eq("candidato_id", candidatoId),
+    db.from("mindeval_pruebas_psicometricas").select("bateria, sten, items_respondidos, items_esperados").eq("candidato_id", candidatoId),
     db.from("mindeval_pruebas_tecnicas").select("puntaje_total").eq("candidato_id", candidatoId).order("created_at", { ascending: false }).limit(1),
   ]);
 
   // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
   // puntaje estándar de VALANTI (media 50 / DE 10) no son un STEN normado
-  // 1-10, se excluyen del promedio.
+  // 1-10, se excluyen del promedio. Una prueba incompleta (enviada por
+  // tiempo agotado) también queda fuera: su decatipo se calculó sobre un
+  // puntaje bruto parcial y no es interpretable — sin filas válidas el
+  // promedio queda undefined y el candidato no avanza solo, que es
+  // exactamente lo que debe pasar (lo decide el reclutador a mano).
   const stenPromedio = promedio(
-    ((psico ?? []) as { bateria: string; sten: number | null }[])
+    ((psico ?? []) as (FilaCompletitudPsicometrica & { bateria: string; sten: number | null })[])
       .filter((p) => !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_") && !p.bateria.startsWith("valanti_"))
+      .filter((p) => !psicometricaIncompleta(p))
       .map((p) => p.sten)
       .filter((s): s is number => s !== null)
   );

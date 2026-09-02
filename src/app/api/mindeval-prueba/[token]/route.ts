@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { corregirCasoTecnico, corregirEjercicioAssessment } from "@/lib/mindeval-ia";
 import { calificarBanco, avanzarASenescytSiAplica, calificar16PF5, calificarKostick, calificarDISC, calificarVALANTI } from "@/lib/mindeval-scoring";
+import { ITEMS_EJEMPLO } from "@/lib/mindeval-baterias";
+import { ITEMS_16PF5 } from "@/lib/mindeval-16pf5";
+import { ITEMS_KOSTICK } from "@/lib/mindeval-kostick";
+import { ITEMS_DISC } from "@/lib/mindeval-disc";
+import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
 import type { EjercicioBanco, SesionPrueba } from "@/lib/mindeval-types";
 
 // El enlace de una prueba agendada no vive para siempre: si el candidato no
@@ -234,6 +239,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         respuestasValanti?: { num: number; puntosFraseA: 0 | 1 | 2 | 3 }[];
       } = body;
 
+      // Cuántos ítems respondió de verdad el candidato frente a cuántos tenía
+      // la batería. Un envío por tiempo agotado llega con menos de los
+      // esperados -- sin esta marca, calificar*() calcula sobre puntajes
+      // brutos parciales y el resultado queda indistinguible de un test
+      // completo (ver mindeval-psicometricas-completitud.sql). El total
+      // siempre se toma del banco en el servidor, nunca de lo que diga el
+      // navegador.
       const filas: {
         candidato_id: string;
         bateria: string;
@@ -241,6 +253,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         puntaje_estandar?: number;
         percentil: number | null;
         respuestas: unknown;
+        items_respondidos: number;
+        items_esperados: number;
       }[] = [];
 
       if (testsActivos.includes("16pf5")) {
@@ -256,6 +270,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
             sten: p.decatipo,
             percentil: p.percentil,
             respuestas: { sexo, puntoBruto: p.puntoBruto, respuestas: respuestas16pf5 },
+            items_respondidos: respuestas16pf5.length,
+            items_esperados: ITEMS_16PF5.length,
           });
         }
       }
@@ -272,6 +288,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
             sten: p.conteo,
             percentil: null,
             respuestas: { respuestas: respuestasKostick },
+            items_respondidos: respuestasKostick.length,
+            items_esperados: ITEMS_KOSTICK.length,
           });
         }
       }
@@ -288,6 +306,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
             sten: p.segmento,
             percentil: null,
             respuestas: { puntoBruto: p.puntoBruto, patron: resultado.patron, respuestas: respuestasDisc },
+            items_respondidos: respuestasDisc.length,
+            items_esperados: ITEMS_DISC.length,
           });
         }
       }
@@ -315,6 +335,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
               areaMenosImportante: resultado.areaMenosImportante,
               respuestas: respuestasValanti,
             },
+            items_respondidos: respuestasValanti.length,
+            items_esperados: ITEMS_VALANTI.length,
           });
         }
       }
@@ -332,7 +354,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       }
 
       const filas = Object.entries(respuestas).map(([bateria, valores]) => {
-        const promedio = valores.reduce((a, b) => a + b, 0) / valores.length; // escala 1-5
+        const respondidos = valores.filter((v) => v !== null && v !== undefined);
+        const promedio = respondidos.reduce((a, b) => a + b, 0) / (respondidos.length || 1); // escala 1-5
         const sten = Math.max(1, Math.min(10, Math.round(((promedio - 1) / 4) * 9) + 1));
         return {
           candidato_id: s.candidato_id,
@@ -340,6 +363,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
           sten,
           percentil: Math.round(((sten - 1) / 9) * 100),
           respuestas: valores,
+          items_respondidos: respondidos.length,
+          items_esperados: ITEMS_EJEMPLO[bateria]?.length ?? valores.length,
         };
       });
 

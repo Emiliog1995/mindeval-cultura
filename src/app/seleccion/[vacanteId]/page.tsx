@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
-import { calcularIdoneidadGlobal, categoriaSten, promedio } from "@/lib/mindeval-scoring";
+import { calcularIdoneidadGlobal, categoriaSten, promedio, psicometricaIncompleta, type FilaCompletitudPsicometrica } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import {
   ETAPAS,
@@ -28,6 +28,7 @@ interface CandidatoConScore extends Candidato {
   assessmentPromedio?: number;
   idoneidad: number | null;
   verificacion?: VerificacionTitulo;
+  psicoIncompleta?: boolean;
 }
 
 function badgeSenescyt(v?: VerificacionTitulo): { label: string; color: string; bg: string } {
@@ -101,7 +102,7 @@ export default function ProcesoVacante() {
 
     const [matches, psico, tecnicas, assess, verificaciones] = await Promise.all([
       ids.length ? supabase.from("mindeval_cv_matches").select("candidato_id, match_pct, generado_en").in("candidato_id", ids) : { data: [] },
-      ids.length ? supabase.from("mindeval_pruebas_psicometricas").select("candidato_id, bateria, sten").in("candidato_id", ids) : { data: [] },
+      ids.length ? supabase.from("mindeval_pruebas_psicometricas").select("candidato_id, bateria, sten, items_respondidos, items_esperados").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_pruebas_tecnicas").select("candidato_id, puntaje_total").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_assessment_evaluaciones").select("candidato_id, puntaje").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_verificaciones_titulo").select("*").in("candidato_id", ids).order("created_at", { ascending: false }) : { data: [] },
@@ -118,20 +119,29 @@ export default function ProcesoVacante() {
       const matchesC = (matches.data ?? []).filter((m: { candidato_id: string }) => m.candidato_id === c.id);
       const matchCv = matchesC.length ? matchesC[matchesC.length - 1].match_pct : undefined;
 
-      const stenValores = (psico.data ?? [])
+      const psicoDelCandidato = (psico.data ?? []).filter(
+        (p: { candidato_id: string }) => p.candidato_id === c.id
+      ) as (FilaCompletitudPsicometrica & { bateria: string; sten: number | null })[];
+
+      // Una prueba enviada por tiempo agotado tiene el decatipo calculado
+      // sobre un puntaje bruto parcial — se conserva y se muestra marcada en
+      // la ficha, pero nunca entra al % de idoneidad.
+      const hayPsicoIncompleta = psicoDelCandidato.some((p) => psicometricaIncompleta(p));
+
+      const stenValores = psicoDelCandidato
         // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
         // puntaje estándar de VALANTI (media 50/DE 10) no son un STEN normado
         // — mezclarlos en este promedio daría un número sin sentido, se
         // excluyen del cálculo.
         .filter(
-          (p: { candidato_id: string; bateria: string; sten: number | null }) =>
-            p.candidato_id === c.id &&
+          (p) =>
             p.sten !== null &&
             !p.bateria.startsWith("kostick_") &&
             !p.bateria.startsWith("disc_") &&
-            !p.bateria.startsWith("valanti_")
+            !p.bateria.startsWith("valanti_") &&
+            !psicometricaIncompleta(p)
         )
-        .map((p: { sten: number }) => p.sten);
+        .map((p) => p.sten as number);
       const stenPromedio = promedio(stenValores);
 
       const tecnicasC = (tecnicas.data ?? []).filter((t: { candidato_id: string }) => t.candidato_id === c.id);
@@ -150,6 +160,7 @@ export default function ProcesoVacante() {
         assessmentPromedio,
         idoneidad: calcularIdoneidadGlobal({ matchCv, stenPromedio, tecnicaTotal, assessmentPromedio }),
         verificacion: verificacionPorCandidato.get(c.id),
+        psicoIncompleta: hayPsicoIncompleta,
       };
     });
 
@@ -769,6 +780,14 @@ export default function ProcesoVacante() {
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{labelEtapa(c.etapa_actual)}</td>
                       <td style={{ padding: "12px 20px", fontSize: 12 }}>
                         {c.stenPromedio !== undefined ? `STEN ${c.stenPromedio.toFixed(1)} · ${categoriaSten(Math.round(c.stenPromedio))}` : "—"}
+                        {c.psicoIncompleta && (
+                          <div
+                            title="El candidato envió la prueba sin responder todos los ítems (se le acabó el tiempo). El resultado no es interpretable y no cuenta para el % de idoneidad ni para el avance automático."
+                            style={{ marginTop: 3, background: "#FFF6DE", color: "#8A6400", fontWeight: 700, fontSize: 10, padding: "2px 7px", borderRadius: 20, display: "inline-block" }}
+                          >
+                            ⚠ Prueba incompleta
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 11.5 }}>
                         {(() => {
