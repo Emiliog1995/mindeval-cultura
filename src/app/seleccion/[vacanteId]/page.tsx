@@ -470,6 +470,13 @@ export default function ProcesoVacante() {
           <button onClick={() => router.push("/seleccion")} style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}>
             ← Vacantes
           </button>
+          <button
+            onClick={() => router.push(`/seleccion/${params.vacanteId}/editar`)}
+            title="Cambiar los cortes de match de CV, STEN y técnica, y las pruebas que rendirá el candidato"
+            style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: `1px solid ${GOLD}`, padding: "8px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+          >
+            Editar vacante
+          </button>
           <button onClick={copiarLinkPostulacion} style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}>
             {linkCopiado ? "¡Copiado!" : "Copiar link de postulación"}
           </button>
@@ -569,6 +576,27 @@ export default function ProcesoVacante() {
               style={{ marginLeft: "auto", background: "none", border: `1px solid ${NAVY}`, color: NAVY, fontSize: 11.5, padding: "6px 12px", borderRadius: 6, cursor: "pointer" }}
             >
               {recalculando ? "Procesando…" : "Recalcular candidatos sin match"}
+            </button>
+          </div>
+
+          {/* Los cortes vigentes, visibles donde se ven sus efectos -- antes
+              solo existían en el formulario de creación y no había forma de
+              saber contra qué se estaba filtrando sin mirar la base. */}
+          <div style={{ margin: "0 24px 14px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {[
+              { etiqueta: "Corte match CV", valor: `${vacante.corte_match_cv}%` },
+              { etiqueta: "Corte STEN", valor: `${vacante.corte_sten}/10` },
+              { etiqueta: "Corte técnica", valor: `${vacante.corte_tecnica}/100` },
+            ].map((c) => (
+              <span key={c.etiqueta} style={{ background: "#F7F9FD", border: "1px solid #E3E8F2", borderRadius: 20, padding: "4px 12px", fontSize: 11.5, color: "#41507A" }}>
+                {c.etiqueta}: <strong style={{ color: NAVY }}>{c.valor}</strong>
+              </span>
+            ))}
+            <button
+              onClick={() => router.push(`/seleccion/${params.vacanteId}/editar`)}
+              style={{ background: "none", border: "none", color: NAVY, fontSize: 11.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0 }}
+            >
+              Ajustar criterios
             </button>
           </div>
           {resultadoRecalculo && (
