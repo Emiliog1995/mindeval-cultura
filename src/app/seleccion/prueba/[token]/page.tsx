@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
@@ -413,7 +414,18 @@ export default function PruebaTokenPage() {
   if (error && !info) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FA" }}>
-        <div style={{ textAlign: "center", color: "#C4402F", maxWidth: 380, padding: 20 }}>{error}</div>
+        <div style={{ textAlign: "center", maxWidth: 400, padding: 20 }}>
+          <div style={{ color: "#C4402F", fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>{error}</div>
+          {/* Salida de autoservicio: antes este mensaje era un callejón sin
+              salida y el candidato solo podía escribirle al reclutador
+              (auditoría 2026-09, M-5). */}
+          <Link
+            href="/seleccion/recuperar"
+            style={{ display: "inline-block", background: GOLD, color: NAVY, textDecoration: "none", fontWeight: 700, fontSize: 13, padding: "10px 18px", borderRadius: 8 }}
+          >
+            Reenviarme el enlace de mi prueba
+          </Link>
+        </div>
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { calcularMatchCv } from "@/lib/mindeval-ia";
 import { evaluarDescarteCv } from "@/lib/mindeval-scoring";
 import { extraerTextoCv } from "@/lib/mindeval-cv-extract";
 import { vacanteAceptaPostulaciones, type Vacante } from "@/lib/mindeval-types";
+import { enviarPostulacionRecibida } from "@/lib/mindeval-email";
 
 /**
  * Ruta pública (sin login) para el formulario de postulación. Sigue el mismo
@@ -219,6 +220,23 @@ export async function POST(req: NextRequest) {
           motivo_descarte: `No está de acuerdo con el salario ofertado${monto ? ` ($${monto})` : ""}`,
         })
         .eq("id", candidato.id);
+    }
+
+    // Acuse de recibo (auditoría 2026-09, I-7). Best-effort a propósito: la
+    // postulación ya está guardada, y que falle el correo no puede
+    // convertirse en un error para alguien que ya hizo su parte. El aviso de
+    // CV ilegible viaja aquí también, para que pueda reenviarlo sin tener que
+    // volver a la pantalla de confirmación.
+    if (email) {
+      const v = vacante as Vacante & { contacto_nombre?: string | null; contacto_email?: string | null };
+      void enviarPostulacionRecibida({
+        to: email,
+        nombreCandidato: nombreCompleto,
+        tituloVacante: v.titulo,
+        empresa: v.empresa,
+        contacto: { nombre: v.contacto_nombre, email: v.contacto_email },
+        cvIlegible: !!cvPath && !cvTexto.trim(),
+      }).catch(() => {});
     }
 
     return NextResponse.json({

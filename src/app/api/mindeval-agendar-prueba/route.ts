@@ -52,6 +52,20 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      // Agendar de nuevo invalida la invitación anterior del mismo tipo. Antes
+      // no lo hacía: como no existía "reenviar invitación", reagendar era la
+      // única forma de volver a mandar el correo, y dejaba dos enlaces vivos a
+      // la vez -- el candidato podía rendir dos veces y los resultados se
+      // mezclaban entre intentos (auditoría 2026-09, I-12). Las completadas no
+      // se tocan: son evidencia de una prueba ya rendida.
+      await supabaseAdmin
+        .from("mindeval_sesiones_prueba")
+        .update({ estado: "expirada" })
+        .eq("candidato_id", candidatoId)
+        .eq("vacante_id", vacante_id)
+        .eq("tipo", tipo)
+        .in("estado", ["programada", "en_curso"]);
+
       const { data: sesion, error: sErr } = await supabaseAdmin
         .from("mindeval_sesiones_prueba")
         .insert({ candidato_id: candidatoId, vacante_id, tipo, fecha_programada: new Date(fecha_programada).toISOString() })

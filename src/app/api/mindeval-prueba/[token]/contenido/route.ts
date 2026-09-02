@@ -89,6 +89,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
           .from("mindeval_pruebas_tecnicas")
           .select("*")
           .eq("candidato_id", sesion.candidato_id)
+          // De esta sesión, o de antes de que existiera la columna (I-12).
+          .or(`sesion_id.eq.${sesion.id},sesion_id.is.null`)
           .eq("modo", "banco")
           .is("respuestas_banco", null)
           .order("created_at", { ascending: false })
@@ -116,6 +118,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
           preguntasSnapshot = activas as PreguntaBanco[];
           const { error: insErr } = await supabaseAdmin.from("mindeval_pruebas_tecnicas").insert({
             candidato_id: sesion.candidato_id,
+            // Ata el intento a la invitación que lo originó -- ver
+            // supabase/mindeval-tecnicas-sesion.sql (I-12).
+            sesion_id: sesion.id,
             modo: "banco",
             preguntas_snapshot: preguntasSnapshot,
             corregido_por: "ia",
@@ -141,6 +146,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         .from("mindeval_pruebas_tecnicas")
         .select("*")
         .eq("candidato_id", sesion.candidato_id)
+        .or(`sesion_id.eq.${sesion.id},sesion_id.is.null`)
         .eq("modo", "caso_abierto")
         .is("respuesta_candidato", null)
         .order("created_at", { ascending: false })
@@ -163,6 +169,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       const caso = await generarCasoTecnico((vacante as Vacante).titulo, perfil);
       const { error: insErr } = await supabaseAdmin.from("mindeval_pruebas_tecnicas").insert({
         candidato_id: sesion.candidato_id,
+        sesion_id: sesion.id,
         modo: "caso_abierto",
         caso_generado: caso.caso_generado,
         criterios: caso.criterios,

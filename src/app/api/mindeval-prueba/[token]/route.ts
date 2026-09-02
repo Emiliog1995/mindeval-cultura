@@ -10,6 +10,7 @@ import { ITEMS_DISC } from "@/lib/mindeval-disc";
 import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
 import type { EjercicioBanco, SesionPrueba } from "@/lib/mindeval-types";
 import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible } from "@/lib/mindeval-ventana-prueba";
+import { enviarPruebaCompletada, enviarAvisoPruebaRendida } from "@/lib/mindeval-email";
 
 // La corrección con IA (caso técnico abierto, ejercicios de assessment) y el
 // Informe Ejecutivo pueden superar el límite por defecto de las funciones
@@ -171,7 +172,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
     const { data: sesion, error } = await supabaseAdmin
       .from("mindeval_sesiones_prueba")
-      .select("*, mindeval_candidatos(nombre_completo)")
+      .select("*, mindeval_candidatos(nombre_completo, email)")
       .eq("token", token)
       .maybeSingle();
 
@@ -193,7 +194,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
     const { data: vacanteCortes } = await supabaseAdmin
       .from("mindeval_vacantes")
-      .select("corte_sten, corte_tecnica, tests_psicometricos")
+      .select("corte_sten, corte_tecnica, tests_psicometricos, titulo, empresa, contacto_nombre, contacto_email")
       .eq("id", s.vacante_id)
       .single();
 
@@ -206,10 +207,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (s.tipo === "tecnica") {
       // El intento pendiente puede estar en cualquiera de los dos modos —
       // el filtro cubre ambos casos de "todavía sin calificar" a la vez.
+      // Se busca el intento de ESTA sesión. Antes se buscaba solo por
+      // candidato_id, así que con dos enlaces vivos a la vez (I-12) las
+      // respuestas de un intento podían escribirse sobre la fila del otro.
+      // Las filas anteriores a la columna sesion_id se siguen aceptando.
       const { data: prueba } = await supabaseAdmin
         .from("mindeval_pruebas_tecnicas")
         .select("*")
         .eq("candidato_id", s.candidato_id)
+        .or(`sesion_id.eq.${s.id},sesion_id.is.null`)
         .or("and(modo.eq.caso_abierto,respuesta_candidato.is.null),and(modo.eq.banco,respuestas_banco.is.null)")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -437,6 +443,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       .update({ estado: "completada", completada_en: new Date().toISOString() })
       .eq("id", s.id);
     if (cierreErr) return errorGuardado();
+
+    // Acuse al candidato y aviso al reclutador (auditoría 2026-09, I-7).
+    // Van DESPUÉS del cierre y sin await: la prueba ya está guardada y
+    // calificada, y un fallo de correo no puede convertirse en un error para
+    // quien acaba de rendir 185 ítems.
+    if (vacanteCortes) {
+      const emailCandidato = (sesion as unknown as { mindeval_candidatos?: { email?: string | null } }).mindeval_candidatos?.email;
+      if (emailCandidato) {
+        void enviarPruebaCompletada({
+          to: emailCandidato,
+          nombreCandidato,
+          tituloVacante: vacanteCortes.titulo,
+          empresa: vacanteCortes.empresa,
+          tipo: s.tipo,
+          contacto: { nombre: vacanteCortes.contacto_nombre, email: vacanteCortes.contacto_email },
+        }).catch(() => {});
+      }
+      if (vacanteCortes.contacto_email) {
+        void enviarAvisoPruebaRendida({
+          to: vacanteCortes.contacto_email,
+          nombreCandidato,
+          tituloVacante: vacanteCortes.titulo,
+          tipo: s.tipo,
+          linkFicha: `${req.nextUrl.origin}/seleccion/${s.vacante_id}/candidato/${s.candidato_id}`,
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e) {

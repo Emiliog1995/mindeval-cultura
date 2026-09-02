@@ -8,6 +8,7 @@ import { authHeaders } from "@/lib/auth-headers";
 import { calcularIdoneidadGlobal, categoriaSten, promedio, psicometricaIncompleta, type FilaCompletitudPsicometrica } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import {
+  DESENLACES,
   ETAPAS,
   labelEtapa,
   vacanteAceptaPostulaciones,
@@ -123,6 +124,7 @@ export default function ProcesoVacante() {
   const [cerrandoProceso, setCerrandoProceso] = useState(false);
   const [descargandoCv, setDescargandoCv] = useState<Set<string>>(new Set());
   const [eliminando, setEliminando] = useState<string | null>(null);
+  const [reenviando, setReenviando] = useState<string | null>(null);
 
   useEffect(() => {
     if (verificando) return;
@@ -562,6 +564,33 @@ export default function ProcesoVacante() {
     }
   }
 
+  /**
+   * Reenvía el enlace que YA tiene el candidato. Existe para que perder el
+   * correo deje de resolverse reagendando: eso creaba una segunda sesión y
+   * dejaba dos enlaces vivos a la vez (auditoría 2026-09, I-12).
+   */
+  async function reenviarInvitacion(candidatoId: string, nombre: string) {
+    if (!window.confirm(`¿Reenviar a ${nombre} el enlace de su prueba?\n\nSe reutiliza el mismo enlace que ya tenía. Si el plazo se le venció, se reactiva por ${VENTANA_HORAS_PRUEBA} h más desde ahora.`)) {
+      return;
+    }
+    setReenviando(candidatoId);
+    try {
+      const res = await fetch("/api/mindeval-reenviar-invitacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ candidato_id: candidatoId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert(data.reactivada ? `Enlace reactivado y reenviado a ${nombre}.` : `Correo reenviado a ${nombre}.`);
+      await cargar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo reenviar la invitación");
+    } finally {
+      setReenviando(null);
+    }
+  }
+
   async function descargarCv(candidatoId: string) {
     setDescargandoCv((prev) => new Set(prev).add(candidatoId));
     try {
@@ -585,7 +614,10 @@ export default function ProcesoVacante() {
     return <div style={{ padding: 40, textAlign: "center", color: "#C4402F" }}>{error}</div>;
   }
 
-  const conteoPorEtapa: Record<EtapaCandidato, number> = ETAPAS.reduce((acc, e) => ({ ...acc, [e.key]: 0 }), {} as Record<EtapaCandidato, number>);
+  const conteoPorEtapa: Record<EtapaCandidato, number> = [...ETAPAS, ...DESENLACES].reduce(
+    (acc, e) => ({ ...acc, [e.key]: 0 }),
+    {} as Record<EtapaCandidato, number>
+  );
   candidatos.forEach((c) => {
     if (c.etapa_actual in conteoPorEtapa) conteoPorEtapa[c.etapa_actual]++;
   });
@@ -727,6 +759,24 @@ export default function ProcesoVacante() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Desenlaces: los candidatos desaparecían del embudo justo al
+              llegar al final del proceso, que es lo que el cliente más quiere
+              ver (auditoría 2026-09, I-13). */}
+          <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 12, borderTop: "1px dashed #E3E8F2", overflowX: "auto" }}>
+            {DESENLACES.map((d) => {
+              const color = d.key === "contratado" ? "#12805C" : d.key === "descartado" ? "#C4402F" : GOLD;
+              const fondo = d.key === "contratado" ? "#E8F6EF" : d.key === "descartado" ? "#FDEDEA" : "#FFFBEF";
+              return (
+                <div key={d.key} style={{ flex: "1 1 120px", minWidth: 120, textAlign: "center" }}>
+                  <div style={{ background: fondo, borderRadius: 10, padding: "14px 8px" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color }}>{conteoPorEtapa[d.key]}</div>
+                    <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 4, lineHeight: 1.3 }}>{d.label}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -1010,13 +1060,26 @@ export default function ProcesoVacante() {
                       <td style={{ padding: "12px 20px", fontSize: 11.5 }}>
                         {(() => {
                           const b = badgeInvitacion(c.sesion);
+                          const puedeReenviar = !!c.sesion && c.sesion.estado !== "completada" && !!c.email;
                           return (
-                            <span
-                              title={b.detalle}
-                              style={{ background: b.bg, color: b.color, fontWeight: 700, padding: b.bg === "transparent" ? 0 : "3px 9px", borderRadius: 20, whiteSpace: "nowrap" }}
-                            >
-                              {b.label}
-                            </span>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                              <span
+                                title={b.detalle}
+                                style={{ background: b.bg, color: b.color, fontWeight: 700, padding: b.bg === "transparent" ? 0 : "3px 9px", borderRadius: 20, whiteSpace: "nowrap" }}
+                              >
+                                {b.label}
+                              </span>
+                              {puedeReenviar && (
+                                <button
+                                  onClick={() => reenviarInvitacion(c.id, c.nombre_completo)}
+                                  disabled={reenviando === c.id}
+                                  title="Reenvía el mismo enlace que ya tiene. No crea una invitación nueva."
+                                  style={{ background: "none", border: "none", color: NAVY, fontSize: 10.5, fontWeight: 700, textDecoration: "underline", cursor: reenviando === c.id ? "not-allowed" : "pointer", padding: 0 }}
+                                >
+                                  {reenviando === c.id ? "Enviando…" : "Reenviar enlace"}
+                                </button>
+                              )}
+                            </div>
                           );
                         })()}
                       </td>

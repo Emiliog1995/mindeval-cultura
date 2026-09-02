@@ -10,7 +10,10 @@ export type EtapaCandidato =
 // a quién entrevistar — la entrevista misma queda fuera del informe, es
 // decisión humana del panel, no evidencia que la IA deba consolidar.
 export const ETAPAS: { key: EtapaCandidato; label: string; orden: number }[] = [
-  { key: "postulado",           label: "Manual de Puestos",     orden: 1 },
+  // Se rotulaba "Manual de Puestos", que es un paso del trabajo del
+  // reclutador, no un estado del candidato -- el número de esa columna del
+  // embudo no lo entendía nadie (auditoría 2026-09, I-13).
+  { key: "postulado",           label: "Postulados",            orden: 1 },
   { key: "filtro_cv",           label: "Filtro de CVs con IA",  orden: 2 },
   { key: "psicometricas",       label: "Pruebas Psicométricas", orden: 3 },
   { key: "tecnica",             label: "Pruebas Técnicas",      orden: 4 },
@@ -20,8 +23,22 @@ export const ETAPAS: { key: EtapaCandidato; label: string; orden: number }[] = [
   { key: "entrevista",          label: "Entrevista Virtual",    orden: 8 },
 ];
 
+/**
+ * Desenlaces del proceso. Van aparte de ETAPAS —que define el recorrido— pero
+ * el embudo sí tiene que mostrarlos: antes los candidatos desaparecían del
+ * conteo justo al llegar al final, que es lo que el cliente más quiere ver
+ * (auditoría 2026-09, I-13).
+ */
+export const DESENLACES: { key: EtapaCandidato; label: string }[] = [
+  { key: "finalista",  label: "Finalistas" },
+  { key: "contratado", label: "Contratados" },
+  { key: "descartado", label: "Descartados" },
+];
+
 export function labelEtapa(key: EtapaCandidato): string {
-  return ETAPAS.find((e) => e.key === key)?.label ?? key;
+  // Antes solo miraba ETAPAS, así que un candidato en un desenlace mostraba
+  // la clave cruda ("descartado") en vez de una etiqueta.
+  return ETAPAS.find((e) => e.key === key)?.label ?? DESENLACES.find((d) => d.key === key)?.label ?? key;
 }
 
 export interface CompetenciaDura {
@@ -67,6 +84,9 @@ export interface Vacante {
   sedes?: string[] | null;
   salario_pregunta?: { monto: number } | null;
   created_at: string;
+  // Responsable del proceso — ver supabase/mindeval-vacante-contacto.sql.
+  contacto_nombre?: string | null;
+  contacto_email?: string | null;
 }
 
 // Cierre por fecha límite sin necesitar un cron: se evalúa en el momento en

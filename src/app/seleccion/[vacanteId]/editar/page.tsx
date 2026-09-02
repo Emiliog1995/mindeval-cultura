@@ -56,6 +56,8 @@ export default function EditarVacantePage() {
   const [codigoProceso, setCodigoProceso] = useState("");
   const [estado, setEstado] = useState<"abierta" | "pausada" | "cerrada">("abierta");
   const [fechaLimite, setFechaLimite] = useState("");
+  const [contactoNombre, setContactoNombre] = useState("");
+  const [contactoEmail, setContactoEmail] = useState("");
   const [corteMatchCv, setCorteMatchCv] = useState(72);
   const [corteSten, setCorteSten] = useState(6);
   const [corteTecnica, setCorteTecnica] = useState(70);
@@ -82,6 +84,8 @@ export default function EditarVacantePage() {
         const local = new Date(d.getTime() - d.getTimezoneOffset() * 60_000);
         setFechaLimite(local.toISOString().slice(0, 16));
       }
+      setContactoNombre(v.contacto_nombre ?? "");
+      setContactoEmail(v.contacto_email ?? "");
       setCorteMatchCv(Number(v.corte_match_cv));
       setCorteSten(Number(v.corte_sten));
       setCorteTecnica(Number(v.corte_tecnica));
@@ -123,6 +127,8 @@ export default function EditarVacantePage() {
           codigo_proceso: codigoProceso,
           estado,
           fecha_limite_postulacion: fechaLimite ? new Date(fechaLimite).toISOString() : null,
+          contacto_nombre: contactoNombre,
+          contacto_email: contactoEmail,
           corte_match_cv: corteMatchCv,
           corte_sten: corteSten,
           corte_tecnica: corteTecnica,
@@ -229,6 +235,18 @@ export default function EditarVacantePage() {
               <label style={label}>Recibe CVs hasta</label>
               <input type="datetime-local" style={inputStyle} value={fechaLimite} onChange={(e) => setFechaLimite(e.target.value)} />
               <div style={ayuda}>Vacío = sin fecha límite.</div>
+            </div>
+            <div>
+              <label style={label}>Responsable del proceso</label>
+              <input style={inputStyle} value={contactoNombre} onChange={(e) => setContactoNombre(e.target.value)} placeholder="Nombre de quien atiende esta vacante" />
+            </div>
+            <div>
+              <label style={label}>Correo del responsable</label>
+              <input style={inputStyle} value={contactoEmail} onChange={(e) => setContactoEmail(e.target.value)} placeholder="nombre@empresa.com" />
+              <div style={ayuda}>
+                Recibe un aviso cada vez que un candidato completa una prueba, y aparece como contacto en los correos
+                al candidato. Vacío = sin avisos.
+              </div>
             </div>
           </div>
         </section>

@@ -76,6 +76,12 @@ export async function POST(req: NextRequest) {
     // 100), el STEN es un decatipo normado de 1 a 10.
     const titulo = typeof body.titulo === "string" ? body.titulo.trim() : vacante.titulo;
     const codigoProceso = typeof body.codigo_proceso === "string" ? body.codigo_proceso.trim() : null;
+    const contactoNombre = ((body.contacto_nombre as string) || "").trim() || null;
+    const contactoEmail = ((body.contacto_email as string) || "").trim() || null;
+    if (contactoEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactoEmail)) {
+      return NextResponse.json({ error: "El correo del responsable no es válido." }, { status: 400 });
+    }
+
     const corteMatchCv = Number(body.corte_match_cv);
     const corteSten = Number(body.corte_sten);
     const corteTecnica = Number(body.corte_tecnica);
@@ -131,6 +137,11 @@ export async function POST(req: NextRequest) {
         corte_tecnica: corteTecnica,
         modo_tecnica: modoTecnica,
         tests_psicometricos: testsPsicometricos,
+        // Responsable del proceso: recibe el aviso cuando alguien completa
+        // una prueba y firma los correos al candidato (auditoría 2026-09,
+        // I-7 y M-4).
+        contacto_nombre: contactoNombre,
+        contacto_email: contactoEmail,
       })
       .eq("id", vacanteId);
     if (updErr) {

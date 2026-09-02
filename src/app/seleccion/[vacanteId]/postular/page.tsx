@@ -17,6 +17,8 @@ export default function PostularPage() {
     acepta_postulaciones: boolean;
     sedes?: string[] | null;
     salario_pregunta?: { monto: number } | null;
+    fecha_limite?: string | null;
+    perfil?: { mision: string | null; area: string | null; competencias: string[] } | null;
   } | null>(null);
   const [cargando, setCargando] = useState(true);
 
@@ -194,6 +196,46 @@ export default function PostularPage() {
       </div>
 
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "2rem 1.5rem" }}>
+        {/* Descripción del puesto: antes el candidato postulaba viendo solo el
+            título y el nombre de la empresa (auditoría 2026-09, M-3). Se
+            muestran la misión, el área y los nombres de las competencias —
+            nunca sus pesos ni cuáles son excluyentes, que es el criterio de
+            calificación. */}
+        {(vacante.perfil?.mision || vacante.perfil?.area || (vacante.perfil?.competencias.length ?? 0) > 0 || vacante.fecha_limite) && (
+          <section style={{ background: "#FFFFFF", borderRadius: 16, padding: 22, marginBottom: 16 }}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 14.5, color: NAVY }}>Sobre esta vacante</h2>
+
+            {vacante.perfil?.area && (
+              <div style={{ fontSize: 12.5, color: "#7C89A8", marginBottom: 10 }}>
+                Área: <strong style={{ color: "#41507A" }}>{vacante.perfil.area}</strong>
+              </div>
+            )}
+
+            {vacante.perfil?.mision && (
+              <p style={{ fontSize: 13.5, color: "#41507A", lineHeight: 1.65, margin: "0 0 14px" }}>{vacante.perfil.mision}</p>
+            )}
+
+            {(vacante.perfil?.competencias.length ?? 0) > 0 && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Qué buscamos</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                  {vacante.perfil!.competencias.map((c) => (
+                    <span key={c} style={{ background: "#F7F9FD", border: "1px solid #E3E8F2", borderRadius: 20, padding: "4px 11px", fontSize: 12, color: "#41507A" }}>
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {vacante.fecha_limite && (
+              <div style={{ fontSize: 12, color: "#8A6400", background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 8, padding: "8px 12px" }}>
+                Recibimos postulaciones hasta el {new Date(vacante.fecha_limite).toLocaleString("es-EC", { dateStyle: "long", timeStyle: "short" })}
+              </div>
+            )}
+          </section>
+        )}
+
         {error && <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
 
         <div style={{ background: "#FFFFFF", borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>

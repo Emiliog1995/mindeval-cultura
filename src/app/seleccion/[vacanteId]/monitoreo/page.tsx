@@ -99,7 +99,10 @@ export default function MonitoreoVacante() {
           .from("mindeval_sesiones_prueba")
           .select("id, candidato_id, tipo, fecha_programada, estado")
           .in("candidato_id", ids)
-          .in("estado", ["programada", "en_curso"])
+          // Antes filtraba solo programada/en_curso, así que Monitoreo no
+          // mostraba quién completó ni a quién se le venció el enlace — las
+          // dos preguntas que más se hace el reclutador durante una ronda de
+          // pruebas (auditoría 2026-09, I-8).
           .order("fecha_programada", { ascending: true }),
         supabase
           .from("mindeval_alertas_fraude")
