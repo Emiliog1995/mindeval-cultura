@@ -11,7 +11,7 @@ import { enviarNoSeleccionado } from "@/lib/mindeval-email";
  */
 export async function POST(req: NextRequest) {
   try {
-    const { candidato_id, titulo_vacante }: { candidato_id: string; titulo_vacante: string } = await req.json();
+    const { candidato_id, titulo_vacante, reenviar }: { candidato_id: string; titulo_vacante: string; reenviar?: boolean } = await req.json();
     if (!candidato_id || !titulo_vacante) {
       return NextResponse.json({ error: "Faltan datos para enviar el correo" }, { status: 400 });
     }
@@ -24,11 +24,26 @@ export async function POST(req: NextRequest) {
 
     const { data: candidato, error } = await supabaseAdmin
       .from("mindeval_candidatos")
-      .select("nombre_completo, email")
+      .select("nombre_completo, email, rechazo_enviado_en")
       .eq("id", candidato_id)
       .single();
     if (error || !candidato) return NextResponse.json({ error: "No se encontró el candidato" }, { status: 404 });
     if (!candidato.email) return NextResponse.json({ error: "Este candidato no tiene correo registrado" }, { status: 400 });
+
+    // Segundo envío: se rechaza salvo que quien llama lo pida explícitamente.
+    // Un candidato descartado no debe recibir dos veces el mismo correo de
+    // rechazo porque alguien volvió a abrir su ficha y pulsó el botón
+    // (auditoría 2026-09, F2-7).
+    if (candidato.rechazo_enviado_en && !reenviar) {
+      return NextResponse.json(
+        {
+          error: "A este candidato ya se le envió el correo de no seleccionado.",
+          rechazo_enviado_en: candidato.rechazo_enviado_en,
+          ya_enviado: true,
+        },
+        { status: 409 }
+      );
+    }
 
     const envio = await enviarNoSeleccionado({
       to: candidato.email,
@@ -37,7 +52,10 @@ export async function POST(req: NextRequest) {
     });
     if (!envio.ok) return NextResponse.json({ error: envio.error }, { status: 502 });
 
-    return NextResponse.json({ ok: true });
+    const enviadoEn = new Date().toISOString();
+    await supabaseAdmin.from("mindeval_candidatos").update({ rechazo_enviado_en: enviadoEn }).eq("id", candidato_id);
+
+    return NextResponse.json({ ok: true, rechazo_enviado_en: enviadoEn });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error al enviar el correo";
     return NextResponse.json({ error: msg }, { status: 500 });

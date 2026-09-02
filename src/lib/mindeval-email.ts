@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import type { TipoSesionPrueba } from "./mindeval-types";
+import { VENTANA_HORAS, limiteDeAcceso, formatoEcuador } from "@/lib/mindeval-ventana-prueba";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
@@ -55,6 +56,10 @@ export async function enviarInvitacionPrueba(params: {
     timeStyle: "short",
     timeZone: "America/Guayaquil",
   });
+  // Hasta cuándo puede entrar. El correo tiene que decirlo: antes solo
+  // anunciaba la hora de inicio y el candidato no tenía forma de saber que
+  // el enlace se le cerraba (auditoría 2026-09, F2-2).
+  const limite = formatoEcuador(limiteDeAcceso({ fecha_programada: params.fechaProgramada, estado: "programada" }));
   const label = LABEL_TIPO[params.tipo];
   const nombreCandidato = escapeHtml(params.nombreCandidato);
   const tituloVacante = escapeHtml(params.tituloVacante);
@@ -72,7 +77,13 @@ export async function enviarInvitacionPrueba(params: {
           te invitamos a rendir tu <strong>${label}</strong>.
         </p>
         <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
-          <strong>Fecha y hora programada:</strong> ${fecha} (hora Ecuador)
+          <strong>Puedes empezar desde:</strong> ${fecha} (hora Ecuador)<br />
+          <strong>Tienes plazo hasta:</strong> ${limite} (hora Ecuador)
+        </p>
+        <p style="font-size: 13px; color: #33405F; line-height: 1.6; background: #F7F9FD; border-radius: 8px; padding: 10px 14px;">
+          Tienes ${VENTANA_HORAS} horas para entrar y rendirla. No hace falta que sea exactamente a la hora de inicio:
+          entra cuando puedas dentro de ese plazo. Eso sí, una vez que abras la prueba el cronómetro empieza a correr
+          y ya no se detiene, así que ábrela cuando tengas el tiempo y la tranquilidad para terminarla de una sola vez.
         </p>
         <div style="text-align: center; margin: 28px 0;">
           <a href="${params.link}" style="background: ${GOLD}; color: ${NAVY}; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; display: inline-block;">
@@ -84,7 +95,7 @@ export async function enviarInvitacionPrueba(params: {
           <a href="${params.link}" style="color: ${NAVY};">${params.link}</a>
         </p>
         <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
-          Ten a mano una conexión estable y realiza la prueba desde un solo dispositivo, sin cambiar de pestaña ni salir de pantalla completa.
+          Ten a mano una conexión estable y realiza la prueba desde un solo dispositivo, sin cambiar de pestaña ni salir de la aplicación. Si puedes hacerla desde una computadora, mejor — pero desde el celular también es válido.
         </p>
       </div>
     </div>

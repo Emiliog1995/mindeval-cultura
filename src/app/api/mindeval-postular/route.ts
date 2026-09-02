@@ -92,31 +92,96 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Insertar candidato
-    const { data: candidato, error: cErr } = await supabaseAdmin
+    // 2. Insertar candidato -- o actualizar el que ya existía.
+    //
+    // Una misma persona reenviaba el formulario (subió el CV equivocado, no
+    // vio la pantalla de confirmación, o simplemente volvió a llenarlo) y
+    // cada envío creaba una fila nueva: el mismo candidato aparecía dos o
+    // tres veces en el ranking, podía recibir dos invitaciones a la misma
+    // prueba, y el reclutador no tenía forma de saber cuál era la buena
+    // (auditoría 2026-09, F2-4). La cédula es el identificador real de la
+    // persona dentro de UNA vacante -- postularse a dos vacantes distintas
+    // con la misma cédula sí es legítimo y sigue permitido.
+    //
+    // No se usa .maybeSingle() a propósito: si la vacante ya arrastra
+    // duplicados de antes de este arreglo, maybeSingle() devolvería error y
+    // rompería la postulación. Se toma el registro más antiguo, que es el
+    // que tiene el historial del proceso.
+    const { data: previos } = await supabaseAdmin
       .from("mindeval_candidatos")
-      .insert({
-        vacante_id: vacanteId,
-        nombre_completo: nombreCompleto,
-        cedula,
-        email,
-        telefono,
-        ciudad,
-        anios_experiencia: aniosRaw ? Number(aniosRaw) : null,
-        educacion,
-        cv_texto: cvTexto || null,
-        cv_url: cvPath,
-        sede,
-        salario_acuerdo: salarioAcuerdo,
-      })
-      .select()
-      .single();
-    if (cErr || !candidato) throw new Error(cErr?.message ?? "No se pudo guardar la postulación");
+      .select("id, etapa_actual, estado")
+      .eq("vacante_id", vacanteId)
+      .eq("cedula", cedula)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    const previo = previos?.[0] ?? null;
+
+    // Solo se reabre la postulación de quien todavía está en el filtro de
+    // CVs. A quien ya rindió pruebas, ya avanzó de etapa, o ya fue
+    // descartado NO se le toca la etapa: reenviar el formulario público no
+    // puede ser una forma de borrar un descarte ni de resetear un proceso en
+    // curso. Sus datos de contacto sí se actualizan siempre -- puede estar
+    // corrigiendo un correo mal escrito, que es justo lo que el proceso
+    // posterior necesita (auditoría 2026-09, C-8).
+    const enFiltro = !previo || ["postulado", "filtro_cv"].includes(previo.etapa_actual);
+
+    const datosContacto = {
+      nombre_completo: nombreCompleto,
+      email,
+      telefono,
+      ciudad,
+    };
+    const datosPostulacion = {
+      anios_experiencia: aniosRaw ? Number(aniosRaw) : null,
+      educacion,
+      sede,
+      salario_acuerdo: salarioAcuerdo,
+      // Un reenvío sin archivo no debe borrar el CV que ya estaba guardado.
+      ...(cvPath ? { cv_texto: cvTexto || null, cv_url: cvPath } : {}),
+    };
+
+    let candidatoGuardado: { id: string } | null = null;
+    let duplicado = false;
+
+    if (previo) {
+      duplicado = true;
+      const { data: actualizado, error: uErr } = await supabaseAdmin
+        .from("mindeval_candidatos")
+        .update(enFiltro ? { ...datosContacto, ...datosPostulacion } : datosContacto)
+        .eq("id", previo.id)
+        .select()
+        .single();
+      if (uErr || !actualizado) throw new Error(uErr?.message ?? "No se pudo actualizar tu postulación");
+      candidatoGuardado = actualizado;
+    } else {
+      const { data: creado, error: cErr } = await supabaseAdmin
+        .from("mindeval_candidatos")
+        .insert({
+          vacante_id: vacanteId,
+          cedula,
+          ...datosContacto,
+          anios_experiencia: aniosRaw ? Number(aniosRaw) : null,
+          educacion,
+          cv_texto: cvTexto || null,
+          cv_url: cvPath,
+          sede,
+          salario_acuerdo: salarioAcuerdo,
+        })
+        .select()
+        .single();
+      if (cErr || !creado) throw new Error(cErr?.message ?? "No se pudo guardar la postulación");
+      candidatoGuardado = creado;
+    }
+
+    // Ninguna de las dos ramas puede dejarlo en null (las dos lanzan antes),
+    // pero el compilador no puede saberlo a través de un `let`.
+    if (!candidatoGuardado) throw new Error("No se pudo guardar la postulación");
+    const candidato = candidatoGuardado;
 
     // 3. Match automático con IA (best-effort — si falla, el candidato queda
     // guardado igual y el reclutador puede calcularlo manualmente después)
     let matchPct: number | null = null;
-    if (cvTexto.trim()) {
+    if (cvTexto.trim() && enFiltro) {
       try {
         const perfil = await resolverPerfilCargo(supabaseAdmin, vacante as Vacante);
         const resultado = await calcularMatchCv(cvTexto, perfil);
@@ -144,7 +209,7 @@ export async function POST(req: NextRequest) {
     // 4. Descarte por desacuerdo salarial — corre después (y por fuera) del
     // match de CV para que siempre gane: un candidato que no acepta el
     // salario ofertado se descarta sin importar qué tan bien calce su CV.
-    if (salarioAcuerdo === false) {
+    if (salarioAcuerdo === false && enFiltro) {
       const monto = (vacante as Vacante).salario_pregunta?.monto;
       await supabaseAdmin
         .from("mindeval_candidatos")
@@ -156,7 +221,16 @@ export async function POST(req: NextRequest) {
         .eq("id", candidato.id);
     }
 
-    return NextResponse.json({ ok: true, candidato_id: candidato.id, match_pct: matchPct });
+    return NextResponse.json({
+      ok: true,
+      candidato_id: candidato.id,
+      match_pct: matchPct,
+      // El formulario usa estos dos para dar una confirmación honesta en vez
+      // de un "¡listo!" que esconde que el CV quedó sin leer o que esta era
+      // la segunda vez que enviaba (auditoría 2026-09, F2-4 y F2-5).
+      duplicado,
+      cv_extraido: cvPath ? !!cvTexto.trim() : null,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "No se pudo enviar la postulación";
     return NextResponse.json({ error: msg }, { status: 500 });

@@ -13,6 +13,7 @@ import {
   vacanteAceptaPostulaciones,
   type Candidato,
   type EtapaCandidato,
+  type EstadoSesionPrueba,
   type TipoSesionPrueba,
   type Vacante,
   type VerificacionTitulo,
@@ -20,15 +21,62 @@ import {
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
+// Espejo de VENTANA_HORAS en src/lib/mindeval-ventana-prueba.ts — ese módulo
+// es server-only y no puede importarse desde un componente de cliente. Solo
+// se usa para pintar el badge; quien decide de verdad es el servidor.
+const VENTANA_HORAS_PRUEBA = 24;
+
+interface SesionResumen {
+  tipo: TipoSesionPrueba;
+  estado: EstadoSesionPrueba;
+  fecha_programada: string;
+}
 
 interface CandidatoConScore extends Candidato {
   matchCv?: number;
+  sesion?: SesionResumen;
   stenPromedio?: number;
   tecnicaTotal?: number;
   assessmentPromedio?: number;
   idoneidad: number | null;
   verificacion?: VerificacionTitulo;
   psicoIncompleta?: boolean;
+}
+
+/**
+ * El archivo llegó a Storage pero la extracción de texto devolvió vacío — un
+ * PDF escaneado sin capa de texto es el caso típico. No es lo mismo que "la
+ * IA todavía no corrió": este candidato no va a tener match nunca hasta que
+ * alguien reintente la extracción o pegue el CV a mano.
+ */
+function cvIlegible(c: Candidato): boolean {
+  return !!c.cv_url && !c.cv_texto?.trim();
+}
+
+const LABEL_TIPO_SESION: Record<TipoSesionPrueba, string> = {
+  psicometrica: "Psicométrica",
+  tecnica: "Técnica",
+  assessment: "Assessment",
+};
+
+/**
+ * Estado de la invitación más reciente, para leerlo de un vistazo en el
+ * ranking. "Expirada" se calcula también contra la ventana de acceso: una
+ * sesión sigue marcada 'programada' en la base hasta que alguien intenta
+ * abrir el enlace, así que sin esto una invitación vencida se veía como si
+ * el candidato todavía pudiera rendirla.
+ */
+function badgeInvitacion(s?: SesionResumen): { label: string; detalle: string; color: string; bg: string } {
+  if (!s) return { label: "Sin invitar", detalle: "Todavía no se le ha agendado ninguna prueba", color: "#7C89A8", bg: "transparent" };
+
+  const tipo = LABEL_TIPO_SESION[s.tipo] ?? s.tipo;
+  const cuando = new Date(s.fecha_programada).toLocaleString("es-EC", { dateStyle: "short", timeStyle: "short" });
+  const vencida = Date.now() > new Date(s.fecha_programada).getTime() + VENTANA_HORAS_PRUEBA * 60 * 60_000;
+
+  if (s.estado === "completada") return { label: `✓ ${tipo} rendida`, detalle: `Agendada para ${cuando}`, color: "#12805C", bg: "#E8F6EF" };
+  if (s.estado === "en_curso") return { label: `● ${tipo} en curso`, detalle: `Empezó desde ${cuando}`, color: "#8A6400", bg: "#FFF6DE" };
+  if (s.estado === "expirada" || vencida) return { label: `✗ ${tipo} vencida`, detalle: `Se le agendó para ${cuando} y no la rindió a tiempo`, color: "#C4402F", bg: "#FDEDEA" };
+  return { label: `✉ ${tipo} enviada`, detalle: `Puede rendirla desde ${cuando}`, color: "#2E4A96", bg: "#EAF0FB" };
 }
 
 function badgeSenescyt(v?: VerificacionTitulo): { label: string; color: string; bg: string } {
@@ -74,6 +122,7 @@ export default function ProcesoVacante() {
 
   const [cerrandoProceso, setCerrandoProceso] = useState(false);
   const [descargandoCv, setDescargandoCv] = useState<Set<string>>(new Set());
+  const [eliminando, setEliminando] = useState<string | null>(null);
 
   useEffect(() => {
     if (verificando) return;
@@ -100,13 +149,30 @@ export default function ProcesoVacante() {
     const lista = cands ?? [];
     const ids = lista.map((c) => c.id);
 
-    const [matches, psico, tecnicas, assess, verificaciones] = await Promise.all([
+    const [matches, psico, tecnicas, assess, verificaciones, sesiones] = await Promise.all([
       ids.length ? supabase.from("mindeval_cv_matches").select("candidato_id, match_pct, generado_en").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_pruebas_psicometricas").select("candidato_id, bateria, sten, items_respondidos, items_esperados").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_pruebas_tecnicas").select("candidato_id, puntaje_total").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_assessment_evaluaciones").select("candidato_id, puntaje").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_verificaciones_titulo").select("*").in("candidato_id", ids).order("created_at", { ascending: false }) : { data: [] },
+      // El ranking no sabía nada de las invitaciones: para saber si a alguien
+      // ya se le había enviado la prueba, si la rindió o si se le venció el
+      // enlace, había que abrir su ficha uno por uno o irse a Monitoreo
+      // (auditoría 2026-09, F2-1).
+      ids.length
+        ? supabase
+            .from("mindeval_sesiones_prueba")
+            .select("candidato_id, tipo, estado, fecha_programada")
+            .in("candidato_id", ids)
+            .order("fecha_programada", { ascending: false })
+        : { data: [] },
     ]);
+
+    // la más reciente por candidato — la query ya viene ordenada desc.
+    const sesionPorCandidato = new Map<string, SesionResumen>();
+    for (const s of (sesiones.data ?? []) as (SesionResumen & { candidato_id: string })[]) {
+      if (!sesionPorCandidato.has(s.candidato_id)) sesionPorCandidato.set(s.candidato_id, s);
+    }
 
     // la más reciente por candidato — la query ya viene ordenada desc, se
     // queda con la primera ocurrencia de cada candidato_id.
@@ -160,6 +226,7 @@ export default function ProcesoVacante() {
         assessmentPromedio,
         idoneidad: calcularIdoneidadGlobal({ matchCv, stenPromedio, tecnicaTotal, assessmentPromedio }),
         verificacion: verificacionPorCandidato.get(c.id),
+        sesion: sesionPorCandidato.get(c.id),
         psicoIncompleta: hayPsicoIncompleta,
       };
     });
@@ -247,6 +314,27 @@ export default function ProcesoVacante() {
 
   async function agendarLote() {
     if (!fechaLote || seleccionados.size === 0) return;
+
+    // Manda correos reales a varias personas de una sola vez y no se puede
+    // deshacer -- pedía menos confirmación que consultar SENESCYT, que solo
+    // gasta diez centavos (auditoría 2026-09, F2-8). Se avisa además de a
+    // quién NO le va a llegar por falta de correo, y del plazo que tendrá.
+    const elegidos = candidatos.filter((c) => seleccionados.has(c.id));
+    const sinCorreo = elegidos.filter((c) => !c.email);
+    const yaInvitados = elegidos.filter((c) => c.sesion && c.sesion.tipo === tipoLote && c.sesion.estado !== "expirada");
+    const limite = new Date(new Date(fechaLote).getTime() + VENTANA_HORAS_PRUEBA * 60 * 60_000);
+
+    const detalles = [
+      `Se enviará un correo con el enlace a ${elegidos.length} candidato${elegidos.length > 1 ? "s" : ""}.`,
+      `Podrán rendirla desde el ${new Date(fechaLote).toLocaleString("es-EC")} y hasta el ${limite.toLocaleString("es-EC")} (${VENTANA_HORAS_PRUEBA} h).`,
+      sinCorreo.length ? `\n⚠ ${sinCorreo.length} sin correo registrado (${sinCorreo.map((c) => c.nombre_completo).join(", ")}): se les creará la sesión pero tendrás que pasarles el enlace a mano.` : "",
+      yaInvitados.length ? `\n⚠ ${yaInvitados.length} ya tenía una invitación de este tipo (${yaInvitados.map((c) => c.nombre_completo).join(", ")}): recibirán un enlace nuevo.` : "",
+    ].filter(Boolean).join("\n");
+
+    if (!window.confirm(`¿Agendar la ${tipoLote === "psicometrica" ? "prueba psicométrica" : tipoLote === "tecnica" ? "prueba técnica" : "sesión de Assessment Center"}?\n\n${detalles}\n\nLos correos salen de inmediato y no se pueden cancelar.`)) {
+      return;
+    }
+
     setAgendandoLote(true);
     setResultadoLote([]);
     try {
@@ -420,6 +508,60 @@ export default function ProcesoVacante() {
     }
   }
 
+  /**
+   * Eliminar es distinto de descartar y debe seguir siéndolo: descartar saca
+   * a alguien del proceso conservando su evaluación; esto borra la fila y
+   * todo lo que cuelgue de ella. Existe para resolver duplicados — filas que
+   * no deberían existir — y no había forma de hacerlo sin entrar a la base.
+   *
+   * Se pregunta al servidor qué se perdería ANTES de confirmar, para que el
+   * reclutador vea el inventario real en vez de un "¿seguro?" a ciegas.
+   */
+  async function eliminarCandidato(candidatoId: string, nombre: string) {
+    setEliminando(candidatoId);
+    try {
+      const headers = await authHeaders();
+      const resPrev = await fetch(`/api/mindeval-eliminar-candidato?candidato_id=${candidatoId}`, { headers });
+      const previo = await resPrev.json();
+      if (!resPrev.ok) throw new Error(previo.error);
+
+      const sePerdera: { etiqueta: string; cantidad: number }[] = previo.se_perdera ?? [];
+      const listado = sePerdera.length
+        ? `\n\nSe eliminará también:\n${sePerdera.map((d) => `  · ${d.cantidad} ${d.etiqueta}${d.cantidad > 1 ? "s" : ""}`).join("\n")}`
+        : "\n\nNo tiene evaluaciones ni pruebas asociadas.";
+
+      if (!window.confirm(`¿Eliminar definitivamente a ${nombre} de esta vacante?${listado}\n\nEsta acción NO se puede deshacer. Si solo quieres sacarlo del proceso conservando su información, usa "descartado" en su ficha.`)) {
+        return;
+      }
+
+      let res = await fetch("/api/mindeval-eliminar-candidato", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ candidato_id: candidatoId }),
+      });
+      let data = await res.json();
+
+      // El servidor frena cuando el candidato tiene evaluaciones rendidas —
+      // muy probablemente se está por borrar la fila equivocada del par.
+      if (res.status === 409 && data.requiere_confirmacion) {
+        if (!window.confirm(`${data.error}\n\n¿Eliminarlo de todos modos?`)) return;
+        res = await fetch("/api/mindeval-eliminar-candidato", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify({ candidato_id: candidatoId, forzar: true }),
+        });
+        data = await res.json();
+      }
+      if (!res.ok) throw new Error(data.error);
+
+      await cargar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo eliminar el candidato");
+    } finally {
+      setEliminando(null);
+    }
+  }
+
   async function descargarCv(candidatoId: string) {
     setDescargandoCv((prev) => new Set(prev).add(candidatoId));
     try {
@@ -447,6 +589,17 @@ export default function ProcesoVacante() {
   candidatos.forEach((c) => {
     if (c.etapa_actual in conteoPorEtapa) conteoPorEtapa[c.etapa_actual]++;
   });
+
+  // Duplicados por cédula dentro de esta vacante. Las postulaciones nuevas ya
+  // no los crean, pero las que entraron antes del arreglo siguen ahí y hay
+  // que poder resolverlas desde acá (auditoría 2026-09, F2-4).
+  const gruposDuplicados = Object.values(
+    candidatos.reduce<Record<string, CandidatoConScore[]>>((acc, c) => {
+      if (!c.cedula) return acc;
+      (acc[c.cedula] ||= []).push(c);
+      return acc;
+    }, {})
+  ).filter((g) => g.length > 1);
 
   const aceptaPostulaciones = vacanteAceptaPostulaciones(vacante);
   const cerradaPorFecha = vacante.estado === "abierta" && !aceptaPostulaciones;
@@ -614,6 +767,67 @@ export default function ProcesoVacante() {
             <div style={{ margin: "0 24px 12px", fontSize: 12, color: "#41507A" }}>{resultadoRecalculo}</div>
           )}
 
+          {gruposDuplicados.length > 0 && (
+            <div style={{ margin: "0 24px 14px", background: "#FDEDEA", border: "1px solid #F0BDB4", borderRadius: 10, padding: "12px 14px" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#C4402F", marginBottom: 8 }}>
+                {gruposDuplicados.length} cédula{gruposDuplicados.length > 1 ? "s" : ""} repetida{gruposDuplicados.length > 1 ? "s" : ""} en esta vacante
+              </div>
+              <div style={{ fontSize: 11.5, color: "#8A4034", marginBottom: 10, lineHeight: 1.5 }}>
+                La misma persona está cargada más de una vez. Conserva la fila que ya tenga historial (match, pruebas o
+                etapa avanzada) y elimina la otra. Las postulaciones nuevas ya no generan duplicados.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {gruposDuplicados.map((grupo) => (
+                  <div key={grupo[0].cedula} style={{ background: "#FFFFFF", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#7C89A8", marginBottom: 6 }}>CÉDULA {grupo[0].cedula}</div>
+                    {grupo.map((c) => (
+                      <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 12, padding: "3px 0" }}>
+                        <span style={{ fontWeight: 700, color: NAVY, minWidth: 150 }}>{c.nombre_completo}</span>
+                        <span style={{ color: "#7C89A8" }}>
+                          {labelEtapa(c.etapa_actual)} · {c.idoneidad !== null ? `${c.idoneidad}% idoneidad` : "sin match"} ·{" "}
+                          {cvIlegible(c) ? "CV no legible" : c.cv_url ? "CV leído" : "sin CV"} · registrado{" "}
+                          {new Date(c.created_at).toLocaleDateString("es-EC")}
+                        </span>
+                        <button
+                          onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${c.id}`)}
+                          style={{ marginLeft: "auto", background: "none", border: "1px solid #D5DCEB", padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}
+                        >
+                          Ver perfil
+                        </button>
+                        <button
+                          onClick={() => eliminarCandidato(c.id, c.nombre_completo)}
+                          disabled={eliminando === c.id}
+                          style={{ background: "#FDEDEA", color: "#C4402F", border: "1px solid #C4402F", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: eliminando === c.id ? "not-allowed" : "pointer", opacity: eliminando === c.id ? 0.6 : 1 }}
+                        >
+                          {eliminando === c.id ? "Eliminando…" : "Eliminar esta fila"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Aviso agregado: si hay CVs que no se pudieron leer, se dice acá
+              arriba y con la acción al lado, en vez de obligar al reclutador
+              a descubrirlo fila por fila. */}
+          {candidatos.some(cvIlegible) && (
+            <div style={{ margin: "0 24px 14px", background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, color: "#8A6400" }}>
+                <strong>{candidatos.filter(cvIlegible).length} hoja{candidatos.filter(cvIlegible).length > 1 ? "s" : ""} de vida sin poder leerse.</strong>{" "}
+                Suelen ser PDFs escaneados como fotos. Sin texto no se calcula el match ni el % de idoneidad, así que quedan fuera del ranking hasta que se resuelva.
+              </span>
+              <button
+                onClick={recalcularPendientes}
+                disabled={recalculando}
+                style={{ marginLeft: "auto", background: NAVY, color: "#FFFFFF", border: "none", fontSize: 11.5, fontWeight: 700, padding: "7px 14px", borderRadius: 6, cursor: recalculando ? "not-allowed" : "pointer", opacity: recalculando ? 0.6 : 1 }}
+              >
+                {recalculando ? "Reintentando…" : "Reintentar lectura"}
+              </button>
+            </div>
+          )}
+
           {seleccionados.size > 0 && (
             <div style={{ margin: "0 24px 16px", background: "#F7F9FD", border: `1px solid ${GOLD}`, borderRadius: 10, padding: 14 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
@@ -734,7 +948,7 @@ export default function ProcesoVacante() {
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
                   <th style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }} />
-                  {["#", "Candidato", "Teléfono", "Sede", "% Idoneidad", "Etapa actual", "STEN", "SENESCYT", "Acciones"].map((h) => (
+                  {["#", "Candidato", "Teléfono", "Sede", "% Idoneidad", "Etapa actual", "Invitación", "STEN", "SENESCYT", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>
                       {h}
                     </th>
@@ -762,6 +976,21 @@ export default function ProcesoVacante() {
                             DESCARTADO
                           </span>
                         )}
+                        {/* Subió un archivo pero no se le pudo sacar el texto
+                            (típicamente un PDF escaneado con la cámara, sin
+                            capa de texto). Sin esta marca era idéntico a un
+                            candidato al que la IA todavía no le corría: los
+                            dos se veían como "Pendiente" y este se quedaba
+                            fuera del ranking para siempre, en silencio
+                            (auditoría 2026-09, F2-5). */}
+                        {cvIlegible(c) && (
+                          <span
+                            title="Se recibió el archivo pero no se pudo leer su texto (suele ser un PDF escaneado como fotos). Sin texto no hay match de CV ni % de idoneidad. Usa 'Recalcular candidatos sin match' para reintentar, o abre su perfil y pega el CV a mano."
+                            style={{ marginLeft: 8, background: "#FFF6DE", color: "#8A6400", fontWeight: 700, fontSize: 10, padding: "2px 8px", borderRadius: 20 }}
+                          >
+                            ⚠ CV NO LEGIBLE
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.telefono || "—"}</td>
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.sede || "—"}</td>
@@ -778,6 +1007,19 @@ export default function ProcesoVacante() {
                         )}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{labelEtapa(c.etapa_actual)}</td>
+                      <td style={{ padding: "12px 20px", fontSize: 11.5 }}>
+                        {(() => {
+                          const b = badgeInvitacion(c.sesion);
+                          return (
+                            <span
+                              title={b.detalle}
+                              style={{ background: b.bg, color: b.color, fontWeight: 700, padding: b.bg === "transparent" ? 0 : "3px 9px", borderRadius: 20, whiteSpace: "nowrap" }}
+                            >
+                              {b.label}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td style={{ padding: "12px 20px", fontSize: 12 }}>
                         {c.stenPromedio !== undefined ? `STEN ${c.stenPromedio.toFixed(1)} · ${categoriaSten(Math.round(c.stenPromedio))}` : "—"}
                         {c.psicoIncompleta && (
@@ -807,6 +1049,23 @@ export default function ProcesoVacante() {
                           >
                             Ver perfil
                           </button>
+                          <button
+                            onClick={() => eliminarCandidato(c.id, c.nombre_completo)}
+                            disabled={eliminando === c.id}
+                            title="Elimina la fila y todo lo que cuelga de ella. Para sacar a alguien del proceso conservando su evaluación, descártalo en su ficha."
+                            style={{
+                              background: "transparent",
+                              color: "#C4402F",
+                              border: "1px solid #F0BDB4",
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              fontSize: 11.5,
+                              cursor: eliminando === c.id ? "not-allowed" : "pointer",
+                              opacity: eliminando === c.id ? 0.6 : 1,
+                            }}
+                          >
+                            {eliminando === c.id ? "…" : "Eliminar"}
+                          </button>
                           {c.cv_url && (
                             <button
                               onClick={() => descargarCv(c.id)}
@@ -832,7 +1091,7 @@ export default function ProcesoVacante() {
                 })}
                 {candidatos.length === 0 && (
                   <tr>
-                    <td colSpan={10} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
+                    <td colSpan={11} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
                       Sin candidatos todavía. Comparte el link de postulación o añade uno manualmente.
                     </td>
                   </tr>

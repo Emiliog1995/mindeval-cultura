@@ -220,7 +220,22 @@ export default function PerfilCandidatoPage() {
    * no lo fuera, así que nunca volvía a avanzar solo, sin ningún error
    * visible (auditoría 2026-09, I-3).
    */
-  async function moverEtapa(nueva: EtapaCandidato) {
+  async function moverEtapa(nueva: EtapaCandidato, confirmar = false) {
+    if (!candidato) return;
+    if (nueva === candidato.etapa_actual) return;
+
+    // Descartar y contratar son decisiones que cierran el proceso de una
+    // persona -- y este selector las disparaba con un solo clic accidental,
+    // sin preguntar nada. El resto de movimientos de etapa siguen siendo
+    // instantáneos: son reversibles y de bajo costo (auditoría 2026-09, F2-6).
+    if (confirmar && (nueva === "descartado" || nueva === "contratado")) {
+      const mensaje =
+        nueva === "descartado"
+          ? `¿Descartar a ${candidato.nombre_completo} del proceso?\n\nSale del ranking activo y deja de avanzar automáticamente. No se le envía ningún correo por esto — el correo de no seleccionado se manda aparte, y tendrás que confirmarlo también.`
+          : `¿Marcar a ${candidato.nombre_completo} como CONTRATADO?\n\nCierra su proceso de selección.`;
+      if (!window.confirm(mensaje)) return;
+    }
+
     const estado: Candidato["estado"] = nueva === "descartado" ? "descartado" : nueva === "contratado" ? "contratado" : "activo";
     const patch = estado === "activo" ? { etapa_actual: nueva, estado, motivo_descarte: null } : { etapa_actual: nueva, estado };
     await supabase.from("mindeval_candidatos").update(patch).eq("id", params.id);
@@ -521,19 +536,32 @@ export default function PerfilCandidatoPage() {
     );
   }
 
-  async function enviarCorreoRechazo() {
+  /**
+   * Enviar el correo de "no seleccionado" es irreversible y sale hacia una
+   * persona real: se confirma antes, con el nombre y el correo exacto a la
+   * vista, y el servidor rechaza un segundo envío salvo que se pida
+   * explícitamente reenviar (auditoría 2026-09, F2-7).
+   */
+  async function enviarCorreoRechazo(reenviar = false) {
     if (!candidato || !vacante) return;
+
+    const mensaje = reenviar
+      ? `Ya se le envió el correo de no seleccionado a ${candidato.nombre_completo}${candidato.rechazo_enviado_en ? ` el ${new Date(candidato.rechazo_enviado_en).toLocaleString("es-EC")}` : ""}.\n\n¿Volver a enviárselo? Lo recibirá por segunda vez.`
+      : `¿Enviar el correo de "no seleccionado" a ${candidato.nombre_completo}?\n\nSe envía a: ${candidato.email}\n\nEs un correo real hacia el candidato y no se puede deshacer.`;
+    if (!window.confirm(mensaje)) return;
+
     setEnviandoRechazo(true);
     setResultadoRechazo("");
     try {
       const res = await fetch("/api/mindeval-enviar-rechazo", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ candidato_id: params.id, titulo_vacante: vacante.titulo }),
+        body: JSON.stringify({ candidato_id: params.id, titulo_vacante: vacante.titulo, reenviar }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResultadoRechazo("Correo enviado.");
+      setCandidato((prev) => (prev ? { ...prev, rechazo_enviado_en: data.rechazo_enviado_en } : prev));
     } catch (e) {
       setResultadoRechazo(e instanceof Error ? e.message : "No se pudo enviar el correo.");
     } finally {
@@ -711,8 +739,15 @@ export default function PerfilCandidatoPage() {
             {candidato.etapa_actual === "descartado" && (
               <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <button
-                  onClick={enviarCorreoRechazo}
+                  onClick={() => enviarCorreoRechazo(!!candidato.rechazo_enviado_en)}
                   disabled={enviandoRechazo || !candidato.email}
+                  title={
+                    !candidato.email
+                      ? "Este candidato no tiene correo registrado"
+                      : candidato.rechazo_enviado_en
+                        ? `Ya enviado el ${new Date(candidato.rechazo_enviado_en).toLocaleString("es-EC")}`
+                        : `Se enviará a ${candidato.email}`
+                  }
                   style={{
                     background: "transparent",
                     border: `1px solid ${GOLD}`,
@@ -725,8 +760,17 @@ export default function PerfilCandidatoPage() {
                     opacity: enviandoRechazo || !candidato.email ? 0.5 : 1,
                   }}
                 >
-                  {enviandoRechazo ? "Enviando…" : "Enviar correo de no seleccionado"}
+                  {enviandoRechazo
+                    ? "Enviando…"
+                    : candidato.rechazo_enviado_en
+                      ? "Reenviar correo de no seleccionado"
+                      : "Enviar correo de no seleccionado"}
                 </button>
+                {candidato.rechazo_enviado_en && (
+                  <span style={{ fontSize: 11.5, color: "#7BE3B4" }}>
+                    ✓ Enviado el {new Date(candidato.rechazo_enviado_en).toLocaleString("es-EC")}
+                  </span>
+                )}
                 {resultadoRechazo && (
                   <span style={{ fontSize: 11.5, color: resultadoRechazo === "Correo enviado." ? "#0FA85F" : "#FF8A78", fontWeight: 600 }}>
                     {resultadoRechazo}
@@ -815,7 +859,7 @@ export default function PerfilCandidatoPage() {
             </div>
             <select
               value={candidato.etapa_actual}
-              onChange={(e) => moverEtapa(e.target.value as EtapaCandidato)}
+              onChange={(e) => moverEtapa(e.target.value as EtapaCandidato, true)}
               style={{ marginTop: 10, padding: "6px 10px", borderRadius: 6, fontSize: 12, border: "none" }}
             >
               {[...ETAPAS.map((e) => e.key), "finalista", "contratado", "descartado"].map((k) => (

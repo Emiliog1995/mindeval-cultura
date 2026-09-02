@@ -35,6 +35,9 @@ export default function PostularPage() {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [matchPct, setMatchPct] = useState<number | null>(null);
+  // null = no subió archivo; false = subió pero no se pudo leer su texto.
+  const [cvExtraido, setCvExtraido] = useState<boolean | null>(null);
+  const [duplicado, setDuplicado] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -120,6 +123,8 @@ export default function PostularPage() {
       if (!res.ok) throw new Error(data.error);
 
       setMatchPct(data.match_pct ?? null);
+      setCvExtraido(data.cv_extraido ?? null);
+      setDuplicado(!!data.duplicado);
       setEnviado(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo enviar la postulación. Intenta de nuevo.");
@@ -143,12 +148,34 @@ export default function PostularPage() {
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F4F6FA", padding: 20 }}>
         <div style={{ textAlign: "center", background: "#FFFFFF", padding: "3rem 2rem", borderRadius: 16, maxWidth: 420 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>✓</div>
-          <h2 style={{ color: NAVY, marginBottom: 8 }}>¡Postulación enviada!</h2>
+          <h2 style={{ color: NAVY, marginBottom: 8 }}>{duplicado ? "¡Postulación actualizada!" : "¡Postulación enviada!"}</h2>
           <p style={{ color: "#7C89A8", fontSize: 13.5 }}>
-            Gracias por postular a <strong>{vacante.titulo}</strong>. El equipo de {vacante.empresa} revisará tu perfil
-            y te contactará si avanzas a la siguiente etapa.
+            {duplicado ? (
+              <>
+                Ya te habías postulado a <strong>{vacante.titulo}</strong> con esta cédula, así que actualizamos tus
+                datos en vez de crear una postulación nueva. El equipo de {vacante.empresa} te contactará si avanzas
+                a la siguiente etapa.
+              </>
+            ) : (
+              <>
+                Gracias por postular a <strong>{vacante.titulo}</strong>. El equipo de {vacante.empresa} revisará tu
+                perfil y te contactará si avanzas a la siguiente etapa.
+              </>
+            )}
           </p>
-          {matchPct !== null && (
+          {/* Antes esta pantalla decía "¡listo!" igual cuando la hoja de vida
+              había llegado ilegible — el candidato se iba tranquilo y su CV
+              nunca entraba al análisis. Ahora se le dice, y se le dice qué
+              puede hacer (auditoría 2026-09, F2-5). */}
+          {cvExtraido === false && (
+            <div style={{ marginTop: 16, fontSize: 12.5, color: "#8A6400", background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 8, padding: "10px 12px", textAlign: "left" }}>
+              <strong>Un detalle sobre tu hoja de vida:</strong> la recibimos, pero no pudimos leer su texto. Suele
+              pasar cuando el archivo es un escaneo o una foto. Tu postulación quedó registrada igual y una persona
+              la revisará, pero si puedes volver a enviarla como PDF de texto (exportada desde Word o Google Docs),
+              tu perfil se analiza mucho mejor. Puedes volver a llenar este formulario con la misma cédula.
+            </div>
+          )}
+          {cvExtraido === true && matchPct !== null && (
             <div style={{ marginTop: 16, fontSize: 12, color: "#A9B6D8", background: "#F7F9FD", borderRadius: 8, padding: "8px 12px" }}>
               Tu CV ya fue procesado por nuestro sistema de análisis.
             </div>

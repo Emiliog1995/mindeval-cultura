@@ -52,6 +52,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Escribe un correo válido" }, { status: 400 });
     }
 
+    // A diferencia de la postulación pública (que actualiza al candidato que
+    // ya existía), acá se bloquea y se avisa: el reclutador tiene la ficha a
+    // un clic y debe decidir él si es la misma persona o un homónimo con la
+    // cédula mal tipeada. Crear el duplicado en silencio le ensuciaba el
+    // ranking sin que se enterara (auditoría 2026-09, F2-4).
+    if (cedula) {
+      const { data: previos } = await supabaseAdmin
+        .from("mindeval_candidatos")
+        .select("id, nombre_completo")
+        .eq("vacante_id", vacanteId)
+        .eq("cedula", cedula)
+        .limit(1);
+      const previo = previos?.[0];
+      if (previo) {
+        return NextResponse.json(
+          {
+            error: `Ya hay un candidato con la cédula ${cedula} en esta vacante: ${previo.nombre_completo}. Abre su ficha para actualizar sus datos en vez de crear uno nuevo.`,
+            candidato_existente_id: previo.id,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     let cvTexto = "";
     if (cvPath) {
       const { data: archivo } = await supabaseAdmin.storage.from("mindeval-cvs").download(cvPath);

@@ -9,19 +9,12 @@ import { ITEMS_KOSTICK } from "@/lib/mindeval-kostick";
 import { ITEMS_DISC } from "@/lib/mindeval-disc";
 import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
 import type { EjercicioBanco, PreguntaBanco, Vacante } from "@/lib/mindeval-types";
-
-const EXPIRACION_DIAS = 7;
+import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible } from "@/lib/mindeval-ventana-prueba";
 
 // generarCasoTecnico (caso técnico abierto) llama a Claude y puede superar
 // el límite por defecto de las funciones serverless de Vercel con un cold
 // start -- mismo motivo que maxDuration en /api/mindeval-postular.
 export const maxDuration = 60;
-
-function sesionExpirada(sesion: { fecha_programada: string; estado: string }): boolean {
-  if (sesion.estado === "completada") return false;
-  const limite = new Date(sesion.fecha_programada).getTime() + EXPIRACION_DIAS * 24 * 60 * 60_000;
-  return Date.now() > limite;
-}
 
 /**
  * Segundo paso del portal del candidato: solo entrega/genera el contenido
@@ -56,23 +49,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (sesion.estado === "completada") {
       return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
     }
+    // Misma regla que GET /api/mindeval-prueba/[token], importada del mismo
+    // módulo -- este endpoint es el que de verdad entrega el contenido, así
+    // que vuelve a validarla en vez de confiar en que el GET ya lo hizo.
     if (sesionExpirada(sesion)) {
-      return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
+      return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
     }
-    if (new Date(sesion.fecha_programada).getTime() > Date.now() + 30 * 60_000) {
-      return NextResponse.json({ error: "Esta prueba todavía no está disponible. Vuelve a la hora agendada." }, { status: 403 });
-    }
-    // Misma ventana que GET /api/mindeval-prueba/[token] (30 min antes a 1 hora
-    // después) -- se repite acá porque este endpoint es el que de verdad
-    // entrega el contenido; GET solo informa si hace falta cédula. No aplica
-    // si ya está "en_curso": un candidato que ya desbloqueó la prueba y
-    // recarga la página cerca de que se le acabe el tiempo no debe quedar
-    // bloqueado a mitad de su propio intento.
-    if (sesion.estado !== "en_curso" && Date.now() > new Date(sesion.fecha_programada).getTime() + 60 * 60_000) {
-      return NextResponse.json(
-        { error: "Ya pasó la hora agendada para esta prueba. Contacta al reclutador para que te reagende un nuevo horario." },
-        { status: 403 }
-      );
+    if (todaviaNoDisponible(sesion)) {
+      return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
     }
 
     const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;

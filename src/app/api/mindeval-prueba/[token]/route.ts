@@ -9,24 +9,13 @@ import { ITEMS_KOSTICK } from "@/lib/mindeval-kostick";
 import { ITEMS_DISC } from "@/lib/mindeval-disc";
 import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
 import type { EjercicioBanco, SesionPrueba } from "@/lib/mindeval-types";
-
-// El enlace de una prueba agendada no vive para siempre: si el candidato no
-// la rinde dentro de este plazo desde la fecha programada, se considera
-// expirado (evita que un correo reenviado o filtrado siga siendo válido
-// meses después). El reclutador puede volver a agendarla si hace falta.
-const EXPIRACION_DIAS = 7;
+import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible } from "@/lib/mindeval-ventana-prueba";
 
 // La corrección con IA (caso técnico abierto, ejercicios de assessment) y el
 // Informe Ejecutivo pueden superar el límite por defecto de las funciones
 // serverless de Vercel con un cold start o una respuesta larga -- mismo
 // motivo que maxDuration en /api/mindeval-postular.
 export const maxDuration = 60;
-
-function sesionExpirada(sesion: { fecha_programada: string; estado: string }): boolean {
-  if (sesion.estado === "completada") return false;
-  const limite = new Date(sesion.fecha_programada).getTime() + EXPIRACION_DIAS * 24 * 60 * 60_000;
-  return Date.now() > limite;
-}
 
 /**
  * Portal del candidato para rendir la prueba agendada — sin login, validado
@@ -66,23 +55,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (sesion.estado !== "expirada") {
       await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
     }
-    return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
+    return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
   }
-  if (new Date(sesion.fecha_programada).getTime() > Date.now() + 30 * 60_000) {
-    return NextResponse.json({ error: "Esta prueba todavía no está disponible. Vuelve a la hora agendada." }, { status: 403 });
-  }
-  // Ventana de 30 min antes a 1 hora después de la hora agendada -- fuera de
-  // eso, aunque el link siga vivo (no ha llegado a los EXPIRACION_DIAS),
-  // exige que el candidato entre a la hora que se le indicó, en vez de
-  // dejarlo abrir el mismo link horas o días después sin más control. No
-  // aplica si ya está "en_curso" -- un candidato que ya desbloqueó la prueba
-  // y recarga la página cerca de que se le acabe el tiempo no debe quedar
-  // bloqueado a mitad de su propio intento.
-  if (sesion.estado !== "en_curso" && Date.now() > new Date(sesion.fecha_programada).getTime() + 60 * 60_000) {
-    return NextResponse.json(
-      { error: "Ya pasó la hora agendada para esta prueba. Contacta al reclutador para que te reagende un nuevo horario." },
-      { status: 403 }
-    );
+  if (todaviaNoDisponible(sesion)) {
+    return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
   }
 
   return NextResponse.json({
@@ -131,7 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       if (sesion.estado !== "expirada") {
         await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
       }
-      return NextResponse.json({ error: "Este enlace ha expirado. Solicita al reclutador que te reagende la prueba." }, { status: 410 });
+      return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
     }
 
     const s = sesion as SesionPrueba;

@@ -95,6 +95,9 @@ export interface Candidato {
   etapa_actual: EtapaCandidato;
   estado: "activo" | "descartado" | "contratado";
   motivo_descarte?: string | null;
+  // Momento en que se le envió el correo de "no seleccionado". NULL/ausente =
+  // nunca se le envió. Ver supabase/mindeval-rechazo-enviado.sql.
+  rechazo_enviado_en?: string | null;
   created_at: string;
 }
 
