@@ -17,6 +17,14 @@ export interface DestinatarioSugerido {
   motivo: string;
 }
 
+const ROL_LABEL: Record<FuenteEvaluacion, string> = {
+  autoevaluacion: "autoevaluación",
+  jefe: "jefe directo",
+  par: "par",
+  colaborador: "colaborador",
+  cliente_interno: "cliente interno",
+};
+
 export type DestinatariosPorFuente = Partial<Record<FuenteEvaluacion, DestinatarioSugerido[]>>;
 
 /** Fuente que aplica al puesto pero para la que no hay a quién enviarle el enlace. */
@@ -67,16 +75,29 @@ interface PersonaMinima {
   id: string;
   nombre: string;
   email: string | null;
+  puesto_id?: string | null;
   clienteInternoId?: string | null;
 }
 
 /**
  * Deriva a quién enviarle cada enlace a partir de la línea de mando ya resuelta.
  *
+ * Dos reglas de la metodología mandan acá:
+ *
+ * 1. **Par = quien ocupa el mismo puesto**, no quien comparte jefe. Compartir
+ *    jefe no hace pares a un Contador General y un Evaluador de Programas: son
+ *    funciones distintas que no se pueden calificar entre sí con el mismo
+ *    criterio. Un puesto con un solo ocupante simplemente no tiene pares.
+ *
+ * 2. **Una persona ocupa un solo rol frente a cada evaluado.** Si el Contador
+ *    ya es colaborador de la Presidenta, no puede además llegarle el formulario
+ *    de cliente interno de la misma persona: contaría dos veces, con dos pesos
+ *    distintos, y le duplica el trabajo. Cuando hay choque gana el vínculo más
+ *    directo, en este orden: jefe > colaborador > cliente interno > par.
+ *
  * Solo la jefatura se interpreta (la resuelve la IA sobre el texto libre del
- * Manual); pares y colaboradores salen de ahí por construcción, y por eso son
- * consistentes entre sí: si A es par de B, B es par de A. Resolver cada fuente
- * por separado con la IA producía conjuntos asimétricos.
+ * Manual); todo lo demás sale de ahí y del puesto, y por eso es simétrico: si
+ * A es par de B, B es par de A.
  */
 export function derivarDestinatarios(
   personaId: string,
@@ -98,44 +119,64 @@ export function derivarDestinatarios(
     motivo,
   });
 
-  destinatarios.autoevaluacion = [aSugerido(evaluado, "alta", "Es la persona evaluada.")];
+  // Un rol por persona: quien ya quedó asignado no vuelve a aparecer más abajo.
+  const yaAsignado = new Set<string>([personaId]);
+  const rolPrevio = new Map<string, FuenteEvaluacion>();
+  const asignar = (fuente: FuenteEvaluacion, personas: PersonaMinima[], confianza: DestinatarioSugerido["confianza"], motivo: (p: PersonaMinima) => string) => {
+    const libres = personas.filter((p) => !yaAsignado.has(p.id));
+    for (const p of libres) {
+      yaAsignado.add(p.id);
+      rolPrevio.set(p.id, fuente);
+    }
+    if (libres.length > 0) destinatarios[fuente] = libres.map((p) => aSugerido(p, confianza, motivo(p)));
+    return libres;
+  };
 
-  const ci = evaluado.clienteInternoId ? porId.get(evaluado.clienteInternoId) : undefined;
-  if (ci) {
-    destinatarios.cliente_interno = [
-      aSugerido(ci, "alta", "Designado como cliente interno en la nómina que entregó la organización."),
-    ];
-  }
+  destinatarios.autoevaluacion = [aSugerido(evaluado, "alta", "Es la persona evaluada.")];
 
   const miJefatura = jefaturaPorPersona.get(personaId);
   const jefe = miJefatura?.jefe_persona_id ? porId.get(miJefatura.jefe_persona_id) : undefined;
 
   if (jefe && miJefatura) {
-    destinatarios.jefe = [aSugerido(jefe, miJefatura.confianza, miJefatura.motivo)];
-
-    const pares = roster.filter(
-      (p) => p.id !== personaId && jefaturaPorPersona.get(p.id)?.jefe_persona_id === jefe.id,
-    );
-    if (pares.length > 0) {
-      destinatarios.par = pares.map((p) =>
-        aSugerido(p, miJefatura.confianza, `Reporta al mismo jefe directo (${jefe.nombre}).`),
-      );
-    } else {
-      sinResolver.push({ fuente: "par", motivo: `Nadie más de la nómina reporta a ${jefe.nombre}.` });
-    }
+    asignar("jefe", [jefe], miJefatura.confianza, () => miJefatura.motivo);
   } else {
-    const motivo = miJefatura?.motivo || "No se pudo determinar el jefe directo dentro de la nómina.";
-    sinResolver.push({ fuente: "jefe", motivo });
-    sinResolver.push({ fuente: "par", motivo: "Sin jefe resuelto no se pueden identificar los pares." });
+    sinResolver.push({
+      fuente: "jefe",
+      motivo: miJefatura?.motivo || "No se pudo determinar el jefe directo dentro de la nómina.",
+    });
   }
 
   const colaboradores = roster.filter((p) => jefaturaPorPersona.get(p.id)?.jefe_persona_id === personaId);
   if (colaboradores.length > 0) {
-    destinatarios.colaborador = colaboradores.map((p) =>
-      aSugerido(p, jefaturaPorPersona.get(p.id)?.confianza ?? "media", `Reporta directamente a ${evaluado.nombre}.`),
-    );
+    asignar("colaborador", colaboradores, "alta", () => `Reporta directamente a ${evaluado.nombre}.`);
   } else {
     sinResolver.push({ fuente: "colaborador", motivo: "Nadie de la nómina le reporta directamente." });
+  }
+
+  const ci = evaluado.clienteInternoId ? porId.get(evaluado.clienteInternoId) : undefined;
+  if (ci) {
+    const asignados = asignar("cliente_interno", [ci], "alta", () => "Designado como cliente interno en la nómina que entregó la organización.");
+    if (asignados.length === 0) {
+      sinResolver.push({
+        fuente: "cliente_interno",
+        motivo: `La nómina designa a ${ci.nombre} como cliente interno, pero ya lo evalúa como ${ROL_LABEL[rolPrevio.get(ci.id) ?? "par"]}. Una persona ocupa un solo rol.`,
+      });
+    }
+  }
+
+  // Pares: mismo puesto. Un puesto con un solo ocupante no tiene pares.
+  const pares = evaluado.puesto_id
+    ? roster.filter((p) => p.id !== personaId && p.puesto_id && p.puesto_id === evaluado.puesto_id)
+    : [];
+  if (pares.length > 0) {
+    asignar("par", pares, "alta", () => "Ocupa el mismo puesto que la persona evaluada.");
+  } else {
+    sinResolver.push({
+      fuente: "par",
+      motivo: evaluado.puesto_id
+        ? "Es la única persona en su puesto, así que no tiene pares."
+        : "No tiene puesto asignado, no se pueden identificar pares.",
+    });
   }
 
   return { destinatarios, sin_resolver: sinResolver, con_ia: mapa.con_ia };
