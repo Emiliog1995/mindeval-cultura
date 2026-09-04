@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
@@ -7,7 +8,33 @@ import { requireAuth } from "@/lib/require-auth";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const PLAZOS_VALIDOS = ["1 mes", "3 meses", "6 meses", "12 meses"];
+const PLAZOS_VALIDOS = ["1 mes", "3 meses", "6 meses", "12 meses"] as const;
+
+// El esquema lo hace cumplir la API (structured outputs), no el prompt: antes se
+// pedia JSON por texto y se extraia con regex, y cuando la respuesta crecia se
+// cortaba por max_tokens dejando un JSON a medias que reventaba el JSON.parse.
+const PDI_SCHEMA = {
+  type: "object",
+  properties: {
+    areas: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          area_mejora: { type: "string" },
+          objetivo_smart: { type: "string" },
+          accion: { type: "string" },
+        },
+        required: ["area_mejora", "objetivo_smart", "accion"],
+        additionalProperties: false,
+      },
+    },
+    plazo: { type: "string", enum: PLAZOS_VALIDOS },
+    indicador: { type: "string" },
+  },
+  required: ["areas", "plazo", "indicador"],
+  additionalProperties: false,
+} as const;
 
 export async function POST(req: NextRequest) {
   const authError = await requireAuth(req, "evaluacion_360");
@@ -115,32 +142,26 @@ Para cada una de las brechas listadas arriba (en el mismo orden, una por una), p
 - Una "acción concreta" de desarrollo, realista para el contexto de esta organización y este puesto
 
 También propone:
-- Un plazo de cumplimiento, que debe ser EXACTAMENTE uno de estos valores: ${PLAZOS_VALIDOS.join(", ")}
+- Un plazo de cumplimiento para todo el plan
 - Un indicador de éxito medible para verificar el cumplimiento del plan
 
-Responde ÚNICAMENTE en JSON con esta estructura exacta (un objeto por cada brecha recibida, en el mismo orden):
-{
-  "areas": [
-    {"area_mejora": "...", "objetivo_smart": "...", "accion": "..."}
-  ],
-  "plazo": "3 meses",
-  "indicador": "..."
-}`;
+Devuelve un objeto en "areas" por cada brecha recibida, en el mismo orden. Escribe en español, en prosa directa y sin relleno: el objetivo SMART y la acción no deben pasar de dos líneas cada uno.`;
 
-    const message = await client.messages.create({
+    const message = await client.messages.parse({
       model: "claude-sonnet-4-6",
-      max_tokens: 1200,
+      max_tokens: 16000,
       messages: [{ role: "user", content: prompt }],
+      output_config: { format: jsonSchemaOutputFormat(PDI_SCHEMA) },
     });
 
-    const texto = message.content[0].type === "text" ? message.content[0].text : "";
-    const jsonMatch = texto.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("La IA no devolvió una sugerencia válida");
-    const sugerencia = JSON.parse(jsonMatch[0]);
-
-    if (!PLAZOS_VALIDOS.includes(sugerencia.plazo)) {
-      sugerencia.plazo = "3 meses";
+    if (message.stop_reason === "max_tokens") {
+      throw new Error(
+        "La respuesta de la IA se cortó por longitud. Vuelve a intentarlo.",
+      );
     }
+
+    const sugerencia = message.parsed_output;
+    if (!sugerencia) throw new Error("La IA no devolvió una sugerencia válida");
 
     return NextResponse.json(sugerencia);
   } catch (e) {
