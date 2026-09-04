@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
-import { vacanteAceptaPostulaciones, type Vacante } from "@/lib/mindeval-types";
-import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
+import { vacanteAceptaPostulaciones } from "@/lib/mindeval-types";
 
 /**
  * Datos públicos sobre una vacante: título, empresa y si sigue aceptando
@@ -14,16 +13,18 @@ import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
  * existen. Nunca expone cortes, perfil_cargo_manual, fecha_limite_postulacion
  * en crudo ni puesto_id.
  *
- * Sí expone una versión PÚBLICA del perfil del cargo (auditoría 2026-09,
- * M-3): antes el candidato postulaba viendo únicamente el título y el nombre
- * de la empresa, sin funciones, requisitos ni área. Eso baja la calidad de
- * las postulaciones y le resta seriedad al anuncio.
+ * NO expone el perfil del cargo. Se intentó publicarlo (auditoría 2026-09,
+ * M-3, "el anuncio no describe el puesto") y se revirtió el 2026-09-04 con el
+ * proceso de la Fundación en curso: la misión y las competencias vienen del
+ * Manual de Puestos, que es documentación INTERNA del cliente. En un caso real
+ * eso publicó los nombres de manuales de sede, políticas de protección de
+ * menores y reglamentos internos en una página abierta a cualquiera con el
+ * link.
  *
- * Qué se expone y qué no: van la misión del puesto, el área y los NOMBRES de
- * las competencias esperadas. Nunca los pesos, los niveles esperados ni qué
- * competencias son excluyentes — eso es el criterio de calificación, y
- * publicarlo le enseñaría al candidato exactamente qué escribir en su CV para
- * pasar el filtro con IA.
+ * Si en el futuro se quiere un anuncio descriptivo, el texto debe ser un campo
+ * público redactado a propósito por el reclutador para publicarse — nunca una
+ * proyección automática del Manual de Puestos, que no se escribió para ojos
+ * externos. El formulario público es solo el formulario.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { permitido } = checkRateLimit(req, "mindeval-vacante-publica");
@@ -41,24 +42,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Vacante no encontrada" }, { status: 404 });
   }
 
-  const perfil = await resolverPerfilCargo(supabaseAdmin, data as Vacante);
-
   return NextResponse.json({
     titulo: data.titulo,
     empresa: data.empresa,
     acepta_postulaciones: vacanteAceptaPostulaciones(data),
     sedes: data.sedes ?? null,
     salario_pregunta: data.salario_pregunta ?? null,
-    fecha_limite: data.fecha_limite_postulacion ?? null,
-    perfil: perfil
-      ? {
-          mision: perfil.mision || null,
-          area: perfil.area || null,
-          competencias: [
-            ...(perfil.competencias_duras ?? []).map((c) => c.nombre),
-            ...(perfil.competencias_blandas ?? []).map((c) => c.nombre),
-          ].filter(Boolean),
-        }
-      : null,
   });
 }
