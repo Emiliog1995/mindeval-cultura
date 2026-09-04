@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { resultado }: { resultado: ResultadoConsolidado360 } = await req.json();
-    const { evaluado, brechas, nombreCuadrante, accionCuadrante } = resultado;
+    const { evaluado, brechas, nombreCuadrante, accionCuadrante, periodo } = resultado;
 
     // Contexto organizacional: genérico para cualquier tipo de cliente
     // (fundación, empresa privada, etc.) — se arma solo con lo que la
@@ -36,6 +36,10 @@ Organización: ${emp.nombre}${emp.sector ? `\nSector / tipo de organización: ${
       }
     }
 
+    // Contexto del puesto tomado del Manual de Puestos (solo lectura): misión,
+    // actividades esenciales MDT e indicadores de gestión con la calificación
+    // real del jefe. Es lo que permite sustentar ante el cliente de dónde sale
+    // cada acción del PDI, en vez de que la IA hable de competencias en abstracto.
     let contextoPuesto = "";
     if (evaluado.puesto_id) {
       const { data: puesto } = await supabaseAdmin
@@ -45,6 +49,42 @@ Organización: ${emp.nombre}${emp.sector ? `\nSector / tipo de organización: ${
         .single();
       if (puesto?.mision) {
         contextoPuesto = `\nMisión del puesto: ${puesto.mision}\n`;
+      }
+
+      const { data: esenciales } = await supabaseAdmin
+        .from("actividades_puesto")
+        .select("id, descripcion")
+        .eq("puesto_id", evaluado.puesto_id)
+        .eq("es_esencial", true)
+        .order("orden");
+
+      if (esenciales?.length) {
+        contextoPuesto += `\nActividades esenciales del puesto (metodología MDT):\n${esenciales
+          .map((a) => `  - ${a.descripcion}`)
+          .join("\n")}\n`;
+
+        const { data: indicadores } = await supabaseAdmin
+          .from("indicadores_puesto")
+          .select("id, indicador, meta")
+          .in("actividad_esencial_id", esenciales.map((a) => a.id));
+
+        if (indicadores?.length) {
+          const { data: notas } = await supabaseAdmin
+            .from("indicadores_resultado_360")
+            .select("indicador_puesto_id, calificacion")
+            .eq("evaluado_id", evaluado.id)
+            .eq("periodo", periodo);
+
+          const notaPorIndicador = new Map(
+            (notas ?? []).map((n) => [n.indicador_puesto_id, n.calificacion]),
+          );
+          contextoPuesto += `\nIndicadores de gestión de esas actividades esenciales, con la calificación del jefe directo (escala 1-5, donde 5 = superó la meta):\n${indicadores
+            .map((i) => {
+              const nota = notaPorIndicador.get(i.id);
+              return `  - ${i.indicador} | meta: ${i.meta} | calificación: ${nota ?? "sin calificar"}`;
+            })
+            .join("\n")}\n`;
+        }
       }
     }
 
@@ -66,6 +106,8 @@ Acción recomendada según el cuadrante: ${accionCuadrante}
 
 BRECHAS PRIORITARIAS (competencias con mayor diferencia frente a la meta):
 ${brechasTexto}
+
+Al redactar las acciones, aterrízalas en las actividades esenciales y en los indicadores de gestión listados arriba, dando prioridad a los indicadores con calificación más baja. El plan debe servir para mejorar el desempeño real del puesto y no solo la competencia en abstracto. Si un indicador está "sin calificar", no lo uses como evidencia.
 
 Para cada una de las brechas listadas arriba (en el mismo orden, una por una), propone:
 - Un "área de mejora" (nombre corto y claro)
