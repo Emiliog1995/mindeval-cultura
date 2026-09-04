@@ -126,6 +126,16 @@ function DashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nuevaEmpresaId]);
 
+  // La resolución tarda ~40s, así que se dispara apenas hay empresa y modo 360:
+  // corre mientras se llena el formulario y suele estar lista al momento de
+  // elegir a la persona, en vez de hacer esperar con el formulario ya completo.
+  useEffect(() => {
+    if (nuevaTipo !== "360" || !nuevaEmpresaId || personasEmpresa.length === 0) return;
+    if (mapaJefaturas || cargandoOrganigrama || errorOrganigrama) return;
+    cargarOrganigrama(nuevaEmpresaId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nuevaTipo, nuevaEmpresaId, personasEmpresa]);
+
   /** Resuelve la línea de mando de la empresa (una llamada, se reutiliza). */
   async function cargarOrganigrama(empresaId: string): Promise<MapaJefaturas | null> {
     if (mapaJefaturas) return mapaJefaturas;
@@ -152,6 +162,38 @@ function DashboardInner() {
     }
   }
 
+  /** Marca por defecto solo lo inequívoco; lo dudoso queda visible sin marcar. */
+  function preseleccionAlta(propuesta: SugerenciaDestinatarios): Set<string> {
+    return new Set(
+      Object.entries(propuesta.destinatarios).flatMap(([fuente, lista]) =>
+        (lista ?? []).filter((d) => d.confianza === "alta").map((d) => `${fuente}:${d.persona_id}`),
+      ),
+    );
+  }
+
+  /** Un envío por destinatario marcado. Puro: no depende del estado de React. */
+  function enviosDe(
+    propuesta: SugerenciaDestinatarios | null,
+    marcados: Set<string>,
+  ): Array<{ fuente: FuenteEvaluacion; destinatario: DestinatarioSugerido }> {
+    if (!propuesta) return [];
+    return Object.entries(propuesta.destinatarios).flatMap(([fuente, lista]) =>
+      (lista ?? [])
+        .filter((d) => marcados.has(`${fuente}:${d.persona_id}`))
+        .map((d) => ({ fuente: fuente as FuenteEvaluacion, destinatario: d })),
+    );
+  }
+
+  async function resolverSugerenciaPara(id: string): Promise<SugerenciaDestinatarios | null> {
+    if (!nuevaEmpresaId) return null;
+    const mapa = await cargarOrganigrama(nuevaEmpresaId);
+    if (!mapa) return null;
+    const propuesta = derivarDestinatarios(id, personasEmpresa, mapa);
+    setSugerencia(propuesta);
+    setSeleccionados(preseleccionAlta(propuesta));
+    return propuesta;
+  }
+
   async function handleSeleccionarPersona(id: string) {
     setPersonaId(id);
     setSugerencia(null);
@@ -173,21 +215,7 @@ function DashboardInner() {
     }));
     setFuentesAplicables(calcularFuentesAplicables(p, personasEmpresa));
 
-    if (!nuevaEmpresaId) return;
-    const mapa = await cargarOrganigrama(nuevaEmpresaId);
-    if (!mapa) return;
-    const propuesta = derivarDestinatarios(id, personasEmpresa, mapa);
-    setSugerencia(propuesta);
-    // Se marcan por defecto solo las propuestas que la IA dio por inequívocas;
-    // las dudosas quedan a la vista pero sin marcar, para que sea una decisión
-    // de la consultora y no del sistema.
-    setSeleccionados(
-      new Set(
-        Object.entries(propuesta.destinatarios).flatMap(([fuente, lista]) =>
-          (lista ?? []).filter((d) => d.confianza === "alta").map((d) => `${fuente}:${d.persona_id}`),
-        ),
-      ),
-    );
+    await resolverSugerenciaPara(id);
   }
 
   function alternarDestinatario(fuente: FuenteEvaluacion, personaIdDestino: string) {
@@ -200,14 +228,8 @@ function DashboardInner() {
     });
   }
 
-  /** Un envío por destinatario marcado: cada evaluador necesita su propio enlace. */
-  function enviosSeleccionados(): Array<{ fuente: FuenteEvaluacion; destinatario: DestinatarioSugerido }> {
-    if (!sugerencia) return [];
-    return Object.entries(sugerencia.destinatarios).flatMap(([fuente, lista]) =>
-      (lista ?? [])
-        .filter((d) => seleccionados.has(`${fuente}:${d.persona_id}`))
-        .map((d) => ({ fuente: fuente as FuenteEvaluacion, destinatario: d })),
-    );
+  function enviosSeleccionados() {
+    return enviosDe(sugerencia, seleccionados);
   }
 
   async function handleCrearSesion() {
@@ -226,12 +248,6 @@ function DashboardInner() {
       setError360("Completa nombre, cargo, departamento y período.");
       return;
     }
-    // Si hubo propuesta de destinatarios y la consultora los desmarcó todos, no
-    // se generan enlaces huérfanos: es más probable que sea un descuido.
-    if (sugerencia && enviosSeleccionados().length === 0) {
-      setError360("Marca al menos a una persona en la lista de destinatarios.");
-      return;
-    }
     setError360("");
     setCreandoSesion(true);
     try {
@@ -247,9 +263,29 @@ function DashboardInner() {
       });
       // Un enlace por evaluador marcado, no uno por fuente: si el evaluado tiene
       // cuatro pares, cada uno necesita su propio token porque el formulario se
-      // cierra al responderse. Sin nómina detrás (alta manual) se cae al
+      // cierra al responderse.
+      //
+      // Resolver el organigrama tarda ~40s, y quien completa el formulario rápido
+      // llega hasta acá antes de que termine. Si en ese caso cayéramos al
+      // fallback, se generarían enlaces sin destinatario sin avisar -- que es
+      // justo lo que el matching viene a evitar. Así que se espera la propuesta
+      // pendiente en vez de darla por inexistente.
+      const esDeLaNomina = personaId !== "" && personaId !== "manual";
+      let propuesta = sugerencia;
+      let marcados = seleccionados;
+      if (esDeLaNomina && !propuesta && !errorOrganigrama) {
+        propuesta = await resolverSugerenciaPara(personaId);
+        if (propuesta) marcados = preseleccionAlta(propuesta);
+      }
+
+      const envios = enviosDe(propuesta, marcados);
+      // Con propuesta pero sin nadie marcado es un descuido, no una intención.
+      if (propuesta && envios.length === 0) {
+        setError360("Marca al menos a una persona en la lista de destinatarios.");
+        return;
+      }
+      // Sin nómina detrás (alta manual, o si falló la IA) se cae al
       // comportamiento anterior: un enlace por fuente aplicable.
-      const envios = enviosSeleccionados();
       const fuentes = envios.length > 0 ? envios.map((e) => e.fuente) : fuentesAplicables;
       const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
       const base = typeof window !== "undefined" ? window.location.origin : "";
@@ -1144,7 +1180,7 @@ function DashboardInner() {
                     className="px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-80 active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 transition-[opacity,transform] duration-150"
                     style={{ background: "#0A1A32", color: "#10b981" }}
                   >
-                    {creandoSesion ? "Creando..." : "Generar link"}
+                    {cargandoOrganigrama ? "Resolviendo organigrama…" : creandoSesion ? "Creando..." : "Generar link"}
                   </button>
                 ) : null}
               </div>
