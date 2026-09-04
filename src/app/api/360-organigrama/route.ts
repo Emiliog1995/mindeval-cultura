@@ -67,6 +67,12 @@ function describirPersona(p: PersonaRoster): string {
  * si A es par de B, B es par de A. Resolviendo cada persona por separado el
  * modelo producía conjuntos de pares asimétricos entre una consulta y otra.
  */
+// Llama a Claude y puede superar el límite por defecto de las funciones
+// serverless de Vercel (10-15s) -- mismo motivo que maxDuration en
+// /api/mindeval-postular: la función muere a mitad de camino y el navegador
+// recibe la página de error de Vercel en vez de JSON.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const authError = await requireAuth(req, "evaluacion_360");
   if (authError) return authError;
@@ -108,7 +114,7 @@ REGLAS QUE NO PUEDES ROMPER:
 - Un mismo puesto puede tener varios ocupantes en distintas sucursales o subproyectos. Para elegir al jefe concreto usa el área del puesto y sobre todo el prefijo del correo institucional, que suele identificar la sede (dos correos con el mismo prefijo antes del punto pertenecen a la misma sucursal). Di en "motivo" qué señal usaste, citando el correo tal como aparece en la nómina y sin reconstruirlo de memoria.
 - Prefiere null antes que arriesgar un jefe equivocado: si el formulario le llega a quien no corresponde, la evaluación queda contaminada.
 - "confianza": "alta" solo si es inequívoco; "media" si es la lectura más razonable pero cabe otra; "baja" si es conjetura. Con jefe_persona_id null usa "baja".
-- "motivo": una frase corta en español. La lee la consultora antes de enviar los enlaces.`;
+- "motivo": UNA sola frase de máximo 20 palabras, en español. La lee la consultora antes de enviar los enlaces; no repitas la regla ni cites ids, di solo de dónde sale el match.`;
 
     const message = await client.messages.parse({
       model: "claude-sonnet-4-6",

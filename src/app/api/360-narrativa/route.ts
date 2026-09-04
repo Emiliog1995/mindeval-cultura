@@ -6,6 +6,12 @@ import { requireAuth } from "@/lib/require-auth";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Llama a Claude y puede superar el límite por defecto de las funciones
+// serverless de Vercel (10-15s) -- mismo motivo que maxDuration en
+// /api/mindeval-postular: la función muere a mitad de camino y el navegador
+// recibe la página de error de Vercel en vez de JSON.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const authError = await requireAuth(req, "evaluacion_360");
   if (authError) return authError;
