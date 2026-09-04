@@ -22,6 +22,17 @@ interface IndicadorEsencialForm {
   formula: string | null;
 }
 
+// La escala es 1-5 y no arranca en 0: un 1 ya significa "muy por debajo", no
+// "no evaluado". Quien llena el formulario tiene que ver esto antes de mover
+// la primera barra, o cada evaluador califica con un criterio distinto.
+const ESCALA_COMPETENCIA = [
+  { valor: 5, label: "Siempre lo demuestra. Es un referente para los demás." },
+  { valor: 4, label: "Casi siempre. Por encima de lo que el puesto espera." },
+  { valor: 3, label: "Generalmente. Cumple con lo que el puesto espera." },
+  { valor: 2, label: "A veces. Por debajo de lo esperado." },
+  { valor: 1, label: "Rara vez o nunca. Muy por debajo de lo esperado." },
+];
+
 const ESCALA_INDICADOR = [
   { valor: 5, label: "Superó la meta" },
   { valor: 4, label: "Cumplió la meta" },
@@ -193,6 +204,67 @@ export default function EvaluarToken360() {
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
+        <div className="rounded-xl border border-[#10b981]/40 bg-[#10b981]/[0.07] p-4 space-y-3">
+          <h2 className="text-sm font-bold text-white">Cómo llenar esta evaluación</h2>
+
+          <p className="text-xs text-gray-300 leading-relaxed">
+            Calificás <strong className="text-white">del 1 al 5</strong> (no hay 0). Podés usar decimales:
+            si dudás entre 3 y 4, dejá la barra en 3.5.
+          </p>
+
+          <div className="space-y-1 pt-1">
+            {ESCALA_COMPETENCIA.map((op) => (
+              <div key={op.valor} className="flex items-start gap-2.5">
+                <span
+                  className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold"
+                  style={{ background: "#10b981", color: "#0A1A32" }}
+                >
+                  {op.valor}
+                </span>
+                <span className="text-[11px] text-gray-300 leading-6">{op.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {data.token.fuente === "jefe" && (
+            <div className="pt-2 mt-1 border-t border-[#10b981]/25 space-y-2">
+              <p className="text-xs font-bold text-white">Como jefe directo tenés dos secciones más</p>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                <strong className="text-white">Potencial:</strong> solo lo califica el jefe. No mide lo que la
+                persona ya hace bien, sino hasta dónde podría llegar. Se usa la misma escala del 1 al 5.
+              </p>
+              {indicadoresEsenciales.length > 0 && (
+                <>
+                  <p className="text-[11px] text-gray-300 leading-relaxed">
+                    <strong className="text-white">Indicadores de gestión:</strong> son los del Manual de Puestos,
+                    con la meta que se fijó para cada uno. Acá no calificás cómo se comportó la persona sino
+                    <strong className="text-white"> cuánto cumplió esa meta</strong> en el período:
+                  </p>
+                  <div className="space-y-1">
+                    {ESCALA_INDICADOR.map((op) => (
+                      <div key={op.valor} className="flex items-start gap-2.5">
+                        <span
+                          className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold"
+                          style={{ background: "#2dd4bf", color: "#0A1A32" }}
+                        >
+                          {op.valor}
+                        </span>
+                        <span className="text-[11px] text-gray-300 leading-6">{op.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          <p className="text-[11px] text-gray-400 leading-relaxed pt-1 border-t border-[#10b981]/25">
+            El punto <span className="text-amber-400">●</span> marca lo que todavía no calificaste. No podés enviar
+            hasta que no quede ninguno: mové cada barra aunque quieras dejarla donde está.
+            Se responde una sola vez y tus respuestas se consolidan con las del resto de evaluadores.
+          </p>
+        </div>
+
         <div className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] p-4 space-y-3">
           <p className="text-xs text-gray-500">Competencias (1.0 – 5.0)</p>
           {COMPETENCIAS_360.map((comp) => (
