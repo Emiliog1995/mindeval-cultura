@@ -55,7 +55,7 @@ function describirPersona(p: PersonaRoster): string {
     // organigrama: p. ej. quien representa a la "Asamblea General de Miembros",
     // que en el Manual figura como jefatura pero no es una persona.
     `    puesto: ${p.puestos?.nombre_puesto ?? p.cargo_externo ?? "sin puesto asignado"}`,
-    `    area: ${p.puestos?.area ?? (p.cargo_externo ? "externo a la nomina de la organizacion" : "sin area")}`,
+    `    area: ${p.puestos?.area ?? (p.cargo_externo ? "contraparte externa a la nomina operativa, incluida aqui como evaluadora valida y elegible" : "sin area")}`,
     `    reporta a (texto del Manual): ${p.puestos?.supervisado_por ?? "no indicado"}`,
     `    supervisa a (texto del Manual): ${p.puestos?.supervisa_a ?? "no indicado"}`,
   ].join("\n");
@@ -106,14 +106,16 @@ export async function POST(req: NextRequest) {
 
 La organización describe su organigrama como TEXTO LIBRE en el Manual de Puestos (campos "reporta a" y "supervisa a"). Ese texto casi nunca coincide palabra por palabra con el nombre real del puesto: puede estar abreviado ("Representante Legal" cuando el puesto se llama "Presidenta y Representante Legal"), estar en plural ("Coordinadores de Subproyecto"), enumerar varios puestos en una frase, o nombrar a alguien que NO está en la nómina (una asamblea, un directorio, voluntarios, becarios).
 
-NÓMINA COMPLETA (${roster.length} personas):
+PERSONAS DE LA ORGANIZACIÓN Y SUS CONTRAPARTES (${roster.length}):
 ${roster.map(describirPersona).join("\n")}
 
 Para CADA UNA de las ${roster.length} personas devuelve quién es su jefe directo concreto: el id de la persona de la nómina que ocupa el puesto al que reporta.
 
 REGLAS QUE NO PUEDES ROMPER:
-- Devuelve exactamente una entrada por persona de la nómina, usando su id textual. Nunca inventes un id.
-- "jefe_persona_id" debe ser un id de la nómina, o null si nadie de la nómina ocupa ese puesto superior (asamblea, directorio, cargo vacante). Devolver null es una respuesta correcta, no un fracaso.
+- Devuelve exactamente una entrada por persona de la lista, usando su id textual. Nunca inventes un id.
+- Todas las personas de la lista son elegibles como jefe, incluidas las marcadas como contraparte externa. "Externa" describe de dónde viene, no que esté excluida.
+- "jefe_persona_id" debe ser un id de la lista, o null si nadie de la lista ocupa ese puesto superior (asamblea, directorio, cargo vacante). Devolver null es una respuesta correcta, no un fracaso.
+- ATENCIÓN: un órgano colegiado (asamblea, directorio, junta, consejo) SÍ puede tener un representante concreto. Antes de devolver null por este motivo, busca en los cargos de la lista la palabra "representante" de ese órgano: si alguien dice representarlo, esa persona ES el jefe, aunque el Manual nombre al órgano y no a ella.
 - Nadie es jefe de sí mismo.
 - Un mismo puesto puede tener varios ocupantes en distintas sucursales o subproyectos. Para elegir al jefe concreto usa el área del puesto y sobre todo el prefijo del correo institucional, que suele identificar la sede (dos correos con el mismo prefijo antes del punto pertenecen a la misma sucursal). Di en "motivo" qué señal usaste, citando el correo tal como aparece en la nómina y sin reconstruirlo de memoria.
 - Prefiere null antes que arriesgar un jefe equivocado: si el formulario le llega a quien no corresponde, la evaluación queda contaminada.
