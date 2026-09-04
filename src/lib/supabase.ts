@@ -603,6 +603,8 @@ export interface PersonaConPuesto {
   tieneClienteInterno: boolean;
   /** Persona que la organización designó como cliente interno de esta persona. */
   clienteInternoId: string | null;
+  /** Cargo libre de un evaluador externo al Manual (contraparte regional, casa matriz). */
+  cargoExterno: string | null;
 }
 
 interface PersonaConPuestoRow {
@@ -611,6 +613,7 @@ interface PersonaConPuestoRow {
   email: string | null;
   puesto_id: string | null;
   cliente_interno_persona_id: string | null;
+  cargo_externo: string | null;
   puestos: {
     nombre_puesto: string;
     area: string;
@@ -623,7 +626,7 @@ interface PersonaConPuestoRow {
 export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Promise<PersonaConPuesto[]> {
   const { data, error } = await supabase
     .from("personas")
-    .select("id, nombre, email, puesto_id, cliente_interno_persona_id, puestos(nombre_puesto, area, supervisado_por, supervisa_a, tiene_cliente_interno)")
+    .select("id, nombre, email, puesto_id, cliente_interno_persona_id, cargo_externo, puestos(nombre_puesto, area, supervisado_por, supervisa_a, tiene_cliente_interno)")
     .eq("empresa_id", empresaId)
     .order("nombre");
   if (error) throw new Error(error.message);
@@ -632,12 +635,14 @@ export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Prom
     nombre: p.nombre,
     email: p.email,
     puesto_id: p.puesto_id,
-    cargo: p.puestos?.nombre_puesto ?? null,
+    // Un evaluador externo no tiene puesto en el Manual: su cargo es texto libre.
+    cargo: p.puestos?.nombre_puesto ?? p.cargo_externo ?? null,
     departamento: p.puestos?.area ?? null,
     jefe: p.puestos?.supervisado_por ?? null,
     supervisaA: p.puestos?.supervisa_a ?? null,
     tieneClienteInterno: p.puestos?.tiene_cliente_interno ?? false,
     clienteInternoId: p.cliente_interno_persona_id ?? null,
+    cargoExterno: p.cargo_externo ?? null,
   }));
 }
 

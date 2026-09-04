@@ -1147,7 +1147,7 @@ function DashboardInner() {
                         </option>
                         {personasEmpresa.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.nombre}{p.cargo ? ` — ${p.cargo}` : ""}
+                            {p.nombre}{p.cargo ? ` — ${p.cargo}` : ""}{p.cargoExterno ? " (externo)" : ""}
                           </option>
                         ))}
                         <option value="manual">+ Escribir manualmente</option>

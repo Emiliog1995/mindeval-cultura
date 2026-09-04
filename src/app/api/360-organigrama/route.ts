@@ -37,6 +37,7 @@ interface PersonaRoster {
   id: string;
   nombre: string;
   email: string | null;
+  cargo_externo: string | null;
   puestos: {
     nombre_puesto: string;
     area: string | null;
@@ -50,8 +51,11 @@ function describirPersona(p: PersonaRoster): string {
     `  - id: ${p.id}`,
     `    nombre: ${p.nombre}`,
     `    correo: ${p.email ?? "sin correo"}`,
-    `    puesto: ${p.puestos?.nombre_puesto ?? "sin puesto asignado"}`,
-    `    area: ${p.puestos?.area ?? "sin area"}`,
+    // El cargo libre es lo que permite emparejar a un evaluador externo con el
+    // organigrama: p. ej. quien representa a la "Asamblea General de Miembros",
+    // que en el Manual figura como jefatura pero no es una persona.
+    `    puesto: ${p.puestos?.nombre_puesto ?? p.cargo_externo ?? "sin puesto asignado"}`,
+    `    area: ${p.puestos?.area ?? (p.cargo_externo ? "externo a la nomina de la organizacion" : "sin area")}`,
     `    reporta a (texto del Manual): ${p.puestos?.supervisado_por ?? "no indicado"}`,
     `    supervisa a (texto del Manual): ${p.puestos?.supervisa_a ?? "no indicado"}`,
   ].join("\n");
@@ -88,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("personas")
-      .select("id, nombre, email, puestos(nombre_puesto, area, supervisado_por, supervisa_a)")
+      .select("id, nombre, email, cargo_externo, puestos(nombre_puesto, area, supervisado_por, supervisa_a)")
       .eq("empresa_id", empresa_id)
       .order("nombre");
     if (error) throw new Error(error.message);
