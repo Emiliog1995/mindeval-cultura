@@ -20,29 +20,42 @@ export function calcularPuntaje360(evaluaciones: Evaluacion360[]): {
   puntajesPorCompetencia: Record<CompetenciaKey, number>;
   puntaje360: number;
 } {
-  const acumulado: Record<string, number> = {};
-  const pesoTotal: Record<string, number> = {};
-
-  for (const comp of COMPETENCIAS_360) {
-    acumulado[comp.key] = 0;
-    pesoTotal[comp.key] = 0;
-  }
+  // Una fuente puede traer varias respuestas: un evaluado suele tener varios
+  // pares y varios colaboradores, cada uno con su propio formulario. Primero se
+  // promedia DENTRO de la fuente y recién después se aplica el peso de la
+  // fórmula; si se acumulara respuesta por respuesta, siete pares pesarían
+  // 7 x 20% = 140% y se comerían el 40% del jefe.
+  const sumaPorFuente: Record<string, Record<string, number>> = {};
+  const conteoPorFuente: Record<string, Record<string, number>> = {};
 
   for (const ev of evaluaciones) {
-    const peso = PESOS_FUENTE[ev.fuente] ?? 0;
+    if (!(PESOS_FUENTE[ev.fuente] > 0)) continue;
+    sumaPorFuente[ev.fuente] ??= {};
+    conteoPorFuente[ev.fuente] ??= {};
     for (const comp of COMPETENCIAS_360) {
       const val = ev.competencias[comp.key];
       if (val !== undefined && val > 0) {
-        acumulado[comp.key] += val * peso;
-        pesoTotal[comp.key] += peso;
+        sumaPorFuente[ev.fuente][comp.key] = (sumaPorFuente[ev.fuente][comp.key] ?? 0) + val;
+        conteoPorFuente[ev.fuente][comp.key] = (conteoPorFuente[ev.fuente][comp.key] ?? 0) + 1;
       }
     }
   }
 
+  // Los pesos se redistribuyen solos: al dividir por el peso de las fuentes
+  // que sí respondieron, una fuente ausente no arrastra el puntaje hacia abajo.
   const puntajesPorCompetencia = {} as Record<CompetenciaKey, number>;
   let suma = 0;
   for (const comp of COMPETENCIAS_360) {
-    const p = pesoTotal[comp.key] > 0 ? acumulado[comp.key] / pesoTotal[comp.key] : 0;
+    let acumulado = 0;
+    let pesoTotal = 0;
+    for (const fuente of Object.keys(sumaPorFuente)) {
+      const n = conteoPorFuente[fuente][comp.key] ?? 0;
+      if (n === 0) continue;
+      const peso = PESOS_FUENTE[fuente as Evaluacion360['fuente']];
+      acumulado += (sumaPorFuente[fuente][comp.key] / n) * peso;
+      pesoTotal += peso;
+    }
+    const p = pesoTotal > 0 ? acumulado / pesoTotal : 0;
     puntajesPorCompetencia[comp.key] = Math.round(p * 100) / 100;
     suma += puntajesPorCompetencia[comp.key];
   }

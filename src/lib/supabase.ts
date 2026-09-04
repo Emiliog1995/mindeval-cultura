@@ -679,26 +679,3 @@ export function calcularFuentesAplicables(
   return fuentes;
 }
 
-/**
- * A quién hay que enviarle el enlace de cada fuente.
- *
- * Solo resuelve lo que puede afirmar con certeza: la autoevaluación (la propia
- * persona) y el cliente interno (designado explícitamente en la nómina). Para
- * jefe, pares y colaboradores el Manual guarda texto libre del organigrama que
- * no siempre calza con un nombre de puesto real, así que se deja sin resolver
- * en vez de arriesgar un destinatario equivocado.
- */
-export function resolverDestinatarios(
-  persona: PersonaConPuesto,
-  todasLasPersonas: PersonaConPuesto[],
-): Partial<Record<FuenteEvaluacion, { nombre: string; email: string | null }>> {
-  const porId = new Map(todasLasPersonas.map((p) => [p.id, p]));
-  const destinos: Partial<Record<FuenteEvaluacion, { nombre: string; email: string | null }>> = {
-    autoevaluacion: { nombre: persona.nombre, email: persona.email },
-  };
-
-  const ci = persona.clienteInternoId ? porId.get(persona.clienteInternoId) : undefined;
-  if (ci) destinos.cliente_interno = { nombre: ci.nombre, email: ci.email };
-
-  return destinos;
-}

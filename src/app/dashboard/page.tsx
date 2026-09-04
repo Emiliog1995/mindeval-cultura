@@ -8,10 +8,12 @@ import {
 } from "recharts";
 import {
   listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion,
-  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa, calcularFuentesAplicables, resolverDestinatarios,
+  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa, calcularFuentesAplicables,
   type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360, type Empresa, type PersonaConPuesto,
 } from "@/lib/supabase";
 import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
+import { derivarDestinatarios, type DestinatarioSugerido, type MapaJefaturas, type SugerenciaDestinatarios } from "@/lib/360-organigrama";
+import { authHeaders } from "@/lib/auth-headers";
 import { getLevelColor } from "@/lib/scoring";
 import { useAuthGuard, cerrarSesion } from "@/lib/useAuthGuard";
 import type { ScoringResult } from "@/lib/scoring";
@@ -71,6 +73,15 @@ function DashboardInner() {
   const FUENTES_FIJAS: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
   const [fuentesAplicables, setFuentesAplicables] = useState<FuenteEvaluacion[]>(FUENTES_FIJAS);
   const [textoMasivo360, setTextoMasivo360] = useState("");
+  // Línea de mando resuelta por IA sobre el organigrama en texto libre del
+  // Manual. Se pide una sola vez por empresa: de ahí salen jefe, pares y
+  // colaboradores de cualquier evaluado de esa nómina.
+  const [mapaJefaturas, setMapaJefaturas] = useState<MapaJefaturas | null>(null);
+  const [cargandoOrganigrama, setCargandoOrganigrama] = useState(false);
+  const [errorOrganigrama, setErrorOrganigrama] = useState("");
+  const [sugerencia, setSugerencia] = useState<SugerenciaDestinatarios | null>(null);
+  // Nadie recibe un enlace sin que la consultora lo haya dejado marcado.
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null } }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
   const [error360, setError360] = useState("");
@@ -101,6 +112,12 @@ function DashboardInner() {
   useEffect(() => {
     setPersonaId("");
     setFuentesAplicables(FUENTES_FIJAS);
+    // El organigrama es de la empresa: al cambiar de cliente se descarta el
+    // anterior para no proponer destinatarios de otra nómina.
+    setMapaJefaturas(null);
+    setSugerencia(null);
+    setSeleccionados(new Set());
+    setErrorOrganigrama("");
     if (!nuevaEmpresaId) {
       setPersonasEmpresa([]);
       return;
@@ -109,8 +126,36 @@ function DashboardInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nuevaEmpresaId]);
 
-  function handleSeleccionarPersona(id: string) {
+  /** Resuelve la línea de mando de la empresa (una llamada, se reutiliza). */
+  async function cargarOrganigrama(empresaId: string): Promise<MapaJefaturas | null> {
+    if (mapaJefaturas) return mapaJefaturas;
+    setCargandoOrganigrama(true);
+    setErrorOrganigrama("");
+    try {
+      const res = await fetch("/api/360-organigrama", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ empresa_id: empresaId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "No se pudo resolver el organigrama");
+      const mapa = json as MapaJefaturas;
+      setMapaJefaturas(mapa);
+      return mapa;
+    } catch (e) {
+      setErrorOrganigrama(
+        e instanceof Error ? e.message : "No se pudo resolver el organigrama. Asigna los destinatarios a mano.",
+      );
+      return null;
+    } finally {
+      setCargandoOrganigrama(false);
+    }
+  }
+
+  async function handleSeleccionarPersona(id: string) {
     setPersonaId(id);
+    setSugerencia(null);
+    setSeleccionados(new Set());
     if (id === "" || id === "manual") {
       setDatos360((prev) => ({ ...prev, nombre: "", cargo: "", departamento: "", jefe: "", puestoId: "" }));
       setFuentesAplicables(FUENTES_FIJAS);
@@ -127,6 +172,42 @@ function DashboardInner() {
       puestoId: p.puesto_id ?? "",
     }));
     setFuentesAplicables(calcularFuentesAplicables(p, personasEmpresa));
+
+    if (!nuevaEmpresaId) return;
+    const mapa = await cargarOrganigrama(nuevaEmpresaId);
+    if (!mapa) return;
+    const propuesta = derivarDestinatarios(id, personasEmpresa, mapa);
+    setSugerencia(propuesta);
+    // Se marcan por defecto solo las propuestas que la IA dio por inequívocas;
+    // las dudosas quedan a la vista pero sin marcar, para que sea una decisión
+    // de la consultora y no del sistema.
+    setSeleccionados(
+      new Set(
+        Object.entries(propuesta.destinatarios).flatMap(([fuente, lista]) =>
+          (lista ?? []).filter((d) => d.confianza === "alta").map((d) => `${fuente}:${d.persona_id}`),
+        ),
+      ),
+    );
+  }
+
+  function alternarDestinatario(fuente: FuenteEvaluacion, personaIdDestino: string) {
+    const clave = `${fuente}:${personaIdDestino}`;
+    setSeleccionados((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(clave)) siguiente.delete(clave);
+      else siguiente.add(clave);
+      return siguiente;
+    });
+  }
+
+  /** Un envío por destinatario marcado: cada evaluador necesita su propio enlace. */
+  function enviosSeleccionados(): Array<{ fuente: FuenteEvaluacion; destinatario: DestinatarioSugerido }> {
+    if (!sugerencia) return [];
+    return Object.entries(sugerencia.destinatarios).flatMap(([fuente, lista]) =>
+      (lista ?? [])
+        .filter((d) => seleccionados.has(`${fuente}:${d.persona_id}`))
+        .map((d) => ({ fuente: fuente as FuenteEvaluacion, destinatario: d })),
+    );
   }
 
   async function handleCrearSesion() {
@@ -145,6 +226,12 @@ function DashboardInner() {
       setError360("Completa nombre, cargo, departamento y período.");
       return;
     }
+    // Si hubo propuesta de destinatarios y la consultora los desmarcó todos, no
+    // se generan enlaces huérfanos: es más probable que sea un descuido.
+    if (sugerencia && enviosSeleccionados().length === 0) {
+      setError360("Marca al menos a una persona en la lista de destinatarios.");
+      return;
+    }
     setError360("");
     setCreandoSesion(true);
     try {
@@ -158,17 +245,36 @@ function DashboardInner() {
         persona_id: personaId && personaId !== "manual" ? personaId : undefined,
         jefe: datos360.jefe || undefined,
       });
-      const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentesAplicables);
+      // Un enlace por evaluador marcado, no uno por fuente: si el evaluado tiene
+      // cuatro pares, cada uno necesita su propio token porque el formulario se
+      // cierra al responderse. Sin nómina detrás (alta manual) se cae al
+      // comportamiento anterior: un enlace por fuente aplicable.
+      const envios = enviosSeleccionados();
+      const fuentes = envios.length > 0 ? envios.map((e) => e.fuente) : fuentesAplicables;
+      const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
       const base = typeof window !== "undefined" ? window.location.origin : "";
-      const personaSel = personasEmpresa.find((x) => x.id === personaId);
-      const destinos = personaSel ? resolverDestinatarios(personaSel, personasEmpresa) : {};
-      const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}`, destinatario: destinos[t.fuente] }));
+
+      // Se emparejan token y destinatario dentro de cada fuente, sin depender
+      // del orden en que la base devolvió las filas.
+      const porFuente = new Map<FuenteEvaluacion, DestinatarioSugerido[]>();
+      for (const e of envios) {
+        const lista = porFuente.get(e.fuente) ?? [];
+        lista.push(e.destinatario);
+        porFuente.set(e.fuente, lista);
+      }
+      const links = tokens.map((t) => ({
+        fuente: t.fuente,
+        url: `${base}/evaluar-360/${t.token}`,
+        destinatario: porFuente.get(t.fuente)?.shift(),
+      }));
 
       setEvaluados360((prev) => [{ evaluado, empresa: nombreEmpresaSeleccionada, links }, ...prev]);
       setExpandido360(evaluado.id);
       setDatos360({ nombre: "", cargo: "", departamento: "", jefe: "", periodo: "", puestoId: "" });
       setPersonaId("");
       setFuentesAplicables(FUENTES_FIJAS);
+      setSugerencia(null);
+      setSeleccionados(new Set());
     } catch (e) {
       setError360(e instanceof Error ? e.message : "Error al generar los links de evaluación 360°");
     } finally {
@@ -1077,9 +1183,86 @@ function DashboardInner() {
                 <p className="text-xs text-red-600 mt-3">{error360}</p>
               )}
               {nuevaTipo === "360" && modo360 === "individual" && personaId && personaId !== "manual" ? (
-                <p className="text-xs text-gray-400 mt-3">
-                  Se generarán {fuentesAplicables.length} link(s) para este puesto según el organigrama: {fuentesAplicables.map((f) => FUENTE_LABELS[f]).join(", ")}.
-                </p>
+                <div className="mt-4">
+                  {cargandoOrganigrama && (
+                    <p className="text-xs text-gray-500">Resolviendo el organigrama del Manual de Puestos con IA…</p>
+                  )}
+                  {errorOrganigrama && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      {errorOrganigrama} Se generará un enlace por fuente aplicable y tendrás que decidir a mano a quién enviarlo.
+                    </p>
+                  )}
+                  {sugerencia && !cargandoOrganigrama && (
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <p className="text-xs font-bold" style={{ color: "#0A1A32" }}>
+                          ¿A quién se le envía cada formulario?
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          El organigrama del Manual está en texto libre, así que la IA propone y tú confirmas. Se genera un enlace por cada persona marcada.
+                        </p>
+                      </div>
+                      <div className="px-4 py-3 space-y-3">
+                        {FUENTES_FIJAS.map((fuente) => {
+                          const lista = sugerencia.destinatarios[fuente] ?? [];
+                          const pendiente = sugerencia.sin_resolver.find((x) => x.fuente === fuente);
+                          if (lista.length === 0 && !pendiente) return null;
+                          return (
+                            <div key={fuente}>
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                                {FUENTE_LABELS[fuente]}
+                              </p>
+                              {lista.map((d) => {
+                                const marcado = seleccionados.has(`${fuente}:${d.persona_id}`);
+                                return (
+                                  <label
+                                    key={d.persona_id}
+                                    className="flex items-start gap-2 py-1 cursor-pointer group"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={marcado}
+                                      onChange={() => alternarDestinatario(fuente, d.persona_id)}
+                                      className="mt-0.5 accent-[#10b981]"
+                                    />
+                                    <span className="min-w-0">
+                                      <span className="text-xs font-semibold text-gray-800">{d.nombre}</span>
+                                      {d.email && <span className="text-xs text-gray-500"> · {d.email}</span>}
+                                      <span
+                                        className="text-[10px] font-bold ml-2 px-1.5 py-0.5 rounded-full align-middle"
+                                        style={
+                                          d.confianza === "alta"
+                                            ? { background: "#dcfce7", color: "#166534" }
+                                            : d.confianza === "media"
+                                            ? { background: "#fef9c3", color: "#854d0e" }
+                                            : { background: "#fee2e2", color: "#991b1b" }
+                                        }
+                                      >
+                                        {d.confianza === "alta" ? "confirmado" : d.confianza === "media" ? "revisar" : "dudoso"}
+                                      </span>
+                                      <span className="block text-[11px] text-gray-400 leading-snug">{d.motivo}</span>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                              {pendiente && (
+                                <p className="text-[11px] text-amber-700 leading-snug">
+                                  Sin destinatario: {pendiente.motivo}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
+                        <p className="text-[11px] text-gray-600">
+                          Se generarán <strong>{enviosSeleccionados().length}</strong> enlace(s) para {datos360.nombre || "esta persona"}.
+                          {enviosSeleccionados().length === 0 && " Marca al menos a una persona."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : nuevaTipo === "360" ? (
                 <p className="text-xs text-gray-400 mt-3">
                   Se generará un link por cada rol aplicable (autoevaluación, jefe, par, colaborador, cliente interno) para que cada evaluador responda sin ver las respuestas de los demás. Al elegir a alguien de la nómina, el sistema ajusta automáticamente cuáles aplican según su puesto.
