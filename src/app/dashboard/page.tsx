@@ -82,6 +82,7 @@ function DashboardInner() {
   const [sugerencia, setSugerencia] = useState<SugerenciaDestinatarios | null>(null);
   // Nadie recibe un enlace sin que la consultora lo haya dejado marcado.
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [nuevoDestinatario, setNuevoDestinatario] = useState<{ fuente: FuenteEvaluacion; personaId: string }>({ fuente: "par", personaId: "" });
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null } }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
   const [error360, setError360] = useState("");
@@ -226,6 +227,49 @@ function DashboardInner() {
       else siguiente.add(clave);
       return siguiente;
     });
+  }
+
+  /**
+   * Agrega a mano un destinatario que la derivación no propuso.
+   *
+   * El puesto no siempre alcanza para decidir quién es par: en Fundación
+   * Unbound la Analista Contable y la Asistente Contable tienen cargos
+   * distintos pero se evalúan entre sí como pares. En vez de escribir esa
+   * excepción en el código -- que solo sirve para ese cliente -- la consultora
+   * la agrega acá y queda marcada como decisión suya, no de la IA.
+   */
+  function agregarDestinatarioManual() {
+    const { fuente, personaId: idNuevo } = nuevoDestinatario;
+    if (!sugerencia || !idNuevo) return;
+    const p = personasEmpresa.find((x) => x.id === idNuevo);
+    if (!p) return;
+    const agregado: DestinatarioSugerido = {
+      persona_id: p.id,
+      nombre: p.nombre,
+      email: p.email,
+      confianza: "media",
+      motivo: "Agregado a mano por la consultora.",
+    };
+    setSugerencia((prev) =>
+      prev
+        ? {
+            ...prev,
+            destinatarios: { ...prev.destinatarios, [fuente]: [...(prev.destinatarios[fuente] ?? []), agregado] },
+            sin_resolver: prev.sin_resolver.filter((x) => x.fuente !== fuente),
+          }
+        : prev,
+    );
+    setSeleccionados((prev) => new Set(prev).add(`${fuente}:${p.id}`));
+    setNuevoDestinatario((prev) => ({ ...prev, personaId: "" }));
+  }
+
+  /** Nadie puede ocupar dos roles frente al mismo evaluado, ni evaluarse a sí mismo. */
+  function personasDisponiblesParaAgregar(): PersonaConPuesto[] {
+    if (!sugerencia) return [];
+    const yaConRol = new Set(
+      Object.values(sugerencia.destinatarios).flatMap((l) => (l ?? []).map((d) => d.persona_id)),
+    );
+    return personasEmpresa.filter((p) => p.id !== personaId && !yaConRol.has(p.id));
   }
 
   function enviosSeleccionados() {
@@ -1289,6 +1333,39 @@ function DashboardInner() {
                             </div>
                           );
                         })}
+                      </div>
+                      <div className="px-4 py-2.5 border-t border-gray-200 flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-semibold text-gray-500">Agregar a mano:</span>
+                        <select
+                          value={nuevoDestinatario.fuente}
+                          onChange={(e) => setNuevoDestinatario((p) => ({ ...p, fuente: e.target.value as FuenteEvaluacion }))}
+                          className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-900"
+                          style={{ colorScheme: "light" }}
+                        >
+                          {FUENTES_FIJAS.filter((f) => f !== "autoevaluacion").map((f) => (
+                            <option key={f} value={f}>{FUENTE_LABELS[f]}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={nuevoDestinatario.personaId}
+                          onChange={(e) => setNuevoDestinatario((p) => ({ ...p, personaId: e.target.value }))}
+                          className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] text-gray-900 max-w-[15rem]"
+                          style={{ colorScheme: "light" }}
+                        >
+                          <option value="">Elegir persona…</option>
+                          {personasDisponiblesParaAgregar().map((p) => (
+                            <option key={p.id} value={p.id}>{p.nombre}{p.cargo ? ` — ${p.cargo}` : ""}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={agregarDestinatarioManual}
+                          disabled={!nuevoDestinatario.personaId}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg disabled:opacity-40"
+                          style={{ background: "#f0f4f8", color: "#0A1A32" }}
+                        >
+                          Agregar
+                        </button>
                       </div>
                       <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
                         <p className="text-[11px] text-gray-600">
