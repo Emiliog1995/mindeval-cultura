@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import {
   listarEvaluaciones, listarClima, eliminarEvaluacion, eliminarClima, listarSesiones, crearSesion, eliminarSesion,
-  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa, calcularFuentesAplicables,
+  crear360Evaluado, crearTokens360, listarEmpresas, listarPersonasConPuestoPorEmpresa, calcularFuentesAplicables, resolverDestinatarios,
   type Evaluacion, type ClimaRespuesta, type Sesion, type Evaluado360, type Token360, type Empresa, type PersonaConPuesto,
 } from "@/lib/supabase";
 import { FUENTE_LABELS, type FuenteEvaluacion } from "@/lib/360-types";
@@ -71,7 +71,7 @@ function DashboardInner() {
   const FUENTES_FIJAS: FuenteEvaluacion[] = ["autoevaluacion", "jefe", "par", "colaborador", "cliente_interno"];
   const [fuentesAplicables, setFuentesAplicables] = useState<FuenteEvaluacion[]>(FUENTES_FIJAS);
   const [textoMasivo360, setTextoMasivo360] = useState("");
-  const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string }> }>>([]);
+  const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null } }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
   const [error360, setError360] = useState("");
   const [progresoMasivo360, setProgresoMasivo360] = useState<{ total: number; hecho: number } | null>(null);
@@ -160,7 +160,9 @@ function DashboardInner() {
       });
       const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentesAplicables);
       const base = typeof window !== "undefined" ? window.location.origin : "";
-      const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
+      const personaSel = personasEmpresa.find((x) => x.id === personaId);
+      const destinos = personaSel ? resolverDestinatarios(personaSel, personasEmpresa) : {};
+      const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}`, destinatario: destinos[t.fuente] }));
 
       setEvaluados360((prev) => [{ evaluado, empresa: nombreEmpresaSeleccionada, links }, ...prev]);
       setExpandido360(evaluado.id);
@@ -235,6 +237,8 @@ function DashboardInner() {
         Cargo: evaluado.cargo,
         Departamento: evaluado.departamento,
         Fuente: FUENTE_LABELS[l.fuente],
+        "Enviar a": l.destinatario?.nombre ?? "",
+        "Correo": l.destinatario?.email ?? "",
         Link: l.url,
       }))
     );
@@ -1119,6 +1123,12 @@ function DashboardInner() {
                             <div key={l.fuente} className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
                                 <span className="text-xs font-semibold text-gray-700">{FUENTE_LABELS[l.fuente]}</span>
+                                {l.destinatario && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    → {l.destinatario.nombre}
+                                    {l.destinatario.email ? ` · ${l.destinatario.email}` : ""}
+                                  </span>
+                                )}
                                 <p className="text-xs text-gray-400 truncate max-w-md">{l.url}</p>
                               </div>
                               <button

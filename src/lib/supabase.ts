@@ -601,6 +601,8 @@ export interface PersonaConPuesto {
   jefe: string | null;
   supervisaA: string | null;
   tieneClienteInterno: boolean;
+  /** Persona que la organización designó como cliente interno de esta persona. */
+  clienteInternoId: string | null;
 }
 
 interface PersonaConPuestoRow {
@@ -608,6 +610,7 @@ interface PersonaConPuestoRow {
   nombre: string;
   email: string | null;
   puesto_id: string | null;
+  cliente_interno_persona_id: string | null;
   puestos: {
     nombre_puesto: string;
     area: string;
@@ -620,7 +623,7 @@ interface PersonaConPuestoRow {
 export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Promise<PersonaConPuesto[]> {
   const { data, error } = await supabase
     .from("personas")
-    .select("id, nombre, email, puesto_id, puestos(nombre_puesto, area, supervisado_por, supervisa_a, tiene_cliente_interno)")
+    .select("id, nombre, email, puesto_id, cliente_interno_persona_id, puestos(nombre_puesto, area, supervisado_por, supervisa_a, tiene_cliente_interno)")
     .eq("empresa_id", empresaId)
     .order("nombre");
   if (error) throw new Error(error.message);
@@ -634,6 +637,7 @@ export async function listarPersonasConPuestoPorEmpresa(empresaId: string): Prom
     jefe: p.puestos?.supervisado_por ?? null,
     supervisaA: p.puestos?.supervisa_a ?? null,
     tieneClienteInterno: p.puestos?.tiene_cliente_interno ?? false,
+    clienteInternoId: p.cliente_interno_persona_id ?? null,
   }));
 }
 
@@ -653,7 +657,8 @@ function tieneValorReal(s: string | null | undefined): boolean {
 }
 
 export function calcularFuentesAplicables(
-  persona: Pick<PersonaConPuesto, "id" | "jefe" | "supervisaA" | "tieneClienteInterno">,
+  persona: Pick<PersonaConPuesto, "id" | "jefe" | "supervisaA" | "tieneClienteInterno"> &
+    Partial<Pick<PersonaConPuesto, "clienteInternoId">>,
   todasLasPersonas: Pick<PersonaConPuesto, "id" | "jefe">[],
 ): FuenteEvaluacion[] {
   const fuentes: FuenteEvaluacion[] = ["autoevaluacion"];
@@ -667,7 +672,33 @@ export function calcularFuentesAplicables(
     todasLasPersonas.some((p) => p.id !== persona.id && normalizarTexto(p.jefe) === miJefeNorm);
   if (hayPar) fuentes.push("par");
 
-  if (persona.tieneClienteInterno) fuentes.push("cliente_interno");
+  // Un cliente interno designado en la nómina es evidencia mas fuerte que la
+  // bandera generica del puesto: si la organizacion nombro a la persona, la fuente aplica.
+  if (persona.clienteInternoId || persona.tieneClienteInterno) fuentes.push("cliente_interno");
 
   return fuentes;
+}
+
+/**
+ * A quién hay que enviarle el enlace de cada fuente.
+ *
+ * Solo resuelve lo que puede afirmar con certeza: la autoevaluación (la propia
+ * persona) y el cliente interno (designado explícitamente en la nómina). Para
+ * jefe, pares y colaboradores el Manual guarda texto libre del organigrama que
+ * no siempre calza con un nombre de puesto real, así que se deja sin resolver
+ * en vez de arriesgar un destinatario equivocado.
+ */
+export function resolverDestinatarios(
+  persona: PersonaConPuesto,
+  todasLasPersonas: PersonaConPuesto[],
+): Partial<Record<FuenteEvaluacion, { nombre: string; email: string | null }>> {
+  const porId = new Map(todasLasPersonas.map((p) => [p.id, p]));
+  const destinos: Partial<Record<FuenteEvaluacion, { nombre: string; email: string | null }>> = {
+    autoevaluacion: { nombre: persona.nombre, email: persona.email },
+  };
+
+  const ci = persona.clienteInternoId ? porId.get(persona.clienteInternoId) : undefined;
+  if (ci) destinos.cliente_interno = { nombre: ci.nombre, email: ci.email };
+
+  return destinos;
 }
