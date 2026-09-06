@@ -50,6 +50,49 @@ interface DatosPsicometricaReal {
   };
 }
 type DatosPsicometrica = DatosPsicometricaPlaceholder | DatosPsicometricaReal;
+
+// Orden fijo en el que se rinde la batería psicométrica -- una sección por
+// instrumento en vez de los 333 ítems seguidos en un solo scroll (auditoría
+// 2026-09 sobre el modelo de la PN: cada prueba de la batería es su propio
+// paso, con un puente explícito entre una y otra). Mismos códigos que usa el
+// resto del proyecto para nombrar estos tests (ver mapa NOMBRES_BATERIA en
+// candidato/[id]/page.tsx).
+const SECCIONES_ORDEN = ["16pf5", "kostick", "disc", "valanti"] as const;
+type SeccionPsico = (typeof SECCIONES_ORDEN)[number];
+const NOMBRE_SECCION: Record<SeccionPsico, string> = {
+  "16pf5": "16PF-5",
+  kostick: "KOSTICK",
+  disc: "DISC",
+  valanti: "VALANTI",
+};
+
+/** Estado de respuestas relevante para saber si una sección ya se completó. */
+interface EstadoRespuestasPsico {
+  sexo16pf5: "H" | "F" | "";
+  respuestas16pf5: Record<number, "a" | "b" | "c">;
+  respuestasKostick: Record<number, "a" | "b">;
+  respuestasDisc: Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>;
+  respuestasValanti: Record<number, 0 | 1 | 2 | 3>;
+}
+
+function seccionCompleta(seccion: SeccionPsico, datos: DatosPsicometricaReal, estado: EstadoRespuestasPsico): boolean {
+  if (seccion === "16pf5") {
+    const total = datos.tests["16pf5"]?.length ?? 0;
+    if (total === 0) return true;
+    if (!estado.sexo16pf5) return false;
+    return Object.keys(estado.respuestas16pf5).length >= total;
+  }
+  if (seccion === "kostick") {
+    const total = datos.tests.kostick?.length ?? 0;
+    return Object.keys(estado.respuestasKostick).length >= total;
+  }
+  if (seccion === "disc") {
+    const total = datos.tests.disc?.length ?? 0;
+    return Object.values(estado.respuestasDisc).filter((r) => r.mas && r.menos).length >= total;
+  }
+  const total = datos.tests.valanti?.length ?? 0;
+  return Object.keys(estado.respuestasValanti).length >= total;
+}
 interface DatosAssessment {
   tipo: "assessment";
   candidato_id: string;
@@ -182,6 +225,13 @@ export default function PruebaTokenPage() {
   const [respuestasDisc, setRespuestasDisc] = useState<Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>>({});
   const [respuestasValanti, setRespuestasValanti] = useState<Record<number, 0 | 1 | 2 | 3>>({});
 
+  // En qué instrumento de la batería psicométrica va el candidato ("16pf5",
+  // "kostick"...) y si está viendo la pantalla puente entre uno y el
+  // siguiente. Solo aplica cuando datos.tipo === "psicometrica" && modo ===
+  // "real"; el resto de tipos de prueba lo ignoran.
+  const [seccionActual, setSeccionActual] = useState(0);
+  const [mostrarPuente, setMostrarPuente] = useState(false);
+
   useEffect(() => {
     fetch(`/api/mindeval-prueba/${token}`)
       .then(async (r) => {
@@ -231,10 +281,12 @@ export default function PruebaTokenPage() {
       // la pestaña, pérdida de conexión) -- ver el efecto de autoguardado
       // más abajo. Best-effort: un borrador corrupto o ausente simplemente
       // se ignora y el candidato empieza en blanco, igual que antes.
+      let borrador: BorradorGuardado | null = null;
       try {
         const raw = localStorage.getItem(claveBorrador(token));
         if (raw) {
           const b: BorradorGuardado = JSON.parse(raw);
+          borrador = b;
           let huboRestauracion = false;
           if (b.respuestaTecnica) { setRespuestaTecnica(b.respuestaTecnica); huboRestauracion = true; }
           if (b.respuestasBanco && Object.keys(b.respuestasBanco).length) { setRespuestasBanco(b.respuestasBanco); huboRestauracion = true; }
@@ -249,6 +301,24 @@ export default function PruebaTokenPage() {
         }
       } catch {
         // localStorage no disponible o borrador corrupto -- se ignora.
+      }
+
+      // La batería psicométrica se rinde en secciones (una por instrumento).
+      // Si el candidato ya había avanzado -- por recarga o por reanudar una
+      // sesión ya iniciada -- lo ubicamos en la primera sección que le falte,
+      // no siempre en la primera (que ya habría terminado).
+      if (d.tipo === "psicometrica" && d.modo === "real") {
+        const orden = SECCIONES_ORDEN.filter((k) => !!d.tests[k]);
+        const estado: EstadoRespuestasPsico = {
+          sexo16pf5: borrador?.sexo16pf5 ?? "",
+          respuestas16pf5: borrador?.respuestas16pf5 ?? {},
+          respuestasKostick: borrador?.respuestasKostick ?? {},
+          respuestasDisc: borrador?.respuestasDisc ?? {},
+          respuestasValanti: borrador?.respuestasValanti ?? {},
+        };
+        let idx = 0;
+        while (idx < orden.length - 1 && seccionCompleta(orden[idx], d, estado)) idx++;
+        setSeccionActual(idx);
       }
     } catch (e) {
       setErrorCedula(e instanceof Error ? e.message : "No se pudo verificar tu cédula.");
@@ -344,6 +414,14 @@ export default function PruebaTokenPage() {
       setEnviando(false);
     }
   }
+
+  // Instrumentos de la batería que le tocan a este candidato, en el orden
+  // fijo de SECCIONES_ORDEN. Determina cuántos "puentes" hay entre pruebas y
+  // cuál es la última sección (donde aparece el botón de envío final).
+  const seccionesActivas = useMemo<SeccionPsico[]>(() => {
+    if (!datos || datos.tipo !== "psicometrica" || datos.modo !== "real") return [];
+    return SECCIONES_ORDEN.filter((k) => !!datos.tests[k]);
+  }, [datos]);
 
   /**
    * Cuánto lleva respondido y cuál es el primer ítem que falta. El botón de
@@ -758,255 +836,340 @@ export default function PruebaTokenPage() {
           </div>
         ) : datos.tipo === "psicometrica" && datos.modo === "real" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {datos.tests["16pf5"] && (
+            {/* Ubicación dentro de la batería: una barra por instrumento, no
+                por ítem -- distinta de la barra de progreso general de arriba,
+                que cuenta ítems. Esta dice en qué prueba vas. */}
+            {seccionesActivas.length > 1 && (
+              <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "14px 18px" }}>
+                <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 8, fontWeight: 700 }}>
+                  Prueba {Math.min(seccionActual, seccionesActivas.length - 1) + 1} de {seccionesActivas.length}
+                  {!mostrarPuente && ` · ${NOMBRE_SECCION[seccionesActivas[seccionActual]]}`}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {seccionesActivas.map((k, i) => (
+                    <div
+                      key={k}
+                      title={NOMBRE_SECCION[k]}
+                      style={{
+                        flex: 1,
+                        height: 6,
+                        borderRadius: 4,
+                        background: i < seccionActual || (i === seccionActual && mostrarPuente) ? "#12805C" : i === seccionActual ? GOLD : "#EDF0F7",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {mostrarPuente ? (
+              // Puente entre una prueba y la siguiente: confirma lo que se
+              // acaba de terminar antes de arrancar la próxima, en vez de
+              // encadenarlas sin aviso (modelo de batería por secciones,
+              // trasladado del recorrido de referencia -- ver análisis
+              // comparativo 2026-09).
+              <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "32px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: 34, marginBottom: 10 }}>✓</div>
+                <h3 style={{ margin: "0 0 6px", fontSize: 15.5, color: NAVY }}>
+                  Terminaste {NOMBRE_SECCION[seccionesActivas[seccionActual]]}
+                </h3>
+                <p style={{ fontSize: 12.5, color: "#7C89A8", margin: "0 0 22px" }}>
+                  Sigue {NOMBRE_SECCION[seccionesActivas[seccionActual + 1]]} — es la prueba {seccionActual + 2} de {seccionesActivas.length}.
+                </p>
+                <button
+                  onClick={() => {
+                    setSeccionActual((s) => s + 1);
+                    setMostrarPuente(false);
+                  }}
+                  style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 24px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+                >
+                  Continuar a {NOMBRE_SECCION[seccionesActivas[seccionActual + 1]]}
+                </button>
+              </div>
+            ) : (
               <>
-                <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                  <h3 style={{ margin: "0 0 12px", fontSize: 14, color: NAVY }}>Antes de empezar</h3>
-                  <div style={{ fontSize: 12.5, color: "#41507A", marginBottom: 8 }}>Sexo</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {(["H", "F"] as const).map((s) => (
+                {datos.tests["16pf5"] && seccionesActivas[seccionActual] === "16pf5" && (
+                  <>
+                    <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                      <h3 style={{ margin: "0 0 12px", fontSize: 14, color: NAVY }}>Antes de empezar</h3>
+                      <div style={{ fontSize: 12.5, color: "#41507A", marginBottom: 8 }}>Sexo</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {(["H", "F"] as const).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setSexo16pf5(s)}
+                            style={{
+                              padding: "8px 20px",
+                              borderRadius: 8,
+                              border: sexo16pf5 === s ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                              background: sexo16pf5 === s ? "#FFFBEF" : "#FFFFFF",
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: NAVY,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {s === "H" ? "Hombre" : "Mujer"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {datos.tests["16pf5"]!.map((it, i) => (
+                      <div key={it.num} id={`item-16pf5-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {it.texto}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {it.opciones.map((o) => (
+                            <label
+                              key={o.letra}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                padding: "10px 12px",
+                                borderRadius: 8,
+                                border: respuestas16pf5[it.num] === o.letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                background: respuestas16pf5[it.num] === o.letra ? "#FFFBEF" : "#FFFFFF",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                color: "#41507A",
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name={`p16pf5-${it.num}`}
+                                checked={respuestas16pf5[it.num] === o.letra}
+                                onChange={() => setRespuestas16pf5((prev) => ({ ...prev, [it.num]: o.letra }))}
+                              />
+                              {o.texto}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {datos.tests.kostick && seccionesActivas[seccionActual] === "kostick" && (
+                  <>
+                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                      Elige, de cada par, la frase que más se parezca a tu forma de ser.
+                    </div>
+                    {datos.tests.kostick.map((it, i) => (
+                      <div key={it.num} id={`item-kostick-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {([["a", it.a], ["b", it.b]] as const).map(([letra, texto]) => (
+                            <label
+                              key={letra}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                padding: "10px 12px",
+                                borderRadius: 8,
+                                border: respuestasKostick[it.num] === letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                background: respuestasKostick[it.num] === letra ? "#FFFBEF" : "#FFFFFF",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                color: "#41507A",
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name={`kostick-${it.num}`}
+                                checked={respuestasKostick[it.num] === letra}
+                                onChange={() => setRespuestasKostick((prev) => ({ ...prev, [it.num]: letra }))}
+                              />
+                              {texto}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {datos.tests.disc && seccionesActivas[seccionActual] === "disc" && (
+                  <>
+                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                      En cada uno de los 28 grupos de 4 palabras, marca la que MÁS te representa y la que MENOS te representa.
+                    </div>
+                    {datos.tests.disc.map((it, i) => (
+                      <div key={it.num} id={`item-disc-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>Grupo {i + 1}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {it.palabras.map((palabra, idx) => {
+                            const pos = (idx + 1) as 1 | 2 | 3 | 4;
+                            const actual = respuestasDisc[it.num] ?? {};
+                            const esMas = actual.mas === pos;
+                            const esMenos = actual.menos === pos;
+                            return (
+                              <div
+                                key={pos}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  padding: "8px 12px",
+                                  borderRadius: 8,
+                                  border: esMas || esMenos ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                  background: esMas || esMenos ? "#FFFBEF" : "#FFFFFF",
+                                  fontSize: 13,
+                                  color: "#41507A",
+                                }}
+                              >
+                                <span style={{ flex: 1 }}>{palabra}</span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setRespuestasDisc((prev) => {
+                                      const item = prev[it.num] ?? {};
+                                      return { ...prev, [it.num]: { ...item, mas: pos, menos: item.menos === pos ? undefined : item.menos } };
+                                    })
+                                  }
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: 6,
+                                    border: esMas ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                    background: esMas ? GOLD : "#FFFFFF",
+                                    color: NAVY,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  MÁS
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setRespuestasDisc((prev) => {
+                                      const item = prev[it.num] ?? {};
+                                      return { ...prev, [it.num]: { ...item, menos: pos, mas: item.mas === pos ? undefined : item.mas } };
+                                    })
+                                  }
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: 6,
+                                    border: esMenos ? `1.5px solid ${NAVY}` : "1.5px solid #D5DCEB",
+                                    background: esMenos ? NAVY : "#FFFFFF",
+                                    color: esMenos ? "#FFFFFF" : NAVY,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  MENOS
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {datos.tests.valanti && seccionesActivas[seccionActual] === "valanti" && (
+                  <>
+                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                      Reparte 3 puntos entre las dos frases de cada par, según qué tan importante es cada una para ti.
+                    </div>
+                    {datos.tests.valanti.map((it, i) => (
+                      <div key={it.num} id={`item-valanti-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                        <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {([0, 1, 2, 3] as const).map((puntosA) => {
+                            const seleccionado = respuestasValanti[it.num] === puntosA;
+                            return (
+                              <label
+                                key={puntosA}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 12,
+                                  padding: "10px 12px",
+                                  borderRadius: 8,
+                                  border: seleccionado ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                  background: seleccionado ? "#FFFBEF" : "#FFFFFF",
+                                  cursor: "pointer",
+                                  fontSize: 13,
+                                  color: "#41507A",
+                                }}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`valanti-${it.num}`}
+                                  checked={seleccionado}
+                                  onChange={() => setRespuestasValanti((prev) => ({ ...prev, [it.num]: puntosA }))}
+                                />
+                                <span style={{ flex: 1 }}>{it.fraseA}</span>
+                                <span style={{ fontWeight: 800, color: NAVY, minWidth: 30, textAlign: "center" }}>
+                                  {puntosA}-{3 - puntosA}
+                                </span>
+                                <span style={{ flex: 1, textAlign: "right" }}>{it.fraseB}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {(() => {
+                  const seccion = seccionesActivas[seccionActual];
+                  const estado: EstadoRespuestasPsico = { sexo16pf5, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti };
+                  const completa = seccion ? seccionCompleta(seccion, datos, estado) : false;
+                  const esUltima = seccionActual >= seccionesActivas.length - 1;
+
+                  if (!esUltima) {
+                    return (
                       <button
-                        key={s}
-                        onClick={() => setSexo16pf5(s)}
+                        onClick={() => setMostrarPuente(true)}
+                        disabled={!completa}
                         style={{
-                          padding: "8px 20px",
-                          borderRadius: 8,
-                          border: sexo16pf5 === s ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                          background: sexo16pf5 === s ? "#FFFBEF" : "#FFFFFF",
-                          fontSize: 13,
-                          fontWeight: 700,
+                          background: GOLD,
                           color: NAVY,
-                          cursor: "pointer",
+                          border: "none",
+                          padding: "12px 22px",
+                          borderRadius: 8,
+                          fontSize: 14,
+                          fontWeight: 800,
+                          cursor: completa ? "pointer" : "not-allowed",
+                          opacity: completa ? 1 : 0.5,
                         }}
                       >
-                        {s === "H" ? "Hombre" : "Mujer"}
+                        Continuar a {NOMBRE_SECCION[seccionesActivas[seccionActual + 1]]}
                       </button>
-                    ))}
-                  </div>
-                </div>
-                {datos.tests["16pf5"]!.map((it, i) => (
-                  <div key={it.num} id={`item-16pf5-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {it.texto}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {it.opciones.map((o) => (
-                        <label
-                          key={o.letra}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "10px 12px",
-                            borderRadius: 8,
-                            border: respuestas16pf5[it.num] === o.letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                            background: respuestas16pf5[it.num] === o.letra ? "#FFFBEF" : "#FFFFFF",
-                            cursor: "pointer",
-                            fontSize: 13,
-                            color: "#41507A",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name={`p16pf5-${it.num}`}
-                            checked={respuestas16pf5[it.num] === o.letra}
-                            onChange={() => setRespuestas16pf5((prev) => ({ ...prev, [it.num]: o.letra }))}
-                          />
-                          {o.texto}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                    );
+                  }
+
+                  // Última sección (o única, si solo le tocó un instrumento):
+                  // mismo botón de envío final de siempre. Se revisan todas las
+                  // secciones, no solo la actual, por defensa -- en el flujo
+                  // normal ya llegan completas por construcción.
+                  const total16pf5 = datos.tests["16pf5"]?.length ?? 0;
+                  const totalKostick = datos.tests.kostick?.length ?? 0;
+                  const totalDisc = datos.tests.disc?.length ?? 0;
+                  const totalValanti = datos.tests.valanti?.length ?? 0;
+                  const faltaSexo = total16pf5 > 0 && !sexo16pf5;
+                  const falta16pf5 = Object.keys(respuestas16pf5).length < total16pf5;
+                  const faltaKostick = Object.keys(respuestasKostick).length < totalKostick;
+                  const faltaDisc = Object.values(respuestasDisc).filter((r) => r.mas && r.menos).length < totalDisc;
+                  const faltaValanti = Object.keys(respuestasValanti).length < totalValanti;
+                  return (
+                    <button
+                      onClick={enviar}
+                      disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc || faltaValanti}
+                      style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
+                    >
+                      {enviando ? "Enviando…" : "Enviar respuestas"}
+                    </button>
+                  );
+                })()}
               </>
             )}
-
-            {datos.tests.kostick && (
-              <>
-                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
-                  Elige, de cada par, la frase que más se parezca a tu forma de ser.
-                </div>
-                {datos.tests.kostick.map((it, i) => (
-                  <div key={it.num} id={`item-kostick-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {([["a", it.a], ["b", it.b]] as const).map(([letra, texto]) => (
-                        <label
-                          key={letra}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "10px 12px",
-                            borderRadius: 8,
-                            border: respuestasKostick[it.num] === letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                            background: respuestasKostick[it.num] === letra ? "#FFFBEF" : "#FFFFFF",
-                            cursor: "pointer",
-                            fontSize: 13,
-                            color: "#41507A",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name={`kostick-${it.num}`}
-                            checked={respuestasKostick[it.num] === letra}
-                            onChange={() => setRespuestasKostick((prev) => ({ ...prev, [it.num]: letra }))}
-                          />
-                          {texto}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {datos.tests.disc && (
-              <>
-                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
-                  En cada uno de los 28 grupos de 4 palabras, marca la que MÁS te representa y la que MENOS te representa.
-                </div>
-                {datos.tests.disc.map((it, i) => (
-                  <div key={it.num} id={`item-disc-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>Grupo {i + 1}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {it.palabras.map((palabra, idx) => {
-                        const pos = (idx + 1) as 1 | 2 | 3 | 4;
-                        const actual = respuestasDisc[it.num] ?? {};
-                        const esMas = actual.mas === pos;
-                        const esMenos = actual.menos === pos;
-                        return (
-                          <div
-                            key={pos}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                              padding: "8px 12px",
-                              borderRadius: 8,
-                              border: esMas || esMenos ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                              background: esMas || esMenos ? "#FFFBEF" : "#FFFFFF",
-                              fontSize: 13,
-                              color: "#41507A",
-                            }}
-                          >
-                            <span style={{ flex: 1 }}>{palabra}</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRespuestasDisc((prev) => {
-                                  const item = prev[it.num] ?? {};
-                                  return { ...prev, [it.num]: { ...item, mas: pos, menos: item.menos === pos ? undefined : item.menos } };
-                                })
-                              }
-                              style={{
-                                padding: "5px 10px",
-                                borderRadius: 6,
-                                border: esMas ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                background: esMas ? GOLD : "#FFFFFF",
-                                color: NAVY,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                              }}
-                            >
-                              MÁS
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setRespuestasDisc((prev) => {
-                                  const item = prev[it.num] ?? {};
-                                  return { ...prev, [it.num]: { ...item, menos: pos, mas: item.mas === pos ? undefined : item.mas } };
-                                })
-                              }
-                              style={{
-                                padding: "5px 10px",
-                                borderRadius: 6,
-                                border: esMenos ? `1.5px solid ${NAVY}` : "1.5px solid #D5DCEB",
-                                background: esMenos ? NAVY : "#FFFFFF",
-                                color: esMenos ? "#FFFFFF" : NAVY,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                              }}
-                            >
-                              MENOS
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {datos.tests.valanti && (
-              <>
-                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
-                  Reparte 3 puntos entre las dos frases de cada par, según qué tan importante es cada una para ti.
-                </div>
-                {datos.tests.valanti.map((it, i) => (
-                  <div key={it.num} id={`item-valanti-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                    <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {([0, 1, 2, 3] as const).map((puntosA) => {
-                        const seleccionado = respuestasValanti[it.num] === puntosA;
-                        return (
-                          <label
-                            key={puntosA}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 12,
-                              padding: "10px 12px",
-                              borderRadius: 8,
-                              border: seleccionado ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                              background: seleccionado ? "#FFFBEF" : "#FFFFFF",
-                              cursor: "pointer",
-                              fontSize: 13,
-                              color: "#41507A",
-                            }}
-                          >
-                            <input
-                              type="radio"
-                              name={`valanti-${it.num}`}
-                              checked={seleccionado}
-                              onChange={() => setRespuestasValanti((prev) => ({ ...prev, [it.num]: puntosA }))}
-                            />
-                            <span style={{ flex: 1 }}>{it.fraseA}</span>
-                            <span style={{ fontWeight: 800, color: NAVY, minWidth: 30, textAlign: "center" }}>
-                              {puntosA}-{3 - puntosA}
-                            </span>
-                            <span style={{ flex: 1, textAlign: "right" }}>{it.fraseB}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {(() => {
-              const total16pf5 = datos.tests["16pf5"]?.length ?? 0;
-              const totalKostick = datos.tests.kostick?.length ?? 0;
-              const totalDisc = datos.tests.disc?.length ?? 0;
-              const totalValanti = datos.tests.valanti?.length ?? 0;
-              const faltaSexo = total16pf5 > 0 && !sexo16pf5;
-              const falta16pf5 = Object.keys(respuestas16pf5).length < total16pf5;
-              const faltaKostick = Object.keys(respuestasKostick).length < totalKostick;
-              const faltaDisc = Object.values(respuestasDisc).filter((r) => r.mas && r.menos).length < totalDisc;
-              const faltaValanti = Object.keys(respuestasValanti).length < totalValanti;
-              return (
-                <button
-                  onClick={enviar}
-                  disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc || faltaValanti}
-                  style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
-                >
-                  {enviando ? "Enviando…" : "Enviar respuestas"}
-                </button>
-              );
-            })()}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
