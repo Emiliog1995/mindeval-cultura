@@ -28,6 +28,21 @@ export const maxDuration = 60;
  * de datos que no es su culpa; la capa de seguridad real sigue siendo el
  * token, esto es una capa adicional cuando el dato está disponible.
  */
+/**
+ * La opción intermedia del 16PF-5 viene en el banco como un "?" pelado (170
+ * de los 185 ítems): así se imprime en el cuadernillo de papel, donde el
+ * evaluado ya sabe por las instrucciones que significa "no me decido". En
+ * pantalla, sin ese contexto, un "?" suelto entre "Verdadero" y "Falso"
+ * parece un error de la plataforma.
+ *
+ * Se cambia SOLO la etiqueta que se muestra. La letra ("b") y su peso (1)
+ * salen del banco intactos, así que la calificación no cambia en nada: un
+ * intento respondido antes y otro respondido después puntúan igual.
+ */
+function etiquetaOpcion16PF5(texto: string): string {
+  return texto.trim() === "?" ? "No estoy seguro" : texto;
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { permitido } = checkRateLimit(req, "mindeval-prueba");
   if (!permitido) return rateLimitResponse();
@@ -233,7 +248,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         tests["16pf5"] = ITEMS_16PF5.map((it) => ({
           num: it.num,
           texto: it.texto,
-          opciones: it.opciones.map((o) => ({ letra: o.letra, texto: o.texto })),
+          opciones: it.opciones.map((o) => ({ letra: o.letra, texto: etiquetaOpcion16PF5(o.texto) })),
         }));
       }
       if (testsActivos.includes("kostick")) {

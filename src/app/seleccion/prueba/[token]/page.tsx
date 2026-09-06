@@ -9,6 +9,13 @@ import type { OpcionPregunta } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
+// Respuesta elegida por el candidato. Va en azul y no en dorado a propósito:
+// el dorado es el color de acción de la marca (los botones de Continuar y
+// Enviar), y usarlo también para "esto es lo que marqué" hacía que la opción
+// elegida compitiera visualmente con el botón de avanzar. El azul sale de la
+// misma paleta navy de MindEval, así que no introduce un color nuevo.
+const AZUL_ELEGIDO = "#2E4A96";
+const AZUL_ELEGIDO_FONDO = "#EAF0FB";
 
 interface DatosTecnicaCasoAbierto {
   tipo: "tecnica";
@@ -518,6 +525,39 @@ export default function PruebaTokenPage() {
   // para el placeholder, que aún son de lista completa.
   const esBateriaPorSecciones = datos?.tipo === "psicometrica" && datos.modo === "real";
 
+  /**
+   * Avance al siguiente ítem DESPUÉS de dejar ver la respuesta marcada. Sin
+   * esta pausa, el salto era instantáneo: el candidato hacía clic y la
+   * pantalla ya mostraba la pregunta siguiente, así que nunca alcanzaba a
+   * ver en qué opción había quedado y no tenía forma de confirmar que su
+   * clic se registró donde quería.
+   *
+   * La respuesta se guarda al instante (eso no espera nada); lo único que se
+   * demora es el cambio de pantalla.
+   */
+  const avancePendiente = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelarAvancePendiente() {
+    if (avancePendiente.current) {
+      clearTimeout(avancePendiente.current);
+      avancePendiente.current = null;
+    }
+  }
+
+  useEffect(() => cancelarAvancePendiente, []);
+
+  function avanzarTrasVerSeleccion(indice: number, total: number) {
+    cancelarAvancePendiente();
+    if (indice >= total - 1) return; // último ítem: se queda para que vea el botón de continuar
+    avancePendiente.current = setTimeout(() => {
+      // Solo avanza si el candidato sigue en el mismo ítem: si mientras tanto
+      // pulsó "Anterior" o cambió de opción, no se le mueve la pantalla bajo
+      // los pies.
+      setItemActual((i) => (i === indice ? indice + 1 : i));
+      avancePendiente.current = null;
+    }, 300);
+  }
+
   /** Cabecera de cada ítem dentro de una sección: "Anterior" + posición.
    *  Reemplaza el número de ítem que antes iba fijo dentro de cada tarjeta
    *  (ahora hay una sola tarjeta visible, así que la posición va aparte). */
@@ -526,7 +566,10 @@ export default function PruebaTokenPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button
           type="button"
-          onClick={() => setItemActual((i) => Math.max(0, i - 1))}
+          onClick={() => {
+            cancelarAvancePendiente();
+            setItemActual((i) => Math.max(0, i - 1));
+          }}
           disabled={indice === 0}
           style={{
             background: "none",
@@ -838,8 +881,8 @@ export default function PruebaTokenPage() {
                         gap: 10,
                         padding: "10px 12px",
                         borderRadius: 8,
-                        border: respuestasBanco[p.id] === o.id ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                        background: respuestasBanco[p.id] === o.id ? "#FFFBEF" : "#FFFFFF",
+                        border: respuestasBanco[p.id] === o.id ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                        background: respuestasBanco[p.id] === o.id ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                         cursor: "pointer",
                         fontSize: 13,
                         color: "#41507A",
@@ -977,8 +1020,8 @@ export default function PruebaTokenPage() {
                             style={{
                               padding: "8px 20px",
                               borderRadius: 8,
-                              border: sexo16pf5 === s ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                              background: sexo16pf5 === s ? "#FFFBEF" : "#FFFFFF",
+                              border: sexo16pf5 === s ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                              background: sexo16pf5 === s ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                               fontSize: 13,
                               fontWeight: 700,
                               color: NAVY,
@@ -1008,8 +1051,8 @@ export default function PruebaTokenPage() {
                                   gap: 10,
                                   padding: "10px 12px",
                                   borderRadius: 8,
-                                  border: respuestas16pf5[it.num] === o.letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                  background: respuestas16pf5[it.num] === o.letra ? "#FFFBEF" : "#FFFFFF",
+                                  border: respuestas16pf5[it.num] === o.letra ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                                  background: respuestas16pf5[it.num] === o.letra ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                                   cursor: "pointer",
                                   fontSize: 13,
                                   color: "#41507A",
@@ -1021,7 +1064,7 @@ export default function PruebaTokenPage() {
                                   checked={respuestas16pf5[it.num] === o.letra}
                                   onChange={() => {
                                     setRespuestas16pf5((prev) => ({ ...prev, [it.num]: o.letra }));
-                                    if (idx < items.length - 1) setItemActual(idx + 1);
+                                    avanzarTrasVerSeleccion(idx, items.length);
                                   }}
                                 />
                                 {o.texto}
@@ -1056,8 +1099,8 @@ export default function PruebaTokenPage() {
                                   gap: 10,
                                   padding: "10px 12px",
                                   borderRadius: 8,
-                                  border: respuestasKostick[it.num] === letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                  background: respuestasKostick[it.num] === letra ? "#FFFBEF" : "#FFFFFF",
+                                  border: respuestasKostick[it.num] === letra ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                                  background: respuestasKostick[it.num] === letra ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                                   cursor: "pointer",
                                   fontSize: 13,
                                   color: "#41507A",
@@ -1069,7 +1112,7 @@ export default function PruebaTokenPage() {
                                   checked={respuestasKostick[it.num] === letra}
                                   onChange={() => {
                                     setRespuestasKostick((prev) => ({ ...prev, [it.num]: letra }));
-                                    if (idx < items.length - 1) setItemActual(idx + 1);
+                                    avanzarTrasVerSeleccion(idx, items.length);
                                   }}
                                 />
                                 {texto}
@@ -1110,8 +1153,8 @@ export default function PruebaTokenPage() {
                                     gap: 10,
                                     padding: "8px 12px",
                                     borderRadius: 8,
-                                    border: esMas || esMenos ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                    background: esMas || esMenos ? "#FFFBEF" : "#FFFFFF",
+                                    border: esMas || esMenos ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                                    background: esMas || esMenos ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                                     fontSize: 13,
                                     color: "#41507A",
                                   }}
@@ -1216,11 +1259,18 @@ export default function PruebaTokenPage() {
                                   style={{
                                     display: "flex",
                                     alignItems: "center",
+                                    // En un celular las dos frases lado a lado
+                                    // quedaban en columnas de dos o tres
+                                    // palabras. Con wrap + un ancho mínimo, en
+                                    // pantalla angosta se acomodan una debajo
+                                    // de la otra y en escritorio se ven igual
+                                    // que antes.
+                                    flexWrap: "wrap",
                                     gap: 12,
                                     padding: "10px 12px",
                                     borderRadius: 8,
-                                    border: seleccionado ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                    background: seleccionado ? "#FFFBEF" : "#FFFFFF",
+                                    border: seleccionado ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                                    background: seleccionado ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                                     cursor: "pointer",
                                     fontSize: 13,
                                     color: "#41507A",
@@ -1232,14 +1282,14 @@ export default function PruebaTokenPage() {
                                     checked={seleccionado}
                                     onChange={() => {
                                       setRespuestasValanti((prev) => ({ ...prev, [it.num]: puntosA }));
-                                      if (idx < items.length - 1) setItemActual(idx + 1);
+                                      avanzarTrasVerSeleccion(idx, items.length);
                                     }}
                                   />
-                                  <span style={{ flex: 1 }}>{it.fraseA}</span>
+                                  <span style={{ flex: "1 1 180px" }}>{it.fraseA}</span>
                                   <span style={{ fontWeight: 800, color: NAVY, minWidth: 30, textAlign: "center" }}>
                                     {puntosA}-{3 - puntosA}
                                   </span>
-                                  <span style={{ flex: 1, textAlign: "right" }}>{it.fraseB}</span>
+                                  <span style={{ flex: "1 1 180px", textAlign: "right" }}>{it.fraseB}</span>
                                 </label>
                               );
                             })}
@@ -1332,8 +1382,8 @@ export default function PruebaTokenPage() {
                             width: 34,
                             height: 34,
                             borderRadius: "50%",
-                            border: respuestasPsico[bateriaKey]?.[i] === v ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                            background: respuestasPsico[bateriaKey]?.[i] === v ? "#FFFBEF" : "#FFFFFF",
+                            border: respuestasPsico[bateriaKey]?.[i] === v ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                            background: respuestasPsico[bateriaKey]?.[i] === v ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
                             fontSize: 12.5,
                             fontWeight: 700,
                             color: NAVY,
