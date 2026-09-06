@@ -231,6 +231,10 @@ export default function PruebaTokenPage() {
   // "real"; el resto de tipos de prueba lo ignoran.
   const [seccionActual, setSeccionActual] = useState(0);
   const [mostrarPuente, setMostrarPuente] = useState(false);
+  // Dentro de una sección, un ítem a la vez -- ver efecto más abajo, que lo
+  // ubica en el primer ítem sin responder cada vez que cambia la sección
+  // (arranque limpio o retomando un borrador a medio instrumento).
+  const [itemActual, setItemActual] = useState(0);
 
   useEffect(() => {
     fetch(`/api/mindeval-prueba/${token}`)
@@ -423,6 +427,35 @@ export default function PruebaTokenPage() {
     return SECCIONES_ORDEN.filter((k) => !!datos.tests[k]);
   }, [datos]);
 
+  // Dentro de la sección activa, cada instrumento se rinde de a un ítem por
+  // pantalla (no en lista) -- este efecto ubica al candidato en el primer
+  // ítem sin responder cada vez que entra a una sección nueva, tanto si
+  // arranca en blanco como si viene de un borrador restaurado a la mitad.
+  useEffect(() => {
+    if (!datos || datos.tipo !== "psicometrica" || datos.modo !== "real") return;
+    const seccion = seccionesActivas[seccionActual];
+    if (!seccion) return;
+    let idx = 0;
+    if (seccion === "16pf5") {
+      const items = datos.tests["16pf5"] ?? [];
+      idx = items.findIndex((it) => !respuestas16pf5[it.num]);
+    } else if (seccion === "kostick") {
+      const items = datos.tests.kostick ?? [];
+      idx = items.findIndex((it) => !respuestasKostick[it.num]);
+    } else if (seccion === "disc") {
+      const items = datos.tests.disc ?? [];
+      idx = items.findIndex((it) => { const r = respuestasDisc[it.num]; return !(r?.mas && r?.menos); });
+    } else {
+      const items = datos.tests.valanti ?? [];
+      idx = items.findIndex((it) => respuestasValanti[it.num] === undefined);
+    }
+    setItemActual(idx === -1 ? 0 : idx);
+    // Solo al entrar a la sección -- las respuestas de más abajo son para
+    // calcular el punto de partida, no para reaccionar a cada respuesta
+    // nueva (eso ya lo maneja el avance automático de cada ítem).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seccionActual, datos]);
+
   /**
    * Cuánto lleva respondido y cuál es el primer ítem que falta. El botón de
    * enviar ya se deshabilitaba cuando faltaba algo, pero no decía qué: en un
@@ -476,6 +509,42 @@ export default function PruebaTokenPage() {
     setTimeout(() => {
       el.style.boxShadow = previo;
     }, 1800);
+  }
+
+  // La batería psicométrica real muestra un ítem a la vez -- el botón
+  // "ir al siguiente pendiente" de la barra de progreso general no tiene
+  // nada que hacer ahí (siempre estás parado en el pendiente, nunca hay que
+  // saltar). Sigue funcionando igual que antes para técnica/assessment y
+  // para el placeholder, que aún son de lista completa.
+  const esBateriaPorSecciones = datos?.tipo === "psicometrica" && datos.modo === "real";
+
+  /** Cabecera de cada ítem dentro de una sección: "Anterior" + posición.
+   *  Reemplaza el número de ítem que antes iba fijo dentro de cada tarjeta
+   *  (ahora hay una sola tarjeta visible, así que la posición va aparte). */
+  function cabeceraItem(indice: number, total: number) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button
+          type="button"
+          onClick={() => setItemActual((i) => Math.max(0, i - 1))}
+          disabled={indice === 0}
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: indice === 0 ? "#C7CEDF" : NAVY,
+            cursor: indice === 0 ? "default" : "pointer",
+          }}
+        >
+          ← Anterior
+        </button>
+        <span style={{ fontSize: 11.5, color: "#7C89A8", fontVariantNumeric: "tabular-nums" }}>
+          {indice + 1} / {total}
+        </span>
+      </div>
+    );
   }
 
   const duracionSegundos = (datos ? duracionMinutos(datos) : 30) * 60;
@@ -703,13 +772,20 @@ export default function PruebaTokenPage() {
             <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
               {progreso.respondidos} / {progreso.total}
             </div>
-            {progreso.primerPendiente ? (
+            {progreso.primerPendiente && !esBateriaPorSecciones ? (
               <button
                 onClick={irAlPendiente}
                 style={{ background: "none", border: `1px solid ${NAVY}`, color: NAVY, fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 6, cursor: "pointer" }}
               >
                 Te faltan {progreso.total - progreso.respondidos} → ir al siguiente
               </button>
+            ) : progreso.primerPendiente ? (
+              // En la batería por secciones siempre estás parado en el
+              // pendiente (un ítem a la vez, avance automático) -- no hay
+              // adónde "saltar", así que no se ofrece el botón.
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: "#7C89A8" }}>
+                Te faltan {progreso.total - progreso.respondidos}
+              </span>
             ) : (
               <span style={{ fontSize: 11.5, fontWeight: 700, color: "#12805C" }}>✓ Todo respondido</span>
             )}
@@ -914,38 +990,47 @@ export default function PruebaTokenPage() {
                         ))}
                       </div>
                     </div>
-                    {datos.tests["16pf5"]!.map((it, i) => (
-                      <div key={it.num} id={`item-16pf5-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 13.5, color: NAVY, fontWeight: 700, marginBottom: 12 }}>{i + 1}. {it.texto}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {it.opciones.map((o) => (
-                            <label
-                              key={o.letra}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 10,
-                                padding: "10px 12px",
-                                borderRadius: 8,
-                                border: respuestas16pf5[it.num] === o.letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                background: respuestas16pf5[it.num] === o.letra ? "#FFFBEF" : "#FFFFFF",
-                                cursor: "pointer",
-                                fontSize: 13,
-                                color: "#41507A",
-                              }}
-                            >
-                              <input
-                                type="radio"
-                                name={`p16pf5-${it.num}`}
-                                checked={respuestas16pf5[it.num] === o.letra}
-                                onChange={() => setRespuestas16pf5((prev) => ({ ...prev, [it.num]: o.letra }))}
-                              />
-                              {o.texto}
-                            </label>
-                          ))}
+                    {(() => {
+                      const items = datos.tests["16pf5"]!;
+                      const idx = Math.min(itemActual, items.length - 1);
+                      const it = items[idx];
+                      return (
+                        <div key={it.num} id={`item-16pf5-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                          {cabeceraItem(idx, items.length)}
+                          <div style={{ fontSize: 14.5, color: NAVY, fontWeight: 700, margin: "12px 0" }}>{it.texto}</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {it.opciones.map((o) => (
+                              <label
+                                key={o.letra}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  padding: "10px 12px",
+                                  borderRadius: 8,
+                                  border: respuestas16pf5[it.num] === o.letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                  background: respuestas16pf5[it.num] === o.letra ? "#FFFBEF" : "#FFFFFF",
+                                  cursor: "pointer",
+                                  fontSize: 13,
+                                  color: "#41507A",
+                                }}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`p16pf5-${it.num}`}
+                                  checked={respuestas16pf5[it.num] === o.letra}
+                                  onChange={() => {
+                                    setRespuestas16pf5((prev) => ({ ...prev, [it.num]: o.letra }));
+                                    if (idx < items.length - 1) setItemActual(idx + 1);
+                                  }}
+                                />
+                                {o.texto}
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })()}
                   </>
                 )}
 
@@ -954,144 +1039,25 @@ export default function PruebaTokenPage() {
                     <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
                       Elige, de cada par, la frase que más se parezca a tu forma de ser.
                     </div>
-                    {datos.tests.kostick.map((it, i) => (
-                      <div key={it.num} id={`item-kostick-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {([["a", it.a], ["b", it.b]] as const).map(([letra, texto]) => (
-                            <label
-                              key={letra}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 10,
-                                padding: "10px 12px",
-                                borderRadius: 8,
-                                border: respuestasKostick[it.num] === letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                background: respuestasKostick[it.num] === letra ? "#FFFBEF" : "#FFFFFF",
-                                cursor: "pointer",
-                                fontSize: 13,
-                                color: "#41507A",
-                              }}
-                            >
-                              <input
-                                type="radio"
-                                name={`kostick-${it.num}`}
-                                checked={respuestasKostick[it.num] === letra}
-                                onChange={() => setRespuestasKostick((prev) => ({ ...prev, [it.num]: letra }))}
-                              />
-                              {texto}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {datos.tests.disc && seccionesActivas[seccionActual] === "disc" && (
-                  <>
-                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
-                      En cada uno de los 28 grupos de 4 palabras, marca la que MÁS te representa y la que MENOS te representa.
-                    </div>
-                    {datos.tests.disc.map((it, i) => (
-                      <div key={it.num} id={`item-disc-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>Grupo {i + 1}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {it.palabras.map((palabra, idx) => {
-                            const pos = (idx + 1) as 1 | 2 | 3 | 4;
-                            const actual = respuestasDisc[it.num] ?? {};
-                            const esMas = actual.mas === pos;
-                            const esMenos = actual.menos === pos;
-                            return (
-                              <div
-                                key={pos}
+                    {(() => {
+                      const items = datos.tests.kostick!;
+                      const idx = Math.min(itemActual, items.length - 1);
+                      const it = items[idx];
+                      return (
+                        <div key={it.num} id={`item-kostick-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                          {cabeceraItem(idx, items.length)}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                            {([["a", it.a], ["b", it.b]] as const).map(([letra, texto]) => (
+                              <label
+                                key={letra}
                                 style={{
                                   display: "flex",
                                   alignItems: "center",
                                   gap: 10,
-                                  padding: "8px 12px",
-                                  borderRadius: 8,
-                                  border: esMas || esMenos ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                  background: esMas || esMenos ? "#FFFBEF" : "#FFFFFF",
-                                  fontSize: 13,
-                                  color: "#41507A",
-                                }}
-                              >
-                                <span style={{ flex: 1 }}>{palabra}</span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setRespuestasDisc((prev) => {
-                                      const item = prev[it.num] ?? {};
-                                      return { ...prev, [it.num]: { ...item, mas: pos, menos: item.menos === pos ? undefined : item.menos } };
-                                    })
-                                  }
-                                  style={{
-                                    padding: "5px 10px",
-                                    borderRadius: 6,
-                                    border: esMas ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                    background: esMas ? GOLD : "#FFFFFF",
-                                    color: NAVY,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  MÁS
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setRespuestasDisc((prev) => {
-                                      const item = prev[it.num] ?? {};
-                                      return { ...prev, [it.num]: { ...item, menos: pos, mas: item.mas === pos ? undefined : item.mas } };
-                                    })
-                                  }
-                                  style={{
-                                    padding: "5px 10px",
-                                    borderRadius: 6,
-                                    border: esMenos ? `1.5px solid ${NAVY}` : "1.5px solid #D5DCEB",
-                                    background: esMenos ? NAVY : "#FFFFFF",
-                                    color: esMenos ? "#FFFFFF" : NAVY,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  MENOS
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {datos.tests.valanti && seccionesActivas[seccionActual] === "valanti" && (
-                  <>
-                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
-                      Reparte 3 puntos entre las dos frases de cada par, según qué tan importante es cada una para ti.
-                    </div>
-                    {datos.tests.valanti.map((it, i) => (
-                      <div key={it.num} id={`item-valanti-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
-                        <div style={{ fontSize: 11.5, color: "#7C89A8", marginBottom: 10 }}>{i + 1}</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {([0, 1, 2, 3] as const).map((puntosA) => {
-                            const seleccionado = respuestasValanti[it.num] === puntosA;
-                            return (
-                              <label
-                                key={puntosA}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 12,
                                   padding: "10px 12px",
                                   borderRadius: 8,
-                                  border: seleccionado ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
-                                  background: seleccionado ? "#FFFBEF" : "#FFFFFF",
+                                  border: respuestasKostick[it.num] === letra ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                  background: respuestasKostick[it.num] === letra ? "#FFFBEF" : "#FFFFFF",
                                   cursor: "pointer",
                                   fontSize: 13,
                                   color: "#41507A",
@@ -1099,21 +1065,188 @@ export default function PruebaTokenPage() {
                               >
                                 <input
                                   type="radio"
-                                  name={`valanti-${it.num}`}
-                                  checked={seleccionado}
-                                  onChange={() => setRespuestasValanti((prev) => ({ ...prev, [it.num]: puntosA }))}
+                                  name={`kostick-${it.num}`}
+                                  checked={respuestasKostick[it.num] === letra}
+                                  onChange={() => {
+                                    setRespuestasKostick((prev) => ({ ...prev, [it.num]: letra }));
+                                    if (idx < items.length - 1) setItemActual(idx + 1);
+                                  }}
                                 />
-                                <span style={{ flex: 1 }}>{it.fraseA}</span>
-                                <span style={{ fontWeight: 800, color: NAVY, minWidth: 30, textAlign: "center" }}>
-                                  {puntosA}-{3 - puntosA}
-                                </span>
-                                <span style={{ flex: 1, textAlign: "right" }}>{it.fraseB}</span>
+                                {texto}
                               </label>
-                            );
-                          })}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })()}
+                  </>
+                )}
+
+                {datos.tests.disc && seccionesActivas[seccionActual] === "disc" && (
+                  <>
+                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                      De este grupo de 4 palabras, marca la que MÁS te representa y la que MENOS te representa.
+                    </div>
+                    {(() => {
+                      const items = datos.tests.disc!;
+                      const idx = Math.min(itemActual, items.length - 1);
+                      const it = items[idx];
+                      const actual = respuestasDisc[it.num] ?? {};
+                      const listo = !!actual.mas && !!actual.menos;
+                      return (
+                        <div key={it.num} id={`item-disc-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                          {cabeceraItem(idx, items.length)}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
+                            {it.palabras.map((palabra, pIdx) => {
+                              const pos = (pIdx + 1) as 1 | 2 | 3 | 4;
+                              const esMas = actual.mas === pos;
+                              const esMenos = actual.menos === pos;
+                              return (
+                                <div
+                                  key={pos}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 10,
+                                    padding: "8px 12px",
+                                    borderRadius: 8,
+                                    border: esMas || esMenos ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                    background: esMas || esMenos ? "#FFFBEF" : "#FFFFFF",
+                                    fontSize: 13,
+                                    color: "#41507A",
+                                  }}
+                                >
+                                  <span style={{ flex: 1 }}>{palabra}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setRespuestasDisc((prev) => {
+                                        const item = prev[it.num] ?? {};
+                                        return { ...prev, [it.num]: { ...item, mas: pos, menos: item.menos === pos ? undefined : item.menos } };
+                                      })
+                                    }
+                                    style={{
+                                      padding: "5px 10px",
+                                      borderRadius: 6,
+                                      border: esMas ? `1.5px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                      background: esMas ? GOLD : "#FFFFFF",
+                                      color: NAVY,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    MÁS
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setRespuestasDisc((prev) => {
+                                        const item = prev[it.num] ?? {};
+                                        return { ...prev, [it.num]: { ...item, menos: pos, mas: item.mas === pos ? undefined : item.mas } };
+                                      })
+                                    }
+                                    style={{
+                                      padding: "5px 10px",
+                                      borderRadius: 6,
+                                      border: esMenos ? `1.5px solid ${NAVY}` : "1.5px solid #D5DCEB",
+                                      background: esMenos ? NAVY : "#FFFFFF",
+                                      color: esMenos ? "#FFFFFF" : NAVY,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    MENOS
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {/* DISC exige dos marcas por ítem (MÁS y MENOS) --
+                              a diferencia de los otros instrumentos, no hay
+                              un único clic que la complete, así que el avance
+                              automático no aplica: se confirma aparte, igual
+                              que el modelo de referencia (PN) resuelve el
+                              mismo formato con un botón "Confirmar"). */}
+                          {idx < items.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setItemActual(idx + 1)}
+                              disabled={!listo}
+                              style={{
+                                marginTop: 14,
+                                background: listo ? GOLD : "#EDF0F7",
+                                color: listo ? NAVY : "#A9B1C4",
+                                border: "none",
+                                padding: "9px 18px",
+                                borderRadius: 8,
+                                fontSize: 13,
+                                fontWeight: 800,
+                                cursor: listo ? "pointer" : "not-allowed",
+                              }}
+                            >
+                              Siguiente
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+
+                {datos.tests.valanti && seccionesActivas[seccionActual] === "valanti" && (
+                  <>
+                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                      Reparte 3 puntos entre las dos frases, según qué tan importante es cada una para ti.
+                    </div>
+                    {(() => {
+                      const items = datos.tests.valanti!;
+                      const idx = Math.min(itemActual, items.length - 1);
+                      const it = items[idx];
+                      return (
+                        <div key={it.num} id={`item-valanti-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                          {cabeceraItem(idx, items.length)}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                            {([0, 1, 2, 3] as const).map((puntosA) => {
+                              const seleccionado = respuestasValanti[it.num] === puntosA;
+                              return (
+                                <label
+                                  key={puntosA}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 12,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    border: seleccionado ? `2px solid ${GOLD}` : "1.5px solid #D5DCEB",
+                                    background: seleccionado ? "#FFFBEF" : "#FFFFFF",
+                                    cursor: "pointer",
+                                    fontSize: 13,
+                                    color: "#41507A",
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`valanti-${it.num}`}
+                                    checked={seleccionado}
+                                    onChange={() => {
+                                      setRespuestasValanti((prev) => ({ ...prev, [it.num]: puntosA }));
+                                      if (idx < items.length - 1) setItemActual(idx + 1);
+                                    }}
+                                  />
+                                  <span style={{ flex: 1 }}>{it.fraseA}</span>
+                                  <span style={{ fontWeight: 800, color: NAVY, minWidth: 30, textAlign: "center" }}>
+                                    {puntosA}-{3 - puntosA}
+                                  </span>
+                                  <span style={{ flex: 1, textAlign: "right" }}>{it.fraseB}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
 
