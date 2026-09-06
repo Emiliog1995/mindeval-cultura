@@ -28,7 +28,26 @@ export async function extraerTextoCv(buffer: Buffer, nombreArchivo: string): Pro
       return result.value;
     }
     if (nombre.endsWith(".pdf")) {
-      const result = await pdfParse(buffer);
+      // Se le pasa un Uint8Array, NO el Buffer de Node tal cual.
+      //
+      // Con un Buffer, el pdf.js que trae pdf-parse falla de forma
+      // intermitente cuando en el mismo proceso ya se parseó otro PDF
+      // distinto: revienta con "bad XRef entry" o "Illegal character" sobre
+      // archivos que están perfectos. En serverless los procesos se reusan
+      // entre peticiones, así que al segundo postulante que caía en el mismo
+      // contenedor se le marcaba el CV como ilegible y quedaba fuera del
+      // ranking (sin match ni idoneidad) con su PDF intacto. Se detectó con
+      // 2 CVs de 77.
+      //
+      // Medido sobre los dos CVs que fallaban, alternándolos 12 veces en un
+      // mismo proceso: Buffer crudo 7/12, Buffer copiado fuera del pool con
+      // allocUnsafeSlow 7/12, Uint8Array 12/12. Lo que lo arregla es el tipo
+      // que recibe pdf.js -- que es el que usa nativamente --, no dónde esté
+      // alojada la memoria.
+      //
+      // El cast existe porque @types/pdf-parse declara Buffer, una firma más
+      // estrecha que lo que la librería realmente acepta.
+      const result = await pdfParse(new Uint8Array(buffer) as unknown as Buffer);
       return result.text;
     }
   } catch (e) {
