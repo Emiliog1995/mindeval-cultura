@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
       const { data: vacante } = await supabaseAdmin
         .from("mindeval_vacantes")
-        .select("titulo, empresa")
+        .select("titulo, empresa, contacto_nombre, contacto_email")
         .eq("id", sesion.vacante_id)
         .maybeSingle();
       if (!vacante) continue;
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
         tipo: sesion.tipo,
         fechaProgramada: sesion.fecha_programada,
         link: `${req.nextUrl.origin}/seleccion/prueba/${sesion.token}`,
+        contacto: { nombre: vacante.contacto_nombre, email: vacante.contacto_email },
       });
     }
 

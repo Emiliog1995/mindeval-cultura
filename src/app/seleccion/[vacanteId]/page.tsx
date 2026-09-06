@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
@@ -125,6 +125,31 @@ export default function ProcesoVacante() {
   const [descargandoCv, setDescargandoCv] = useState<Set<string>>(new Set());
   const [eliminando, setEliminando] = useState<string | null>(null);
   const [reenviando, setReenviando] = useState<string | null>(null);
+  const [recordando, setRecordando] = useState(false);
+
+  /**
+   * Ya recibieron su invitación y todavía no la han abierto, con el plazo
+   * aún vivo. Son exactamente los que se pueden recuperar con un
+   * recordatorio: al vencido ya no le sirve (hay que reactivarlo, uno por
+   * uno) y el que está 'en_curso' ya entró.
+   */
+  const pendientesDeEntrar = useMemo(
+    () =>
+      candidatos.filter((c) => {
+        if (c.sesion?.estado !== "programada") return false;
+        const vence = new Date(c.sesion.fecha_programada).getTime() + VENTANA_HORAS_PRUEBA * 60 * 60_000;
+        return Date.now() < vence;
+      }),
+    [candidatos]
+  );
+
+  /** Al que primero se le cierra el plazo — es la urgencia que hay que mostrar. */
+  const vencimientoMasCercano = useMemo(() => {
+    const fechas = pendientesDeEntrar.map(
+      (c) => new Date(c.sesion!.fecha_programada).getTime() + VENTANA_HORAS_PRUEBA * 60 * 60_000
+    );
+    return fechas.length ? Math.min(...fechas) : null;
+  }, [pendientesDeEntrar]);
 
   useEffect(() => {
     if (verificando) return;
@@ -591,6 +616,44 @@ export default function ProcesoVacante() {
     }
   }
 
+  /**
+   * Recordatorio en lote a quienes ya tienen invitación y todavía no han
+   * abierto la prueba. Reenviar de a uno existía desde antes; con un lote
+   * de veinte candidatos nadie lo hacía, y al que no vio el correo se le
+   * vencía el plazo en silencio.
+   */
+  async function recordarPendientes() {
+    if (!pendientesDeEntrar.length) return;
+    if (
+      !window.confirm(
+        `¿Enviar un recordatorio a ${pendientesDeEntrar.length} candidato(s) que todavía no han entrado a su prueba?\n\n` +
+          `Se les manda el MISMO enlace que ya tienen — no se genera uno nuevo ni se les cambia el plazo.`
+      )
+    ) {
+      return;
+    }
+    setRecordando(true);
+    try {
+      const res = await fetch("/api/mindeval-recordar-pruebas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ vacante_id: params.vacanteId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const omitidos: { nombre: string; motivo: string }[] = data.omitidos ?? [];
+      const detalleOmitidos = omitidos.length
+        ? `\n\nNo se les envió a ${omitidos.length}:\n` + omitidos.map((o) => `• ${o.nombre}: ${o.motivo}`).join("\n")
+        : "";
+      alert(`Recordatorio enviado a ${data.enviados?.length ?? 0} candidato(s).${detalleOmitidos}`);
+      await cargar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudieron enviar los recordatorios");
+    } finally {
+      setRecordando(false);
+    }
+  }
+
   async function descargarCv(candidatoId: string) {
     setDescargandoCv((prev) => new Set(prev).add(candidatoId));
     try {
@@ -779,6 +842,62 @@ export default function ProcesoVacante() {
             })}
           </div>
         </section>
+
+        {/* Quién recibió la invitación y todavía no ha entrado, con el plazo
+            corriendo. Antes esto solo se veía candidato por candidato en el
+            badge del ranking: si nadie iba a mirarlos de a uno, al que no vio
+            el correo se le vencía el plazo sin que nadie se enterara. */}
+        {pendientesDeEntrar.length > 0 && (
+          <section
+            style={{
+              background: "#FFFBEF",
+              border: "1px solid #F3E0AE",
+              borderRadius: 16,
+              padding: "16px 20px",
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ flex: "1 1 320px" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: NAVY }}>
+                {pendientesDeEntrar.length === 1
+                  ? "1 candidato no ha entrado todavía a su prueba"
+                  : `${pendientesDeEntrar.length} candidatos no han entrado todavía a su prueba`}
+              </div>
+              <div style={{ fontSize: 12, color: "#8A6400", marginTop: 3 }}>
+                {vencimientoMasCercano && (
+                  <>
+                    Al primero se le vence el{" "}
+                    <strong>
+                      {new Date(vencimientoMasCercano).toLocaleString("es-EC", { dateStyle: "short", timeStyle: "short" })}
+                    </strong>
+                    {" · "}
+                  </>
+                )}
+                Se les envía el mismo enlace que ya tienen, sin cambiarles el plazo.
+              </div>
+            </div>
+            <button
+              onClick={recordarPendientes}
+              disabled={recordando}
+              style={{
+                background: GOLD,
+                color: NAVY,
+                border: "none",
+                padding: "10px 18px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: recordando ? "not-allowed" : "pointer",
+                opacity: recordando ? 0.6 : 1,
+              }}
+            >
+              {recordando ? "Enviando…" : "Enviarles un recordatorio"}
+            </button>
+          </section>
+        )}
 
         <section style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 16, overflow: "hidden" }}>
           <div style={{ padding: "18px 24px 12px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

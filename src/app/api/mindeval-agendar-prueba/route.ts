@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         tipo,
         fechaProgramada: fecha_programada,
         link,
+        contacto: { nombre: (vacante as Vacante).contacto_nombre, email: (vacante as Vacante).contacto_email },
       });
 
       resultados.push({

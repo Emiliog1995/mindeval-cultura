@@ -105,6 +105,7 @@ export async function enviarInvitacionPrueba(params: {
   tipo: TipoSesionPrueba;
   fechaProgramada: string;
   link: string;
+  contacto?: ContactoVacante;
 }): Promise<{ ok: boolean; error?: string }> {
   if (!process.env.RESEND_API_KEY) {
     return { ok: false, error: "RESEND_API_KEY no configurada" };
@@ -130,40 +131,38 @@ export async function enviarInvitacionPrueba(params: {
   const tituloVacante = escapeHtml(params.tituloVacante);
   const empresa = escapeHtml(params.empresa);
 
-  const html = `
-    <div style="font-family: -apple-system, Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-      <div style="background: ${NAVY}; padding: 24px 28px; border-radius: 10px 10px 0 0;">
-        <div style="color: ${GOLD}; font-weight: 800; font-size: 18px;">MindEval</div>
-      </div>
-      <div style="border: 1px solid #E3E8F2; border-top: none; border-radius: 0 0 10px 10px; padding: 28px;">
-        <p style="font-size: 14px; color: #1B2A5B;">Hola ${nombreCandidato},</p>
-        <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
-          Como parte del proceso de selección para <strong>${tituloVacante}</strong> en ${empresa},
-          te invitamos a rendir tu <strong>${label}</strong>.
-        </p>
-        <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
-          <strong>Puedes empezar desde:</strong> ${fecha} (hora Ecuador)<br />
-          <strong>Tienes plazo hasta:</strong> ${limite} (hora Ecuador)
-        </p>
-        <p style="font-size: 13px; color: #33405F; line-height: 1.6; background: #F7F9FD; border-radius: 8px; padding: 10px 14px;">
-          Tienes ${VENTANA_HORAS} horas para entrar y rendirla. No hace falta que sea exactamente a la hora de inicio:
-          entra cuando puedas dentro de ese plazo. Eso sí, una vez que abras la prueba el cronómetro empieza a correr
-          y ya no se detiene, así que ábrela cuando tengas el tiempo y la tranquilidad para terminarla de una sola vez.
-        </p>
-        <div style="text-align: center; margin: 28px 0;">
-          <a href="${params.link}" style="background: ${GOLD}; color: ${NAVY}; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; display: inline-block;">
-            Ir a mi prueba
-          </a>
-        </div>
-        <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
-          Si el botón no funciona, copia y pega este enlace en tu navegador:<br />
-          <a href="${params.link}" style="color: ${NAVY};">${params.link}</a>
-        </p>
-        <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
-          Ten a mano una conexión estable y realiza la prueba desde un solo dispositivo, sin cambiar de pestaña ni salir de la aplicación. Si puedes hacerla desde una computadora, mejor — pero desde el celular también es válido.
-        </p>
-      </div>
+  // Pasa por `plantilla` como el resto de correos al candidato. Antes armaba
+  // su propio HTML y era, justamente, el único que NO llevaba a quién
+  // escribirle: el correo que trae el enlace para rendir es donde más falta
+  // hace un contacto, porque si el enlace no le abre, el candidato se queda
+  // sin salida.
+  const cuerpo = `
+    <p style="font-size: 14px; color: #1B2A5B;">Hola ${nombreCandidato},</p>
+    <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
+      Como parte del proceso de selección para <strong>${tituloVacante}</strong> en ${empresa},
+      te invitamos a rendir tu <strong>${label}</strong>.
+    </p>
+    <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
+      <strong>Puedes empezar desde:</strong> ${fecha} (hora Ecuador)<br />
+      <strong>Tienes plazo hasta:</strong> ${limite} (hora Ecuador)
+    </p>
+    <p style="font-size: 13px; color: #33405F; line-height: 1.6; background: #F7F9FD; border-radius: 8px; padding: 10px 14px;">
+      Tienes ${VENTANA_HORAS} horas para entrar y rendirla. No hace falta que sea exactamente a la hora de inicio:
+      entra cuando puedas dentro de ese plazo. Eso sí, una vez que abras la prueba el cronómetro empieza a correr
+      y ya no se detiene, así que ábrela cuando tengas el tiempo y la tranquilidad para terminarla de una sola vez.
+    </p>
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${params.link}" style="background: ${GOLD}; color: ${NAVY}; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; display: inline-block;">
+        Ir a mi prueba
+      </a>
     </div>
+    <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
+      Si el botón no funciona, copia y pega este enlace en tu navegador:<br />
+      <a href="${params.link}" style="color: ${NAVY};">${params.link}</a>
+    </p>
+    <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
+      Ten a mano una conexión estable y realiza la prueba desde un solo dispositivo, sin cambiar de pestaña ni salir de la aplicación. Si puedes hacerla desde una computadora, mejor — pero desde el celular también es válido.
+    </p>
   `;
 
   try {
@@ -171,7 +170,76 @@ export async function enviarInvitacionPrueba(params: {
       from: emisor.from,
       to: params.to,
       subject: `Invitación a tu ${label} — ${params.tituloVacante}`,
-      html,
+      html: plantilla({ cuerpo, contacto: params.contacto, empresa: params.empresa }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error al enviar el correo" };
+  }
+}
+
+/**
+ * Recordatorio a quien recibió su invitación y todavía no ha entrado. Lo
+ * dispara el reclutador desde el panel de la vacante (no hay tarea
+ * automática en este proyecto — ver el comentario de cierre por fecha
+ * límite en mindeval-types.ts).
+ *
+ * Va con su propio asunto y su propio texto en vez de reenviar la
+ * invitación tal cual: un correo idéntico al de ayer se lee como un envío
+ * duplicado por error, no como un aviso de que se le está acabando el plazo.
+ * El enlace es el MISMO de siempre — no se genera ninguno nuevo.
+ */
+export async function enviarRecordatorioPrueba(params: {
+  to: string;
+  nombreCandidato: string;
+  tituloVacante: string;
+  empresa: string;
+  tipo: TipoSesionPrueba;
+  fechaProgramada: string;
+  link: string;
+  contacto?: ContactoVacante;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY no configurada" };
+  const emisor = remitente();
+  if ("error" in emisor) return { ok: false, error: emisor.error };
+
+  const limite = formatoEcuador(limiteDeAcceso({ fecha_programada: params.fechaProgramada, estado: "programada" }));
+  const label = LABEL_TIPO[params.tipo];
+  const nombreCandidato = escapeHtml(params.nombreCandidato);
+  const tituloVacante = escapeHtml(params.tituloVacante);
+
+  const cuerpo = `
+    <p style="font-size: 14px; color: #1B2A5B;">Hola ${nombreCandidato},</p>
+    <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
+      Te escribimos para recordarte que todavía tienes pendiente tu <strong>${label}</strong>
+      del proceso de selección para <strong>${tituloVacante}</strong>.
+    </p>
+    <p style="font-size: 14px; color: #33405F; line-height: 1.6; background: #FFFBEF; border: 1px solid #F3E0AE; border-radius: 8px; padding: 12px 14px;">
+      <strong>Tu plazo vence el ${limite}</strong> (hora Ecuador). Si no la rindes antes de esa hora,
+      el enlace deja de funcionar.
+    </p>
+    <p style="font-size: 13px; color: #33405F; line-height: 1.6;">
+      Es el mismo enlace que te enviamos antes — no necesitas uno nuevo. Recuerda que al abrirlo
+      el cronómetro empieza a correr, así que entra cuando tengas el tiempo para terminarla de una sola vez.
+    </p>
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${params.link}" style="background: ${GOLD}; color: ${NAVY}; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; display: inline-block;">
+        Ir a mi prueba
+      </a>
+    </div>
+    <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
+      Si el botón no funciona, copia y pega este enlace en tu navegador:<br />
+      <a href="${params.link}" style="color: ${NAVY};">${params.link}</a>
+    </p>
+  `;
+
+  try {
+    const { error } = await getResend().emails.send({
+      from: emisor.from,
+      to: params.to,
+      subject: `Recordatorio: te queda pendiente tu ${label} — ${params.tituloVacante}`,
+      html: plantilla({ cuerpo, contacto: params.contacto, empresa: params.empresa }),
     });
     if (error) return { ok: false, error: error.message };
     return { ok: true };

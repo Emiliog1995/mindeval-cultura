@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const { data: vacante } = await supabaseAdmin
       .from("mindeval_vacantes")
-      .select("titulo, empresa")
+      .select("titulo, empresa, contacto_nombre, contacto_email")
       .eq("id", sesion.vacante_id)
       .single();
     if (!vacante) return NextResponse.json({ error: "No se encontró la vacante" }, { status: 404 });
@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       tipo: sesion.tipo,
       fechaProgramada,
       link: `${req.nextUrl.origin}/seleccion/prueba/${sesion.token}`,
+      contacto: { nombre: (vacante as Vacante).contacto_nombre, email: (vacante as Vacante).contacto_email },
     });
     if (!envio.ok) return NextResponse.json({ error: `No se pudo enviar el correo: ${envio.error}` }, { status: 502 });
 
