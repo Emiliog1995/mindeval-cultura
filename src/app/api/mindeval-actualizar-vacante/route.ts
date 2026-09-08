@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/require-auth";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { avanzarASenescytSiAplica, evaluarDescarteCv } from "@/lib/mindeval-scoring";
+import { normalizarPerfil16PF5, perfilesEquivalentes } from "@/lib/mindeval-16pf5";
 import type { MatchCvResultado } from "@/lib/mindeval-ia";
 
 /**
@@ -115,6 +116,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Test psicométrico no reconocido" }, { status: 400 });
     }
 
+    // ── Perfil psicométrico objetivo del cargo ──────────────────────────────
+    // Se normaliza server-side y no se confía en lo que mande el navegador:
+    // normalizarPerfil16PF5 descarta escalas desconocidas, direcciones
+    // inválidas e IM (que es validez, no competencia). Si el cuerpo trae la
+    // clave pero no queda ni un factor utilizable, es un error del reclutador
+    // que hay que decirle — guardar un perfil vacío dejaría el ajuste
+    // psicométrico en undefined para toda la vacante y nadie avanzaría, sin
+    // ninguna señal de por qué.
+    let perfilPsicometrico = (vacante.perfil_psicometrico ?? null) as ReturnType<typeof normalizarPerfil16PF5>;
+    if ("perfil_psicometrico" in body) {
+      if (body.perfil_psicometrico === null) {
+        perfilPsicometrico = null; // volver a la plantilla sugerida
+      } else {
+        perfilPsicometrico = normalizarPerfil16PF5(body.perfil_psicometrico);
+        if (!perfilPsicometrico) {
+          return NextResponse.json(
+            { error: "El perfil psicométrico debe marcar al menos un factor como alto, medio o bajo." },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     let fechaLimite: string | null = null;
     if (body.fecha_limite_postulacion) {
       const fecha = new Date(body.fecha_limite_postulacion as string);
@@ -137,6 +161,10 @@ export async function POST(req: NextRequest) {
         corte_tecnica: corteTecnica,
         modo_tecnica: modoTecnica,
         tests_psicometricos: testsPsicometricos,
+        // Perfil objetivo del 16PF-5 con el que se rankea esta vacante. NULL
+        // = sin configurar, cae a la plantilla sugerida y la interfaz lo
+        // advierte (ver supabase/mindeval-vacante-perfil-psicometrico.sql).
+        perfil_psicometrico: perfilPsicometrico,
         // Responsable del proceso: recibe el aviso cuando alguien completa
         // una prueba y firma los correos al candidato (auditoría 2026-09,
         // I-7 y M-4).
@@ -150,8 +178,15 @@ export async function POST(req: NextRequest) {
 
     // ── Recálculo del embudo ────────────────────────────────────────────────
     const corteCvCambio = Number(vacante.corte_match_cv) !== corteMatchCv;
+    // Cambiar el perfil objetivo mueve el ajuste psicométrico de TODOS los
+    // candidatos, así que hay que revisar el avance automático igual que si
+    // se hubiera movido un corte: alguien que no llegaba al 60% contra el
+    // perfil anterior puede pasarlo con el nuevo.
+    const perfilCambio = !perfilesEquivalentes(vacante.perfil_psicometrico, perfilPsicometrico);
     const cortesPruebasCambiaron =
-      Number(vacante.corte_sten) !== corteSten || Number(vacante.corte_tecnica) !== corteTecnica;
+      Number(vacante.corte_sten) !== corteSten ||
+      Number(vacante.corte_tecnica) !== corteTecnica ||
+      perfilCambio;
 
     const resumen = { reactivados: 0, descartados: 0, avanzados: 0, nombres_reactivados: [] as string[], nombres_descartados: [] as string[] };
 
@@ -227,6 +262,7 @@ export async function POST(req: NextRequest) {
           const avanzo = await avanzarASenescytSiAplica(supabaseAdmin, c.id, {
             corte_sten: corteSten,
             corte_tecnica: corteTecnica,
+            perfil_psicometrico: perfilPsicometrico,
           });
           if (avanzo) resumen.avanzados += 1;
         }

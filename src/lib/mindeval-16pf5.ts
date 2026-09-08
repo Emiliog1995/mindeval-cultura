@@ -14,6 +14,68 @@
 
 export type Escala16PF5 = "A" | "B" | "C" | "E" | "F" | "G" | "H" | "I" | "L" | "M" | "N" | "O" | "Q1" | "Q2" | "Q3" | "Q4" | "IM";
 
+/**
+ * Las 16 escalas primarias que SÍ pueden formar parte de un perfil objetivo
+ * de puesto. IM queda deliberadamente fuera: es una escala de VALIDEZ (mide
+ * si la persona respondió buscando dar buena imagen), no una competencia —
+ * un IM alto hace que todo el perfil se lea con cautela, no que el candidato
+ * sea mejor ni peor. Ver interpretarIM() en mindeval-scoring.
+ */
+export const ESCALAS_PUNTUABLES_16PF5 = [
+  "A", "B", "C", "E", "F", "G", "H", "I", "L", "M", "N", "O", "Q1", "Q2", "Q3", "Q4",
+] as const satisfies readonly Escala16PF5[];
+
+export type EscalaPuntuable16PF5 = (typeof ESCALAS_PUNTUABLES_16PF5)[number];
+
+export type DireccionFactor = "alto" | "medio" | "bajo";
+
+export const DIRECCIONES_FACTOR: readonly DireccionFactor[] = ["alto", "medio", "bajo"];
+
+/**
+ * Perfil objetivo del cargo: qué factores del 16PF-5 importan y en qué
+ * dirección. Una escala AUSENTE no puntúa a propósito — es la forma de decir
+ * "este factor no tiene una dirección clara de mejor para este cargo", y
+ * puntuarla sería inventar criterio. Se sigue mostrando completa en la ficha
+ * del candidato, que es donde el perfil se interpreta.
+ */
+export type PerfilObjetivo16PF5 = Partial<Record<EscalaPuntuable16PF5, DireccionFactor>>;
+
+/**
+ * Valida un perfil que viene de fuera del código (columna jsonb de la
+ * vacante o cuerpo de una petición) y devuelve solo lo que se puede puntuar.
+ * Descarta en silencio escalas desconocidas, IM y direcciones inválidas —
+ * un perfil a medio validar produciría un ranking equivocado que parece
+ * válido, que es exactamente lo que esta columna vino a evitar.
+ *
+ * Devuelve `null` si la entrada no es un objeto o si no queda ni un factor
+ * utilizable: en ese caso quien llama debe caer a la plantilla y advertirlo,
+ * nunca rankear contra un perfil vacío.
+ */
+export function normalizarPerfil16PF5(raw: unknown): PerfilObjetivo16PF5 | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const perfil: PerfilObjetivo16PF5 = {};
+  for (const [clave, valor] of Object.entries(raw as Record<string, unknown>)) {
+    if (!(ESCALAS_PUNTUABLES_16PF5 as readonly string[]).includes(clave)) continue;
+    if (typeof valor !== "string" || !DIRECCIONES_FACTOR.includes(valor as DireccionFactor)) continue;
+    perfil[clave as EscalaPuntuable16PF5] = valor as DireccionFactor;
+  }
+  return Object.keys(perfil).length ? perfil : null;
+}
+
+/**
+ * ¿Dos perfiles puntúan igual? Compara en el orden fijo de las escalas y no
+ * por JSON.stringify: el objeto que llega de la columna jsonb trae las claves
+ * en el orden en que se guardaron y el que arma la interfaz en el orden en
+ * que el reclutador fue marcando, así que una comparación textual daría
+ * "cambió" cada vez y dispararía un recálculo del embudo sin motivo.
+ */
+export function perfilesEquivalentes(a: unknown, b: unknown): boolean {
+  const pa = normalizarPerfil16PF5(a);
+  const pb = normalizarPerfil16PF5(b);
+  if (!pa || !pb) return pa === pb;
+  return ESCALAS_PUNTUABLES_16PF5.every((escala) => pa[escala] === pb[escala]);
+}
+
 export interface OpcionItem16PF5 {
   letra: "a" | "b" | "c";
   texto: string;

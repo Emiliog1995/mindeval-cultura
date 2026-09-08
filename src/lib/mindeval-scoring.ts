@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RespuestaBancoDetalle, SeveridadAlerta, Vacante } from "./mindeval-types";
 import type { MatchCvResultado } from "./mindeval-ia";
-import { ITEMS_16PF5, NORMAS_16PF5, type Escala16PF5 } from "./mindeval-16pf5";
+import {
+  ITEMS_16PF5,
+  NORMAS_16PF5,
+  ESCALAS_PUNTUABLES_16PF5,
+  normalizarPerfil16PF5,
+  type Escala16PF5,
+  type EscalaPuntuable16PF5,
+  type DireccionFactor,
+  type PerfilObjetivo16PF5,
+} from "./mindeval-16pf5";
 import { ITEMS_KOSTICK, type FactorKostick } from "./mindeval-kostick";
 import { ITEMS_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, type CategoriaTextoDISC } from "./mindeval-disc";
 import { ITEMS_VALANTI, NORMAS_VALANTI, NIVELES_VALANTI, MENSAJE_AREA_MAS_IMPORTANTE, MENSAJE_AREA_MENOS_IMPORTANTE, type EscalaVALANTI } from "./mindeval-valanti";
@@ -68,15 +77,24 @@ export function calcularIdoneidadGlobal(input: {
 // importan y en qué dirección. Eso no se infiere del test, lo define quien
 // conoce el cargo.
 
-export type DireccionFactor = "alto" | "medio" | "bajo";
-
-export type PerfilObjetivo16PF5 = Partial<Record<Escala16PF5, DireccionFactor>>;
+// Definidos en mindeval-16pf5 (módulo hoja) para que mindeval-types pueda
+// tipar la columna de la vacante sin crear un ciclo de imports. Se
+// re-exportan aquí porque todo el scoring ya los importaba desde acá.
+export type { DireccionFactor, PerfilObjetivo16PF5, EscalaPuntuable16PF5 };
 
 /**
- * Perfil objetivo por defecto, derivado del cargo tipo "promotor/gestor
- * social de campo" (acompañamiento a familias, visitas domiciliarias,
- * talleres, gestión de fichas y expedientes, cumplimiento de políticas de
- * protección) y validado con la consultora responsable del proceso.
+ * PLANTILLA SUGERIDA, no "el perfil del sistema": derivada del cargo tipo
+ * "promotor/gestor social de campo" (acompañamiento a familias, visitas
+ * domiciliarias, talleres, gestión de fichas y expedientes, cumplimiento de
+ * políticas de protección) y validada con la consultora responsable de ese
+ * proceso.
+ *
+ * Sirve para dos cosas y para nada más: precargar la interfaz de Editar
+ * vacante cuando el reclutador todavía no configuró el perfil del cargo, y
+ * sostener las vacantes anteriores a la columna `perfil_psicometrico` (todas
+ * ellas de promotor social). Cualquier vacante nueva debe configurar el suyo
+ * — un contador rankeado contra este perfil sale ordenado al revés y nada
+ * en el resultado lo delata. Ver perfilDeVacante().
  *
  * Los factores que NO aparecen aquí no puntúan a propósito: no tienen una
  * dirección clara de "mejor" para este cargo, y puntuarlos sería inventar
@@ -89,7 +107,7 @@ export type PerfilObjetivo16PF5 = Partial<Record<Escala16PF5, DireccionFactor>>;
  *
  * IM nunca entra aquí: es validez, no competencia (ver interpretarIM).
  */
-export const PERFIL_16PF5_PROMOTOR_SOCIAL: PerfilObjetivo16PF5 = {
+export const PLANTILLA_16PF5_PROMOTOR_SOCIAL: PerfilObjetivo16PF5 = {
   A: "alto",    // Afabilidad — trabaja cara a cara con las familias
   C: "alto",    // Estabilidad emocional — sostiene situaciones duras
   G: "alto",    // Atención a las normas — políticas de protección, no negociable
@@ -103,6 +121,24 @@ export const PERFIL_16PF5_PROMOTOR_SOCIAL: PerfilObjetivo16PF5 = {
 };
 
 /**
+ * El perfil objetivo con el que se rankea ESTA vacante, más si viene
+ * configurado o heredado de la plantilla.
+ *
+ * `configurado: false` no es un detalle interno: significa que el orden del
+ * ranking se está calculando contra un cargo que puede no tener nada que ver
+ * con el de la vacante. Quien llame tiene que poder avisarlo en pantalla, así
+ * que el dato sale de aquí junto con el perfil y no se puede ignorar sin
+ * verlo.
+ */
+export function perfilDeVacante(
+  vacante: Pick<Vacante, "perfil_psicometrico"> | null | undefined
+): { perfil: PerfilObjetivo16PF5; configurado: boolean } {
+  const propio = normalizarPerfil16PF5(vacante?.perfil_psicometrico);
+  if (propio) return { perfil: propio, configurado: true };
+  return { perfil: PLANTILLA_16PF5_PROMOTOR_SOCIAL, configurado: false };
+}
+
+/**
  * Qué tan cerca está un decatipo (1-10) del polo deseado, en 0-100.
  * "medio" penaliza la desviación en AMBAS direcciones desde el centro (5.5).
  */
@@ -114,7 +150,7 @@ export function ajusteFactor(decatipo: number, direccion: DireccionFactor): numb
 }
 
 export interface DetalleAjusteFactor {
-  escala: Escala16PF5;
+  escala: EscalaPuntuable16PF5;
   decatipo: number;
   direccion: DireccionFactor;
   ajuste: number;
@@ -123,15 +159,27 @@ export interface DetalleAjusteFactor {
 /**
  * Ajuste del candidato al perfil objetivo del puesto, en 0-100. `undefined`
  * si no rindió el 16PF-5 o si ninguno de los factores del perfil llegó.
+ *
+ * `perfil` es obligatorio a propósito: con un valor por defecto, una vacante
+ * nueva se rankeaba contra el perfil de promotor social sin que ninguna
+ * llamada lo dijera. Ahora cada sitio tiene que resolverlo con
+ * perfilDeVacante() y el compilador no deja olvidarlo.
  */
 export function calcularAjuste16PF5(
   filas: { bateria: string; sten: number | null }[],
-  perfil: PerfilObjetivo16PF5 = PERFIL_16PF5_PROMOTOR_SOCIAL
+  perfil: PerfilObjetivo16PF5
 ): { ajuste: number | undefined; detalle: DetalleAjusteFactor[] } {
   const detalle: DetalleAjusteFactor[] = [];
   for (const fila of filas) {
     if (!fila.bateria.startsWith("16pf5_") || fila.sten === null) continue;
-    const escala = fila.bateria.replace("16pf5_", "") as Escala16PF5;
+    // El nombre de la batería viene de la base como texto libre, así que se
+    // comprueba contra la lista de escalas puntuables en vez de castearlo: eso
+    // deja fuera cualquier fila desconocida y, sobre todo, deja fuera IM —
+    // que es validez, no competencia, y no puede entrar al ajuste ni aunque
+    // alguien lo escriba en el perfil de la vacante.
+    const clave = fila.bateria.replace("16pf5_", "");
+    if (!(ESCALAS_PUNTUABLES_16PF5 as readonly string[]).includes(clave)) continue;
+    const escala = clave as EscalaPuntuable16PF5;
     const direccion = perfil[escala];
     if (!direccion) continue;
     detalle.push({ escala, decatipo: fila.sten, direccion, ajuste: ajusteFactor(fila.sten, direccion) });
@@ -308,7 +356,7 @@ export function apruebaPsicometricaYTecnica(
 export async function avanzarASenescytSiAplica(
   db: SupabaseClient,
   candidatoId: string,
-  vacante: Pick<Vacante, "corte_sten" | "corte_tecnica">
+  vacante: Pick<Vacante, "corte_sten" | "corte_tecnica" | "perfil_psicometrico">
 ): Promise<boolean> {
   const { data: candidato } = await db
     .from("mindeval_candidatos")
@@ -334,8 +382,13 @@ export async function avanzarASenescytSiAplica(
     puntaje_estandar?: number | null;
   })[]).filter((p) => !psicometricaIncompleta(p));
 
+  // El avance automático se mide contra el perfil objetivo de ESTA vacante.
+  // Si todavía no tiene uno configurado cae a la plantilla, igual que el
+  // ranking — lo que no puede pasar es que los dos usen perfiles distintos y
+  // el candidato avance con un número que la pantalla no muestra.
+  const { perfil } = perfilDeVacante(vacante);
   const ajustePsicometrico = calcularAjustePsicometrico({
-    ajuste16pf5: calcularAjuste16PF5(filasPsico).ajuste,
+    ajuste16pf5: calcularAjuste16PF5(filasPsico, perfil).ajuste,
     ajusteValanti: calcularAjusteVALANTI(filasPsico).ajuste,
   });
   const tecnicaTotal = (tecnica?.[0] as { puntaje_total: number | null } | undefined)?.puntaje_total ?? undefined;

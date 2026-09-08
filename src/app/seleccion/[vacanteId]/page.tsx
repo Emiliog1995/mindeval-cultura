@@ -9,6 +9,7 @@ import {
   calcularAjuste16PF5,
   calcularAjusteVALANTI,
   calcularAjustePsicometrico,
+  perfilDeVacante,
   calcularIdoneidadGlobal,
   corteAjustePorcentaje,
   interpretarIM,
@@ -221,6 +222,12 @@ export default function ProcesoVacante() {
       if (!verificacionPorCandidato.has(v.candidato_id)) verificacionPorCandidato.set(v.candidato_id, v);
     }
 
+    // El perfil objetivo con el que se rankea esta vacante. Si todavía no
+    // tiene uno propio se usa la plantilla sugerida y se avisa arriba del
+    // ranking — un cargo distinto rankeado contra el perfil de promotor
+    // social sale ordenado mal y nada en el resultado lo delata.
+    const { perfil: perfilObjetivo } = perfilDeVacante(v as Vacante);
+
     const conScore: CandidatoConScore[] = lista.map((c) => {
       const matchesC = (matches.data ?? []).filter((m: { candidato_id: string }) => m.candidato_id === c.id);
       const matchCv = matchesC.length ? matchesC[matchesC.length - 1].match_pct : undefined;
@@ -238,7 +245,7 @@ export default function ProcesoVacante() {
       // tiempo agotado tiene decatipos calculados sobre puntajes brutos
       // parciales y no es interpretable.
       const psicoCompletas = psicoDelCandidato.filter((p) => !psicometricaIncompleta(p));
-      const { ajuste: ajuste16pf5, detalle: detalleAjuste } = calcularAjuste16PF5(psicoCompletas);
+      const { ajuste: ajuste16pf5, detalle: detalleAjuste } = calcularAjuste16PF5(psicoCompletas, perfilObjetivo);
       const { ajuste: ajusteValanti } = calcularAjusteVALANTI(psicoCompletas);
       const ajustePsicometrico = calcularAjustePsicometrico({ ajuste16pf5, ajusteValanti });
       // El IM no puntúa: marca si el perfil se puede leer con normalidad.
@@ -960,6 +967,26 @@ export default function ProcesoVacante() {
               Ajustar criterios
             </button>
           </div>
+          {/* El ranking se ordena por el ajuste al perfil objetivo del cargo.
+              Si esta vacante no tiene el suyo configurado se está usando la
+              plantilla de promotor social de campo, y el orden puede estar
+              mal sin que nada en los números lo delate — por eso se dice
+              aquí, donde se ven sus efectos, y no solo en Editar vacante. */}
+          {!perfilDeVacante(vacante).configurado && (
+            <div style={{ margin: "0 24px 14px", background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: "11px 14px", fontSize: 12, color: "#8A6400", lineHeight: 1.55 }}>
+              <strong>Esta vacante no tiene perfil psicométrico propio.</strong> El ajuste al perfil se está
+              calculando con la plantilla de <em>promotor/gestor social de campo</em>. Si el cargo es otro, el orden
+              del ranking no corresponde:{" "}
+              <button
+                onClick={() => router.push(`/seleccion/${params.vacanteId}/editar`)}
+                style={{ background: "none", border: "none", color: "#8A6400", fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0 }}
+              >
+                configurar el perfil del cargo
+              </button>
+              .
+            </div>
+          )}
+
           {resultadoRecalculo && (
             <div style={{ margin: "0 24px 12px", fontSize: 12, color: "#41507A" }}>{resultadoRecalculo}</div>
           )}

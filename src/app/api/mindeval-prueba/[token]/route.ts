@@ -194,7 +194,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
     const { data: vacanteCortes } = await supabaseAdmin
       .from("mindeval_vacantes")
-      .select("corte_sten, corte_tecnica, tests_psicometricos, titulo, empresa, contacto_nombre, contacto_email")
+      .select("corte_sten, corte_tecnica, perfil_psicometrico, tests_psicometricos, titulo, empresa, contacto_nombre, contacto_email")
       .eq("id", s.vacante_id)
       .single();
 

@@ -6,6 +6,16 @@ import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
 import type { Vacante } from "@/lib/mindeval-types";
+import {
+  ESCALAS_PUNTUABLES_16PF5,
+  NOMBRES_ESCALA_16PF5,
+  normalizarPerfil16PF5,
+  perfilesEquivalentes,
+  type DireccionFactor,
+  type EscalaPuntuable16PF5,
+  type PerfilObjetivo16PF5,
+} from "@/lib/mindeval-16pf5";
+import { PLANTILLA_16PF5_PROMOTOR_SOCIAL } from "@/lib/mindeval-scoring";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
@@ -21,6 +31,38 @@ const NOMBRE_TEST: Record<"16pf5" | "kostick" | "disc" | "valanti", string> = {
   disc: "DISC",
   valanti: "VALANTI",
 };
+
+/**
+ * Qué significa cada dirección en el polo del factor, en las palabras del
+ * reclutador y no en las del manual. Sin esto, "alto en L" no le dice nada a
+ * quien tiene que configurar el cargo, y marcar al azar es peor que no
+ * marcar: produce un ranking equivocado con apariencia de válido.
+ */
+const POLOS_16PF5: Record<EscalaPuntuable16PF5, { alto: string; bajo: string }> = {
+  A:  { alto: "cálido, cercano",              bajo: "reservado, distante" },
+  B:  { alto: "razonamiento ágil",            bajo: "razonamiento concreto" },
+  C:  { alto: "estable, sostiene presión",    bajo: "reactivo emocionalmente" },
+  E:  { alto: "dominante, impone criterio",   bajo: "deferente, se acomoda" },
+  F:  { alto: "animado, expresivo",           bajo: "serio, contenido" },
+  G:  { alto: "cumple normas al pie",         bajo: "flexible con las reglas" },
+  H:  { alto: "atrevido, se expone",          bajo: "tímido, prudente" },
+  I:  { alto: "sensible, empático",           bajo: "objetivo, poco sentimental" },
+  L:  { alto: "desconfiado, vigilante",       bajo: "confiado, se deja acompañar" },
+  M:  { alto: "abstracto, imaginativo",       bajo: "práctico, aterrizado" },
+  N:  { alto: "reservado, calculador",        bajo: "abierto, transparente" },
+  O:  { alto: "aprensivo, se culpa",          bajo: "seguro, despreocupado" },
+  Q1: { alto: "abierto al cambio",            bajo: "apegado a lo conocido" },
+  Q2: { alto: "autosuficiente, solo",         bajo: "necesita grupo" },
+  Q3: { alto: "ordenado, perfeccionista",     bajo: "tolera el desorden" },
+  Q4: { alto: "tenso, con carga",             bajo: "relajado, tranquilo" },
+};
+
+const OPCIONES_DIRECCION: { valor: DireccionFactor | null; etiqueta: string }[] = [
+  { valor: "alto", etiqueta: "Alto" },
+  { valor: "medio", etiqueta: "Medio" },
+  { valor: "bajo", etiqueta: "Bajo" },
+  { valor: null, etiqueta: "No puntúa" },
+];
 
 interface Resumen {
   reactivados: number;
@@ -63,6 +105,11 @@ export default function EditarVacantePage() {
   const [corteTecnica, setCorteTecnica] = useState(70);
   const [modoTecnica, setModoTecnica] = useState<"caso_abierto" | "banco">("caso_abierto");
   const [tests, setTests] = useState<("16pf5" | "kostick" | "disc" | "valanti")[]>([]);
+  const [perfil, setPerfil] = useState<PerfilObjetivo16PF5>({});
+  // Si la vacante nunca configuró el suyo, la interfaz arranca precargada con
+  // la plantilla pero lo dice con todas sus letras — al guardar deja de ser
+  // una herencia invisible y pasa a ser una decisión del reclutador.
+  const [perfilEraPlantilla, setPerfilEraPlantilla] = useState(false);
 
   useEffect(() => {
     if (verificando) return;
@@ -91,6 +138,9 @@ export default function EditarVacantePage() {
       setCorteTecnica(Number(v.corte_tecnica));
       setModoTecnica(v.modo_tecnica ?? "caso_abierto");
       setTests(v.tests_psicometricos ?? []);
+      const propio = normalizarPerfil16PF5(v.perfil_psicometrico);
+      setPerfil(propio ?? { ...PLANTILLA_16PF5_PROMOTOR_SOCIAL });
+      setPerfilEraPlantilla(!propio);
       setCargando(false);
     })();
   }, [verificando, params.vacanteId]);
@@ -99,11 +149,26 @@ export default function EditarVacantePage() {
     setTests((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   }
 
+  function marcarFactor(escala: EscalaPuntuable16PF5, direccion: DireccionFactor | null) {
+    setPerfil((prev) => {
+      const siguiente = { ...prev };
+      if (direccion === null) delete siguiente[escala];
+      else siguiente[escala] = direccion;
+      return siguiente;
+    });
+  }
+
   function validar(): string | null {
     if (!titulo.trim()) return "El título de la vacante no puede quedar vacío.";
     if (!Number.isFinite(corteMatchCv) || corteMatchCv < 0 || corteMatchCv > 100) return "El corte de match de CV debe estar entre 0 y 100.";
     if (!Number.isFinite(corteSten) || corteSten < 0 || corteSten > 10) return "El corte de ajuste al perfil debe estar entre 0% y 100%.";
     if (!Number.isFinite(corteTecnica) || corteTecnica < 0 || corteTecnica > 100) return "El corte de prueba técnica debe estar entre 0 y 100.";
+    // Un perfil sin ni un factor deja el ajuste psicométrico en blanco para
+    // toda la vacante: nadie avanzaría a SENESCYT y el ranking se ordenaría
+    // solo por CV, sin ninguna señal de por qué.
+    if (tests.includes("16pf5") && Object.keys(perfil).length === 0) {
+      return "Marca al menos un factor del 16PF-5 como alto, medio o bajo: sin ninguno, el ajuste al perfil no se puede calcular.";
+    }
     return null;
   }
 
@@ -134,11 +199,13 @@ export default function EditarVacantePage() {
           corte_tecnica: corteTecnica,
           modo_tecnica: modoTecnica,
           tests_psicometricos: tests,
+          perfil_psicometrico: Object.keys(perfil).length ? perfil : null,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResumen(data.resumen as Resumen);
+      setPerfilEraPlantilla(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar la vacante.");
     } finally {
@@ -153,6 +220,7 @@ export default function EditarVacantePage() {
 
   const corteCvCambio = Number(vacante.corte_match_cv) !== corteMatchCv;
   const cortesPruebasCambiaron = Number(vacante.corte_sten) !== corteSten || Number(vacante.corte_tecnica) !== corteTecnica;
+  const perfilCambio = !perfilesEquivalentes(vacante.perfil_psicometrico, perfil);
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F6FA" }}>
@@ -323,6 +391,92 @@ export default function EditarVacantePage() {
           </div>
         </section>
 
+        {/* Perfil psicométrico objetivo del cargo — lo que de verdad ordena
+            el ranking. Antes estaba fijo en código (promotor social de campo)
+            y cualquier vacante nueva heredaba ese criterio en silencio. */}
+        <section style={card}>
+          <h2 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 800, color: NAVY }}>Perfil psicométrico del cargo</h2>
+          <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#7C89A8", lineHeight: 1.6 }}>
+            El ajuste al perfil no es un promedio de puntajes: mide qué tan cerca está cada candidato del perfil que
+            este cargo necesita. Marca, factor por factor, hacia dónde debe inclinarse.{" "}
+            <strong style={{ color: NAVY }}>Un factor sin dirección clara déjalo en “No puntúa”</strong> — se sigue
+            viendo completo en la ficha del candidato, pero no mueve el ranking.
+          </p>
+
+          {perfilEraPlantilla && (
+            <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", color: "#8A6400", padding: "11px 14px", borderRadius: 10, marginBottom: 16, fontSize: 12.5, lineHeight: 1.6 }}>
+              <strong>Esta vacante todavía no tiene perfil propio.</strong> Abajo está precargada la plantilla de
+              <em> promotor/gestor social de campo</em>, que es contra la que se está rankeando ahora mismo. Si el
+              cargo es otro, ajústala antes de guardar: un perfil equivocado ordena mal el ranking sin dar ningún
+              error.
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {ESCALAS_PUNTUABLES_16PF5.map((escala) => {
+              const actual = perfil[escala] ?? null;
+              return (
+                <div
+                  key={escala}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    background: actual ? "#F7F9FD" : "#FFFFFF",
+                    border: `1px solid ${actual ? "#E3E8F2" : "#F1F4FA"}`,
+                  }}
+                >
+                  <div style={{ minWidth: 190, flex: "1 1 190px" }}>
+                    <div style={{ fontSize: 12.5, color: NAVY, fontWeight: 700 }}>
+                      {escala} · {NOMBRES_ESCALA_16PF5[escala]}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#7C89A8", marginTop: 2 }}>
+                      alto: {POLOS_16PF5[escala].alto} · bajo: {POLOS_16PF5[escala].bajo}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {OPCIONES_DIRECCION.map((op) => {
+                      const activo = actual === op.valor;
+                      return (
+                        <button
+                          key={op.etiqueta}
+                          onClick={() => marcarFactor(escala, op.valor)}
+                          style={{
+                            padding: "5px 11px",
+                            borderRadius: 7,
+                            border: activo ? `2px solid ${NAVY}` : "1.5px solid #D5DCEB",
+                            background: activo ? NAVY : "#FFFFFF",
+                            color: activo ? "#FFFFFF" : "#41507A",
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {op.etiqueta}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ ...ayuda, marginTop: 12 }}>
+            El <strong>Índice de manipulación (IM)</strong> no aparece en esta lista a propósito: es una escala de
+            validez, no una competencia. Un IM alto significa que el candidato respondió buscando dar buena imagen y
+            que todo su perfil debe leerse con cautela — nunca que sea mejor ni peor candidato, así que no puntúa.
+          </div>
+          <div style={ayuda}>
+            <strong>{Object.keys(perfil).length}</strong> de {ESCALAS_PUNTUABLES_16PF5.length} factores puntúan.
+            Al guardar, los candidatos que ya rindieron se vuelven a comparar contra este perfil — sus respuestas y
+            decatipos no se tocan, solo cambia el ajuste que se calcula con ellos.
+          </div>
+        </section>
+
         <section style={card}>
           <h2 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 800, color: NAVY }}>Pruebas que rendirá el candidato</h2>
           <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#7C89A8", lineHeight: 1.6 }}>
@@ -363,7 +517,7 @@ export default function EditarVacantePage() {
           </div>
         </section>
 
-        {(corteCvCambio || cortesPruebasCambiaron) && (
+        {(corteCvCambio || cortesPruebasCambiaron || perfilCambio) && (
           <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", color: "#8A6400", padding: "12px 16px", borderRadius: 10, marginBottom: 18, fontSize: 12.5, lineHeight: 1.6 }}>
             <strong>Vas a cambiar un criterio que afecta el embudo.</strong> Al guardar:
             <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -374,6 +528,12 @@ export default function EditarVacantePage() {
                 </li>
               )}
               {cortesPruebasCambiaron && <li>Se revisa si alguien que ya rindió sus pruebas ahora califica para avanzar a SENESCYT.</li>}
+              {perfilCambio && (
+                <li>
+                  El perfil psicométrico cambió: el ajuste al perfil se recalcula para <strong>todos</strong> los
+                  candidatos de esta vacante y el orden del ranking puede moverse.
+                </li>
+              )}
             </ul>
           </div>
         )}

@@ -1,3 +1,5 @@
+import type { PerfilObjetivo16PF5 } from "./mindeval-16pf5";
+
 export type EtapaCandidato =
   | "postulado" | "filtro_cv" | "verificacion_titulo" | "psicometricas"
   | "tecnica" | "assessment" | "informe_final" | "entrevista" | "finalista" | "contratado" | "descartado";
@@ -77,6 +79,12 @@ export interface Vacante {
   corte_tecnica: number;
   modo_tecnica: "caso_abierto" | "banco";
   tests_psicometricos: ("16pf5" | "kostick" | "disc" | "valanti")[];
+  // Perfil objetivo del 16PF-5 con el que se rankea ESTA vacante: qué
+  // factores importan y en qué dirección. NULL = sin configurar, el código
+  // cae a la plantilla sugerida y la interfaz lo advierte (ver
+  // perfilDeVacante en mindeval-scoring y
+  // supabase/mindeval-vacante-perfil-psicometrico.sql).
+  perfil_psicometrico?: PerfilObjetivo16PF5 | null;
   // Caso especial: opciones de sede y filtro de salario en el formulario
   // público. Nulos en la gran mayoría de vacantes — solo se configuran a
   // mano (vía SQL) cuando un cliente puntual lo pide, como Fundación

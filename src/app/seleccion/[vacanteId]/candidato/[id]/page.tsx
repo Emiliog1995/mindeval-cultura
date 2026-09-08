@@ -18,6 +18,7 @@ import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evalu
   calcularAjuste16PF5,
   calcularAjusteVALANTI,
   calcularAjustePsicometrico,
+  perfilDeVacante,
   interpretarIM
 } from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
@@ -657,7 +658,11 @@ export default function PerfilCandidatoPage() {
   // dentro del % de idoneidad (ver mindeval-scoring.ts). Solo entran las
   // baterías completas.
   const psicoCompletas = psicoGuardados.filter((p) => !psicometricaIncompleta(p));
-  const { ajuste: ajuste16pf5, detalle: detalleAjuste } = calcularAjuste16PF5(psicoCompletas);
+  // El perfil objetivo es el de la vacante; sin uno configurado cae a la
+  // plantilla y se dice en el bloque de abajo, para que el reclutador no
+  // defienda ante el cliente un ajuste calculado contra otro cargo.
+  const { perfil: perfilObjetivo, configurado: perfilConfigurado } = perfilDeVacante(vacante);
+  const { ajuste: ajuste16pf5, detalle: detalleAjuste } = calcularAjuste16PF5(psicoCompletas, perfilObjetivo);
   const { ajuste: ajusteValanti, desviacionMedia: desviacionValanti } = calcularAjusteVALANTI(psicoCompletas);
   const ajustePsicometrico = calcularAjustePsicometrico({ ajuste16pf5, ajusteValanti });
   const avisoIM = interpretarIM(psicoCompletas.find((p) => p.bateria === "16pf5_IM")?.sten ?? null);
@@ -1020,6 +1025,14 @@ export default function PerfilCandidatoPage() {
                       <span style={{ minWidth: 34, textAlign: "right", fontWeight: 700, color: "#41507A" }}>{Math.round(d.ajuste)}%</span>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {!perfilConfigurado && (
+                <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", color: "#8A6400", borderRadius: 8, padding: "9px 12px", fontSize: 11.5, lineHeight: 1.55, marginTop: 12 }}>
+                  Esta vacante no tiene perfil psicométrico propio: el ajuste se calculó con la plantilla de
+                  <strong> promotor/gestor social de campo</strong>. Si el cargo es otro, configúralo en Editar
+                  vacante antes de usar este número para decidir.
                 </div>
               )}
 
