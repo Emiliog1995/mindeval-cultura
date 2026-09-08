@@ -10,6 +10,7 @@ import {
   calcularAjusteVALANTI,
   calcularAjustePsicometrico,
   calcularIdoneidadGlobal,
+  corteAjustePorcentaje,
   interpretarIM,
   promedio,
   psicometricaIncompleta,
@@ -929,7 +930,7 @@ export default function ProcesoVacante() {
         <section style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 16, overflow: "hidden" }}>
           <div style={{ padding: "18px 24px 12px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h2 style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: NAVY }}>Ranking de candidatos</h2>
-            <span style={{ fontSize: 12, color: "#7C89A8" }}>Idoneidad calculada por IA sobre el Manual de Puestos · descarte automático bajo el corte o requisito excluyente</span>
+            <span style={{ fontSize: 12, color: "#7C89A8" }}>Un solo puntaje que combina lo que se sabe hoy de cada candidato (CV, psicométrica, técnica) y se recalcula solo conforme avanzan · el desglose completo está en su ficha</span>
             <button
               onClick={recalcularPendientes}
               disabled={recalculando}
@@ -945,7 +946,7 @@ export default function ProcesoVacante() {
           <div style={{ margin: "0 24px 14px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {[
               { etiqueta: "Corte match CV", valor: `${vacante.corte_match_cv}%` },
-              { etiqueta: "Corte STEN", valor: `${vacante.corte_sten}/10` },
+              { etiqueta: "Corte ajuste al perfil", valor: `${corteAjustePorcentaje(vacante.corte_sten)}%` },
               { etiqueta: "Corte técnica", valor: `${vacante.corte_tecnica}/100` },
             ].map((c) => (
               <span key={c.etiqueta} style={{ background: "#F7F9FD", border: "1px solid #E3E8F2", borderRadius: 20, padding: "4px 12px", fontSize: 11.5, color: "#41507A" }}>
@@ -1144,7 +1145,7 @@ export default function ProcesoVacante() {
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
                   <th style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }} />
-                  {["#", "Candidato", "Teléfono", "Sede", "% Idoneidad", "Etapa actual", "Invitación", "Ajuste al perfil", "SENESCYT", "Acciones"].map((h) => (
+                  {["#", "Candidato", "Teléfono", "Sede", "Ajuste al perfil", "Etapa actual", "Invitación", "SENESCYT", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>
                       {h}
                     </th>
@@ -1167,7 +1168,7 @@ export default function ProcesoVacante() {
                     <React.Fragment key={c.id}>
                     {abreDescartados && (
                       <tr key="sep-descartados">
-                        <td colSpan={11} style={{ padding: "10px 20px", background: "#F7F9FD", borderTop: "2px solid #E3E8F2", fontSize: 11, fontWeight: 700, color: "#7C89A8", letterSpacing: 0.4 }}>
+                        <td colSpan={10} style={{ padding: "10px 20px", background: "#F7F9FD", borderTop: "2px solid #E3E8F2", fontSize: 11, fontWeight: 700, color: "#7C89A8", letterSpacing: 0.4 }}>
                           FUERA DEL PROCESO · {candidatos.filter((x) => x.etapa_actual === "descartado").length} descartado{candidatos.filter((x) => x.etapa_actual === "descartado").length > 1 ? "s" : ""}
                         </td>
                       </tr>
@@ -1209,11 +1210,62 @@ export default function ProcesoVacante() {
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.sede || "—"}</td>
                       <td style={{ padding: "12px 20px" }}>
                         {c.idoneidad !== null ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 60, height: 7, borderRadius: 6, background: "#EDF0F7", overflow: "hidden" }}>
-                              <div style={{ width: `${c.idoneidad}%`, height: "100%", background: GOLD }} />
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ width: 58, height: 7, borderRadius: 6, background: "#EDF0F7", overflow: "hidden" }}>
+                                <div style={{ width: `${c.idoneidad}%`, height: "100%", background: c.idoneidad >= 70 ? "#12805C" : c.idoneidad >= 50 ? GOLD : "#E08A3C" }} />
+                              </div>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: NAVY }}>{c.idoneidad}%</span>
                             </div>
-                            <span style={{ fontSize: 13, fontWeight: 800 }}>{c.idoneidad}%</span>
+                            {/* De qué está hecho ese número hoy. Va aquí y no
+                                en una columna aparte: dos porcentajes
+                                compitiendo en la misma tabla se leen como
+                                contradictorios (feedback del reclutador,
+                                2026-09-08). El desglose completo está en la
+                                ficha. */}
+                            <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 3 }}>
+                              {[
+                                c.matchCv !== undefined ? `CV ${Math.round(c.matchCv)}%` : null,
+                                c.ajustePsicometrico !== undefined ? `psico ${Math.round(c.ajustePsicometrico)}%` : null,
+                                c.tecnicaTotal !== undefined ? `téc ${Math.round(c.tecnicaTotal)}%` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                            {c.ajustePsicometrico !== undefined && (() => {
+                              const flojos = [...(c.detalleAjuste ?? [])]
+                                .sort((x, y) => x.ajuste - y.ajuste)
+                                .slice(0, 2)
+                                .filter((d) => d.ajuste < 50);
+                              if (!flojos.length) return null;
+                              return (
+                                <div style={{ fontSize: 10.5, color: "#A07A2C", marginTop: 2 }}>
+                                  bajo en {flojos.map((d) => `${d.escala} (${d.direccion})`).join(", ")}
+                                </div>
+                              );
+                            })()}
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                              {(() => {
+                                const im = interpretarIM(c.imDecatipo);
+                                if (!im || im.nivel === "ok") return null;
+                                return (
+                                  <span
+                                    title={im.mensaje}
+                                    style={{ background: im.nivel === "alerta" ? "#FDEDEA" : "#FFF6DE", color: im.nivel === "alerta" ? "#C4402F" : "#8A6400", fontWeight: 700, fontSize: 9.5, padding: "2px 7px", borderRadius: 20 }}
+                                  >
+                                    {im.nivel === "alerta" ? "⚠ IM alto" : "IM elevado"}
+                                  </span>
+                                );
+                              })()}
+                              {c.psicoIncompleta && (
+                                <span
+                                  title="Se le acabó el tiempo y envió sin responder todos los ítems. Su ajuste se calculó solo con la batería que sí completó — es menos evidencia que la de los demás."
+                                  style={{ background: "#FFF6DE", color: "#8A6400", fontWeight: 700, fontSize: 9.5, padding: "2px 7px", borderRadius: 20 }}
+                                >
+                                  ⚠ Prueba incompleta
+                                </span>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <span style={{ fontSize: 12, color: "#7C89A8" }}>Pendiente</span>
@@ -1245,50 +1297,6 @@ export default function ProcesoVacante() {
                             </div>
                           );
                         })()}
-                      </td>
-                      <td style={{ padding: "12px 20px", fontSize: 12 }}>
-                        {(() => {
-                          if (c.ajustePsicometrico === undefined) return "—";
-                          const a = Math.round(c.ajustePsicometrico);
-                          const color = a >= 70 ? "#12805C" : a >= 50 ? "#8A6400" : "#C4402F";
-                          // Los factores que más lo alejan del perfil: es lo
-                          // primero que el reclutador quiere saber cuando ve
-                          // un ajuste bajo.
-                          const flojos = [...(c.detalleAjuste ?? [])]
-                            .sort((x, y) => x.ajuste - y.ajuste)
-                            .slice(0, 2)
-                            .filter((d) => d.ajuste < 50);
-                          return (
-                            <div>
-                              <div style={{ fontWeight: 800, color, fontSize: 13 }}>{a}% ajuste</div>
-                              {flojos.length > 0 && (
-                                <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 2 }}>
-                                  bajo en {flojos.map((d) => `${d.escala} (${d.direccion})`).join(", ")}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                        {(() => {
-                          const im = interpretarIM(c.imDecatipo);
-                          if (!im || im.nivel === "ok") return null;
-                          return (
-                            <div
-                              title={im.mensaje}
-                              style={{ marginTop: 3, background: im.nivel === "alerta" ? "#FDEDEA" : "#FFF6DE", color: im.nivel === "alerta" ? "#C4402F" : "#8A6400", fontWeight: 700, fontSize: 10, padding: "2px 7px", borderRadius: 20, display: "inline-block" }}
-                            >
-                              {im.nivel === "alerta" ? "⚠ IM alto" : "IM elevado"}
-                            </div>
-                          );
-                        })()}
-                        {c.psicoIncompleta && (
-                          <div
-                            title="El candidato envió la prueba sin responder todos los ítems (se le acabó el tiempo). El resultado no es interpretable y no cuenta para el % de idoneidad ni para el avance automático."
-                            style={{ marginTop: 3, background: "#FFF6DE", color: "#8A6400", fontWeight: 700, fontSize: 10, padding: "2px 7px", borderRadius: 20, display: "inline-block" }}
-                          >
-                            ⚠ Prueba incompleta
-                          </div>
-                        )}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 11.5 }}>
                         {(() => {
@@ -1351,7 +1359,7 @@ export default function ProcesoVacante() {
                 })}
                 {candidatos.length === 0 && (
                   <tr>
-                    <td colSpan={11} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
+                    <td colSpan={10} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
                       Sin candidatos todavía. Comparte el link de postulación o añade uno manualmente.
                     </td>
                   </tr>

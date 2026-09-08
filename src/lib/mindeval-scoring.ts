@@ -268,13 +268,29 @@ export function evaluarDescarteCv(
  * IA decidiendo, es aplicar ese corte apenas existen ambos puntajes en vez
  * de esperar a que el reclutador revise candidato por candidato.
  */
+/**
+ * `corte_sten` se guarda en 0-10 por historia (era un corte sobre el promedio
+ * de decatipos, que ya no existe). De cara al usuario SIEMPRE se muestra y se
+ * edita como un porcentaje de ajuste al perfil — de ahí el ×10. Se conserva la
+ * columna tal cual para no migrar cortes en medio de un proceso en curso: un
+ * corte de 6 sigue significando lo mismo que significaba, "60 sobre 100".
+ */
+export function corteAjustePorcentaje(corteSten: number): number {
+  return corteSten * 10;
+}
+
 export function apruebaPsicometricaYTecnica(
-  stenPromedio: number | undefined,
+  ajustePsicometrico: number | undefined,
   tecnicaTotal: number | undefined,
   corteSten: number,
   corteTecnica: number
 ): boolean {
-  return stenPromedio !== undefined && tecnicaTotal !== undefined && stenPromedio >= corteSten && tecnicaTotal >= corteTecnica;
+  return (
+    ajustePsicometrico !== undefined &&
+    tecnicaTotal !== undefined &&
+    ajustePsicometrico >= corteAjustePorcentaje(corteSten) &&
+    tecnicaTotal >= corteTecnica
+  );
 }
 
 /**
@@ -303,27 +319,28 @@ export async function avanzarASenescytSiAplica(
   if (candidato.etapa_actual !== "psicometricas" && candidato.etapa_actual !== "tecnica") return false;
 
   const [{ data: psico }, { data: tecnica }] = await Promise.all([
-    db.from("mindeval_pruebas_psicometricas").select("bateria, sten, items_respondidos, items_esperados").eq("candidato_id", candidatoId),
+    db.from("mindeval_pruebas_psicometricas").select("bateria, sten, puntaje_estandar, items_respondidos, items_esperados").eq("candidato_id", candidatoId),
     db.from("mindeval_pruebas_tecnicas").select("puntaje_total").eq("candidato_id", candidatoId).order("created_at", { ascending: false }).limit(1),
   ]);
 
-  // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
-  // puntaje estándar de VALANTI (media 50 / DE 10) no son un STEN normado
-  // 1-10, se excluyen del promedio. Una prueba incompleta (enviada por
-  // tiempo agotado) también queda fuera: su decatipo se calculó sobre un
-  // puntaje bruto parcial y no es interpretable — sin filas válidas el
-  // promedio queda undefined y el candidato no avanza solo, que es
-  // exactamente lo que debe pasar (lo decide el reclutador a mano).
-  const stenPromedio = promedio(
-    ((psico ?? []) as (FilaCompletitudPsicometrica & { bateria: string; sten: number | null })[])
-      .filter((p) => !p.bateria.startsWith("kostick_") && !p.bateria.startsWith("disc_") && !p.bateria.startsWith("valanti_"))
-      .filter((p) => !psicometricaIncompleta(p))
-      .map((p) => p.sten)
-      .filter((s): s is number => s !== null)
-  );
+  // Una prueba incompleta (enviada por tiempo agotado) queda fuera: sus
+  // decatipos se calcularon sobre puntajes brutos parciales y no son
+  // interpretables. Sin baterías válidas el ajuste queda undefined y el
+  // candidato no avanza solo, que es exactamente lo que debe pasar — lo
+  // decide el reclutador a mano.
+  const filasPsico = ((psico ?? []) as (FilaCompletitudPsicometrica & {
+    bateria: string;
+    sten: number | null;
+    puntaje_estandar?: number | null;
+  })[]).filter((p) => !psicometricaIncompleta(p));
+
+  const ajustePsicometrico = calcularAjustePsicometrico({
+    ajuste16pf5: calcularAjuste16PF5(filasPsico).ajuste,
+    ajusteValanti: calcularAjusteVALANTI(filasPsico).ajuste,
+  });
   const tecnicaTotal = (tecnica?.[0] as { puntaje_total: number | null } | undefined)?.puntaje_total ?? undefined;
 
-  if (!apruebaPsicometricaYTecnica(stenPromedio, tecnicaTotal, vacante.corte_sten, vacante.corte_tecnica)) return false;
+  if (!apruebaPsicometricaYTecnica(ajustePsicometrico, tecnicaTotal, vacante.corte_sten, vacante.corte_tecnica)) return false;
 
   await db.from("mindeval_candidatos").update({ etapa_actual: "verificacion_titulo" }).eq("id", candidatoId);
   return true;

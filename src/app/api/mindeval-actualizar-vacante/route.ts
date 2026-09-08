@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(corteMatchCv) || corteMatchCv < 0 || corteMatchCv > 100) {
       return NextResponse.json({ error: "El corte de match de CV debe estar entre 0 y 100" }, { status: 400 });
     }
-    if (!Number.isFinite(corteSten) || corteSten < 1 || corteSten > 10) {
-      return NextResponse.json({ error: "El corte STEN debe estar entre 1 y 10" }, { status: 400 });
+    if (!Number.isFinite(corteSten) || corteSten < 0 || corteSten > 10) {
+      return NextResponse.json({ error: "El corte de ajuste al perfil debe estar entre 0% y 100%." }, { status: 400 });
     }
     if (!Number.isFinite(corteTecnica) || corteTecnica < 0 || corteTecnica > 100) {
       return NextResponse.json({ error: "El corte de prueba técnica debe estar entre 0 y 100" }, { status: 400 });

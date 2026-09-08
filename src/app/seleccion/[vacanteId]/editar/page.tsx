@@ -102,7 +102,7 @@ export default function EditarVacantePage() {
   function validar(): string | null {
     if (!titulo.trim()) return "El título de la vacante no puede quedar vacío.";
     if (!Number.isFinite(corteMatchCv) || corteMatchCv < 0 || corteMatchCv > 100) return "El corte de match de CV debe estar entre 0 y 100.";
-    if (!Number.isFinite(corteSten) || corteSten < 1 || corteSten > 10) return "El corte STEN debe estar entre 1 y 10.";
+    if (!Number.isFinite(corteSten) || corteSten < 0 || corteSten > 10) return "El corte de ajuste al perfil debe estar entre 0% y 100%.";
     if (!Number.isFinite(corteTecnica) || corteTecnica < 0 || corteTecnica > 100) return "El corte de prueba técnica debe estar entre 0 y 100.";
     return null;
   }
@@ -287,19 +287,24 @@ export default function EditarVacantePage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
             <div>
-              <label style={label}>Corte STEN psicométrico: {corteSten}</label>
+              <label style={label}>Corte de ajuste al perfil: {Math.round(corteSten * 10)}%</label>
+              {/* Se guarda en 0-10 (columna corte_sten, heredada del antiguo
+                  promedio de decatipos) pero se edita y se muestra siempre en
+                  porcentaje — es la única unidad que el reclutador ve en el
+                  resto del sistema. Ver corteAjustePorcentaje(). */}
               <input
                 type="number"
-                min={1}
-                max={10}
-                step={0.5}
-                value={corteSten}
-                onChange={(e) => setCorteSten(Number(e.target.value))}
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round(corteSten * 10)}
+                onChange={(e) => setCorteSten(Number(e.target.value) / 10)}
                 style={inputStyle}
               />
               <div style={ayuda}>
-                Promedio mínimo de decatipo (escala 1 a 10) para avanzar a Verificación SENESCYT. Solo cuenta el
-                16PF-5; KOSTICK, DISC y VALANTI no son escalas normadas y quedan fuera del promedio.
+                Ajuste mínimo al perfil psicométrico del puesto para avanzar automáticamente a Verificación SENESCYT.
+                Mide qué tan cerca está el candidato del perfil objetivo del cargo (no un promedio de puntajes): un
+                60% es un candidato claramente compatible.
               </div>
             </div>
             <div>
