@@ -10,6 +10,7 @@ import {
   calcularAjusteVALANTI,
   calcularAjustePsicometrico,
   perfilDeVacante,
+  sinEvidenciaDePruebas,
   calcularIdoneidadGlobal,
   corteAjustePorcentaje,
   interpretarIM,
@@ -282,11 +283,19 @@ export default function ProcesoVacante() {
     // leer quién iba primero de verdad.
     //
     // Contratados primero (el desenlace que se busca), después los activos
-    // por puntaje, y al final los descartados — también ordenados entre sí,
-    // para poder revisar a quién estuvo cerca del corte.
+    // por puntaje, luego los que fueron invitados a rendir y no dejaron
+    // ninguna evidencia válida, y al final los descartados — también
+    // ordenados entre sí, para poder revisar a quién estuvo cerca del corte.
+    //
+    // La franja "sin evidencia" es la respuesta a un caso real: el
+    // consolidado reparte su peso entre lo disponible, así que un candidato
+    // con la psicométrica vencida se calculaba con el CV al 100% y quedó en
+    // el puesto 02, por encima de gente que sí rindió. Se le saca el número
+    // en vez de inventarle un castigo — ver sinEvidenciaDePruebas().
     const rangoEstado = (c: CandidatoConScore): number => {
       if (c.etapa_actual === "contratado") return 0;
-      if (c.etapa_actual === "descartado") return 2;
+      if (c.etapa_actual === "descartado") return 3;
+      if (sinEvidenciaDePruebas(c)) return 2;
       return 1;
     };
     conScore.sort((a, b) => {
@@ -1182,17 +1191,40 @@ export default function ProcesoVacante() {
               <tbody>
                 {candidatos.map((c, i) => {
                   const descartado = c.etapa_actual === "descartado";
-                  // La posición es del ranking real: los descartados no
-                  // consumen un número (antes el índice del array los
-                  // contaba, así que el "01" podía caerle a alguien que ya
-                  // estaba fuera del proceso).
-                  const posicion = descartado ? null : candidatos.filter((x, j) => j < i && x.etapa_actual !== "descartado").length + 1;
+                  // Se le pidió rendir y no hay ninguna evidencia válida:
+                  // sale del ranking numerado en vez de competir con un
+                  // porcentaje hecho solo de su CV (ver sinEvidenciaDePruebas).
+                  const sinEvidencia = !descartado && sinEvidenciaDePruebas(c);
+                  const fueraDeCarrera = descartado || sinEvidencia;
+                  // La posición es del ranking real: ni los descartados ni
+                  // los que no rindieron consumen un número (antes el índice
+                  // del array los contaba, así que el "01" podía caerle a
+                  // alguien que ya estaba fuera del proceso).
+                  const posicion = fueraDeCarrera
+                    ? null
+                    : candidatos.filter((x, j) => j < i && x.etapa_actual !== "descartado" && !sinEvidenciaDePruebas(x)).length + 1;
                   // Frontera visible entre quien sigue en carrera y quien ya
                   // salió — sin ella las dos mitades se leen como una sola
                   // lista y no queda claro dónde termina el ranking real.
                   const abreDescartados = descartado && (i === 0 || candidatos[i - 1].etapa_actual !== "descartado");
+                  const abreSinEvidencia = sinEvidencia && (i === 0 || !sinEvidenciaDePruebas(candidatos[i - 1]) || candidatos[i - 1].etapa_actual === "descartado");
+                  const totalSinEvidencia = candidatos.filter((x) => x.etapa_actual !== "descartado" && sinEvidenciaDePruebas(x)).length;
                   return (
                     <React.Fragment key={c.id}>
+                    {abreSinEvidencia && (
+                      <tr key="sep-sin-evidencia">
+                        <td colSpan={10} style={{ padding: "10px 20px", background: "#FFFBEF", borderTop: "2px solid #F3E0AE", fontSize: 11, color: "#8A6400", lineHeight: 1.5 }}>
+                          <span style={{ fontWeight: 700, letterSpacing: 0.4 }}>
+                            SIN EVIDENCIA DE PRUEBAS · {totalSinEvidencia} candidato{totalSinEvidencia > 1 ? "s" : ""}
+                          </span>
+                          <span style={{ marginLeft: 8 }}>
+                            Siguen activos, pero no rindieron (o se les venció el enlace). No tienen puesto porque no
+                            hay con qué compararlos: puntuarlos solo con su CV los pondría por encima de quien sí
+                            rindió. Vuelven al ranking en cuanto rindan — reenvíales la invitación.
+                          </span>
+                        </td>
+                      </tr>
+                    )}
                     {abreDescartados && (
                       <tr key="sep-descartados">
                         <td colSpan={10} style={{ padding: "10px 20px", background: "#F7F9FD", borderTop: "2px solid #E3E8F2", fontSize: 11, fontWeight: 700, color: "#7C89A8", letterSpacing: 0.4 }}>
@@ -1217,6 +1249,14 @@ export default function ProcesoVacante() {
                             DESCARTADO
                           </span>
                         )}
+                        {sinEvidencia && (
+                          <span
+                            title="Sigue activo, pero no hay ninguna prueba válida suya: no rindió, se le venció el enlace, o lo único que envió fue una prueba incompleta por tiempo agotado. No se le da puesto porque su único dato es el CV, y compararlo así lo pondría por encima de quien sí rindió."
+                            style={{ marginLeft: 8, background: "#FFF6DE", color: "#8A6400", fontWeight: 700, fontSize: 10, padding: "2px 8px", borderRadius: 20 }}
+                          >
+                            NO RINDIÓ
+                          </span>
+                        )}
                         {/* Subió un archivo pero no se le pudo sacar el texto
                             (típicamente un PDF escaneado con la cámara, sin
                             capa de texto). Sin esta marca era idéntico a un
@@ -1236,7 +1276,21 @@ export default function ProcesoVacante() {
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.telefono || "—"}</td>
                       <td style={{ padding: "12px 20px", fontSize: 12.5, color: "#41507A" }}>{c.sede || "—"}</td>
                       <td style={{ padding: "12px 20px" }}>
-                        {c.idoneidad !== null ? (
+                        {/* Sin evidencia de pruebas no se enseña un
+                            consolidado: ese número sería el match de CV
+                            disfrazado de puntaje final y es justo la lectura
+                            que puso a alguien sin rendir en el puesto 02. Se
+                            muestra el CV como lo que es —el único dato que
+                            hay— y sin barra, para que no compita
+                            visualmente con los porcentajes de arriba. */}
+                        {sinEvidencia ? (
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: "#A7B2CC" }}>Sin rendir</div>
+                            <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 3 }}>
+                              {c.matchCv !== undefined ? `solo CV ${Math.round(c.matchCv)}%` : "sin datos todavía"}
+                            </div>
+                          </div>
+                        ) : c.idoneidad !== null ? (
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ width: 58, height: 7, borderRadius: 6, background: "#EDF0F7", overflow: "hidden" }}>

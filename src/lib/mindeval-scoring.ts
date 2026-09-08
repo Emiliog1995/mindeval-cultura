@@ -255,6 +255,52 @@ export function interpretarIM(decatipo: number | null | undefined): { nivel: "ok
 
 const PENALIZACION: Record<SeveridadAlerta, number> = { bajo: 0, medio: 5, alto: 15, critico: 30 };
 
+/**
+ * Un candidato al que ya se le pidió rendir pruebas y no hay NINGUNA
+ * evidencia válida de que las haya rendido.
+ *
+ * Por qué existe (decisión del reclutador, 2026-09, con el proceso de la
+ * Fundación en curso): el consolidado reparte su peso entre lo que hay
+ * disponible, así que un candidato del que solo se conoce el CV se calcula
+ * con el CV al 100%. El efecto real fue que alguien con la psicométrica
+ * VENCIDA quedó en el puesto 02 del ranking, por encima de gente que sí se
+ * sentó las dos horas a rendirla: no rendir no penalizaba, y en la práctica
+ * premiaba.
+ *
+ * La salida no es inventarle un castigo —cualquier factor de descuento
+ * sería una cifra sacada de la nada, imposible de defender ante el
+ * cliente— sino sacarlo del ranking numerado y decir lo único que se sabe
+ * con certeza: no hay con qué compararlo todavía. Sigue activo, sigue
+ * visible, y vuelve a la carrera solo en el momento en que rinda.
+ *
+ * Dos precisiones deliberadas:
+ *  - Quien todavía está en el filtro de CV NO entra aquí. A esa altura
+ *    nadie ha rendido nada y el CV es la única evidencia que existe para
+ *    todos por igual, así que compararlos entre sí es legítimo.
+ *  - Una batería enviada por tiempo agotado no cuenta como evidencia,
+ *    porque sus decatipos se calcularon sobre puntajes brutos parciales y
+ *    no son interpretables — es la misma regla que ya aplican el ajuste al
+ *    perfil y el avance automático a SENESCYT, no una penalización nueva.
+ *    Quien completó UNA batería de dos sí tiene evidencia válida y conserva
+ *    su puesto, con su bandera de prueba incompleta.
+ */
+export function sinEvidenciaDePruebas(c: {
+  etapa_actual: string;
+  estado?: string;
+  ajustePsicometrico?: number;
+  tecnicaTotal?: number;
+  assessmentPromedio?: number;
+}): boolean {
+  if (c.etapa_actual === "postulado" || c.etapa_actual === "filtro_cv") return false;
+  if (c.etapa_actual === "descartado" || c.etapa_actual === "contratado") return false;
+  if (c.estado !== undefined && c.estado !== "activo") return false;
+  return (
+    c.ajustePsicometrico === undefined &&
+    c.tecnicaTotal === undefined &&
+    c.assessmentPromedio === undefined
+  );
+}
+
 export function calcularIndiceIntegridad(alertas: { severidad: SeveridadAlerta }[]): number {
   const total = alertas.reduce((s, a) => s + PENALIZACION[a.severidad], 0);
   return Math.max(0, 100 - total);
