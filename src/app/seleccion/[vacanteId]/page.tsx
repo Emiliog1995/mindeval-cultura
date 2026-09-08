@@ -5,7 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
-import { calcularIdoneidadGlobal, categoriaSten, promedio, psicometricaIncompleta, type FilaCompletitudPsicometrica } from "@/lib/mindeval-scoring";
+import {
+  calcularAjuste16PF5,
+  calcularAjusteVALANTI,
+  calcularAjustePsicometrico,
+  calcularIdoneidadGlobal,
+  interpretarIM,
+  promedio,
+  psicometricaIncompleta,
+  type DetalleAjusteFactor,
+  type FilaCompletitudPsicometrica,
+} from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import {
   DESENLACES,
@@ -36,7 +46,9 @@ interface SesionResumen {
 interface CandidatoConScore extends Candidato {
   matchCv?: number;
   sesion?: SesionResumen;
-  stenPromedio?: number;
+  ajustePsicometrico?: number;
+  detalleAjuste?: DetalleAjusteFactor[];
+  imDecatipo?: number | null;
   tecnicaTotal?: number;
   assessmentPromedio?: number;
   idoneidad: number | null;
@@ -178,7 +190,7 @@ export default function ProcesoVacante() {
 
     const [matches, psico, tecnicas, assess, verificaciones, sesiones] = await Promise.all([
       ids.length ? supabase.from("mindeval_cv_matches").select("candidato_id, match_pct, generado_en").in("candidato_id", ids) : { data: [] },
-      ids.length ? supabase.from("mindeval_pruebas_psicometricas").select("candidato_id, bateria, sten, items_respondidos, items_esperados").in("candidato_id", ids) : { data: [] },
+      ids.length ? supabase.from("mindeval_pruebas_psicometricas").select("candidato_id, bateria, sten, puntaje_estandar, items_respondidos, items_esperados").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_pruebas_tecnicas").select("candidato_id, puntaje_total").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_assessment_evaluaciones").select("candidato_id, puntaje").in("candidato_id", ids) : { data: [] },
       ids.length ? supabase.from("mindeval_verificaciones_titulo").select("*").in("candidato_id", ids).order("created_at", { ascending: false }) : { data: [] },
@@ -214,28 +226,22 @@ export default function ProcesoVacante() {
 
       const psicoDelCandidato = (psico.data ?? []).filter(
         (p: { candidato_id: string }) => p.candidato_id === c.id
-      ) as (FilaCompletitudPsicometrica & { bateria: string; sten: number | null })[];
+      ) as (FilaCompletitudPsicometrica & { bateria: string; sten: number | null; puntaje_estandar?: number | null })[];
 
       // Una prueba enviada por tiempo agotado tiene el decatipo calculado
       // sobre un puntaje bruto parcial — se conserva y se muestra marcada en
       // la ficha, pero nunca entra al % de idoneidad.
       const hayPsicoIncompleta = psicoDelCandidato.some((p) => psicometricaIncompleta(p));
 
-      const stenValores = psicoDelCandidato
-        // el conteo ipsativo de KOSTICK (0-9), el segmento de DISC (1-7) y el
-        // puntaje estándar de VALANTI (media 50/DE 10) no son un STEN normado
-        // — mezclarlos en este promedio daría un número sin sentido, se
-        // excluyen del cálculo.
-        .filter(
-          (p) =>
-            p.sten !== null &&
-            !p.bateria.startsWith("kostick_") &&
-            !p.bateria.startsWith("disc_") &&
-            !p.bateria.startsWith("valanti_") &&
-            !psicometricaIncompleta(p)
-        )
-        .map((p) => p.sten as number);
-      const stenPromedio = promedio(stenValores);
+      // Solo las baterías completas entran al ajuste — una prueba enviada por
+      // tiempo agotado tiene decatipos calculados sobre puntajes brutos
+      // parciales y no es interpretable.
+      const psicoCompletas = psicoDelCandidato.filter((p) => !psicometricaIncompleta(p));
+      const { ajuste: ajuste16pf5, detalle: detalleAjuste } = calcularAjuste16PF5(psicoCompletas);
+      const { ajuste: ajusteValanti } = calcularAjusteVALANTI(psicoCompletas);
+      const ajustePsicometrico = calcularAjustePsicometrico({ ajuste16pf5, ajusteValanti });
+      // El IM no puntúa: marca si el perfil se puede leer con normalidad.
+      const imDecatipo = psicoCompletas.find((p) => p.bateria === "16pf5_IM")?.sten ?? null;
 
       const tecnicasC = (tecnicas.data ?? []).filter((t: { candidato_id: string }) => t.candidato_id === c.id);
       const tecnicaTotal = tecnicasC.length ? tecnicasC[tecnicasC.length - 1].puntaje_total : undefined;
@@ -248,10 +254,12 @@ export default function ProcesoVacante() {
       return {
         ...c,
         matchCv,
-        stenPromedio,
+        ajustePsicometrico,
+        detalleAjuste,
+        imDecatipo,
         tecnicaTotal,
         assessmentPromedio,
-        idoneidad: calcularIdoneidadGlobal({ matchCv, stenPromedio, tecnicaTotal, assessmentPromedio }),
+        idoneidad: calcularIdoneidadGlobal({ matchCv, ajustePsicometrico, tecnicaTotal, assessmentPromedio }),
         verificacion: verificacionPorCandidato.get(c.id),
         sesion: sesionPorCandidato.get(c.id),
         psicoIncompleta: hayPsicoIncompleta,
@@ -1136,7 +1144,7 @@ export default function ProcesoVacante() {
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
                   <th style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }} />
-                  {["#", "Candidato", "Teléfono", "Sede", "% Idoneidad", "Etapa actual", "Invitación", "STEN", "SENESCYT", "Acciones"].map((h) => (
+                  {["#", "Candidato", "Teléfono", "Sede", "% Idoneidad", "Etapa actual", "Invitación", "Ajuste al perfil", "SENESCYT", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>
                       {h}
                     </th>
@@ -1239,7 +1247,40 @@ export default function ProcesoVacante() {
                         })()}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 12 }}>
-                        {c.stenPromedio !== undefined ? `STEN ${c.stenPromedio.toFixed(1)} · ${categoriaSten(Math.round(c.stenPromedio))}` : "—"}
+                        {(() => {
+                          if (c.ajustePsicometrico === undefined) return "—";
+                          const a = Math.round(c.ajustePsicometrico);
+                          const color = a >= 70 ? "#12805C" : a >= 50 ? "#8A6400" : "#C4402F";
+                          // Los factores que más lo alejan del perfil: es lo
+                          // primero que el reclutador quiere saber cuando ve
+                          // un ajuste bajo.
+                          const flojos = [...(c.detalleAjuste ?? [])]
+                            .sort((x, y) => x.ajuste - y.ajuste)
+                            .slice(0, 2)
+                            .filter((d) => d.ajuste < 50);
+                          return (
+                            <div>
+                              <div style={{ fontWeight: 800, color, fontSize: 13 }}>{a}% ajuste</div>
+                              {flojos.length > 0 && (
+                                <div style={{ fontSize: 10.5, color: "#7C89A8", marginTop: 2 }}>
+                                  bajo en {flojos.map((d) => `${d.escala} (${d.direccion})`).join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {(() => {
+                          const im = interpretarIM(c.imDecatipo);
+                          if (!im || im.nivel === "ok") return null;
+                          return (
+                            <div
+                              title={im.mensaje}
+                              style={{ marginTop: 3, background: im.nivel === "alerta" ? "#FDEDEA" : "#FFF6DE", color: im.nivel === "alerta" ? "#C4402F" : "#8A6400", fontWeight: 700, fontSize: 10, padding: "2px 7px", borderRadius: 20, display: "inline-block" }}
+                            >
+                              {im.nivel === "alerta" ? "⚠ IM alto" : "IM elevado"}
+                            </div>
+                          );
+                        })()}
                         {c.psicoIncompleta && (
                           <div
                             title="El candidato envió la prueba sin responder todos los ítems (se le acabó el tiempo). El resultado no es interpretable y no cuenta para el % de idoneidad ni para el avance automático."

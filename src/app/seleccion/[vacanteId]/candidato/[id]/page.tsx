@@ -14,7 +14,12 @@ import { NOMBRES_ESCALA_16PF5, type Escala16PF5 } from "@/lib/mindeval-16pf5";
 import { NOMBRES_FACTOR_KOSTICK, type FactorKostick } from "@/lib/mindeval-kostick";
 import { NOMBRES_RASGO_DISC, PATRONES_DISC, TEXTOS_PATRON_DISC, NOMBRES_CATEGORIA_TEXTO_DISC } from "@/lib/mindeval-disc";
 import { NOMBRES_ESCALA_VALANTI, type EscalaVALANTI } from "@/lib/mindeval-valanti";
-import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio, psicometricaIncompleta } from "@/lib/mindeval-scoring";
+import { avanzarASenescytSiAplica, calcularIdoneidadGlobal, categoriaSten, evaluarDescarteCv, promedio, psicometricaIncompleta,
+  calcularAjuste16PF5,
+  calcularAjusteVALANTI,
+  calcularAjustePsicometrico,
+  interpretarIM
+} from "@/lib/mindeval-scoring";
 import { resolverPerfilCargo } from "@/lib/mindeval-perfil";
 import { ETAPAS, labelEtapa, type Candidato, type EtapaCandidato, type PreguntaBanco, type RespuestaBancoDetalle, type SesionPrueba, type TipoSesionPrueba, type Vacante, type VerificacionTitulo } from "@/lib/mindeval-types";
 
@@ -647,9 +652,19 @@ export default function PerfilCandidatoPage() {
     return "#C4402F";
   }
   const assessmentPromedio = promedio(assessRows.map((a) => a.puntaje));
+
+  // Ajuste al perfil objetivo del puesto — reemplaza al promedio de decatipos
+  // dentro del % de idoneidad (ver mindeval-scoring.ts). Solo entran las
+  // baterías completas.
+  const psicoCompletas = psicoGuardados.filter((p) => !psicometricaIncompleta(p));
+  const { ajuste: ajuste16pf5, detalle: detalleAjuste } = calcularAjuste16PF5(psicoCompletas);
+  const { ajuste: ajusteValanti, desviacionMedia: desviacionValanti } = calcularAjusteVALANTI(psicoCompletas);
+  const ajustePsicometrico = calcularAjustePsicometrico({ ajuste16pf5, ajusteValanti });
+  const avisoIM = interpretarIM(psicoCompletas.find((p) => p.bateria === "16pf5_IM")?.sten ?? null);
+
   const idoneidadGlobal = calcularIdoneidadGlobal({
     matchCv: matchCv?.match_pct,
-    stenPromedio,
+    ajustePsicometrico,
     tecnicaTotal: tecnicaGuardada ?? undefined,
     assessmentPromedio,
   });
@@ -961,6 +976,57 @@ export default function PerfilCandidatoPage() {
                   promedio STEN, del % de idoneidad y del avance automático a SENESCYT. Si quieres un resultado
                   válido, reagenda la prueba desde el bloque de arriba.
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Ajuste al perfil del puesto — el número que sí entra al ranking.
+              Se muestra desglosado a propósito: un porcentaje solo, sin decir
+              qué factores lo suben o lo bajan, no sirve para decidir ni para
+              defender la decisión ante el cliente. */}
+          {ajustePsicometrico !== undefined && (
+            <div style={{ marginTop: 16, background: "#F7F9FD", border: "1px solid #E3E8F2", borderRadius: 12, padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Ajuste al perfil del puesto</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: ajustePsicometrico >= 70 ? "#12805C" : ajustePsicometrico >= 50 ? "#8A6400" : "#C4402F" }}>
+                  {Math.round(ajustePsicometrico)}%
+                </div>
+                <div style={{ fontSize: 11.5, color: "#7C89A8" }}>
+                  {ajuste16pf5 !== undefined && `16PF-5 ${Math.round(ajuste16pf5)}%`}
+                  {ajuste16pf5 !== undefined && ajusteValanti !== undefined && " · "}
+                  {ajusteValanti !== undefined && `VALANTI ${Math.round(ajusteValanti)}%${desviacionValanti !== undefined ? ` (desviación media ${desviacionValanti.toFixed(1)} pts)` : ""}`}
+                </div>
+              </div>
+
+              {avisoIM && avisoIM.nivel !== "ok" && (
+                <div style={{ background: avisoIM.nivel === "alerta" ? "#FDEDEA" : "#FFFBEF", border: `1px solid ${avisoIM.nivel === "alerta" ? "#F0BDB4" : "#F3E0AE"}`, color: avisoIM.nivel === "alerta" ? "#C4402F" : "#8A6400", borderRadius: 8, padding: "9px 12px", fontSize: 12, lineHeight: 1.55, marginBottom: 12 }}>
+                  {avisoIM.mensaje}
+                </div>
+              )}
+
+              {detalleAjuste.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {[...detalleAjuste].sort((a, b) => b.ajuste - a.ajuste).map((d) => (
+                    <div key={d.escala} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+                      <span style={{ minWidth: 168, color: "#41507A" }}>
+                        <strong style={{ color: NAVY }}>{d.escala}</strong> · {NOMBRES_ESCALA_16PF5[d.escala]}
+                      </span>
+                      <span style={{ minWidth: 96, color: "#7C89A8" }}>
+                        decatipo {d.decatipo} / se busca {d.direccion}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 60, height: 6, borderRadius: 5, background: "#E3E8F2", overflow: "hidden" }}>
+                        <div style={{ width: `${Math.round(d.ajuste)}%`, height: "100%", background: d.ajuste >= 70 ? "#12805C" : d.ajuste >= 50 ? GOLD : "#C4402F" }} />
+                      </div>
+                      <span style={{ minWidth: 34, textAlign: "right", fontWeight: 700, color: "#41507A" }}>{Math.round(d.ajuste)}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ fontSize: 11, color: "#7C89A8", marginTop: 12, lineHeight: 1.55 }}>
+                Solo se puntúan los factores con una dirección clara para este cargo. Los demás se leen abajo en el
+                perfil completo, pero no mueven el ranking. El Índice de manipulación (IM) nunca puntúa: solo indica
+                si el perfil se puede interpretar con normalidad.
               </div>
             </div>
           )}

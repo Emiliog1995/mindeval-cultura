@@ -18,15 +18,22 @@ export function percentilDeSten(sten: number): number {
   return Math.round(((sten - 1) / 9) * 100);
 }
 
+/**
+ * `ajustePsicometrico` ya viene en 0-100 y mide ajuste al perfil del puesto
+ * (ver calcularAjustePsicometrico). Antes este parámetro era `stenPromedio`
+ * —el promedio de los 17 decatipos del 16PF-5— que valía ~5.5 para
+ * cualquier persona y por lo tanto aportaba un 55% fijo a todos los
+ * candidatos: ocupaba un 25% del puntaje sin distinguir a nadie.
+ */
 export function calcularIdoneidadGlobal(input: {
   matchCv?: number;
-  stenPromedio?: number;
+  ajustePsicometrico?: number;
   tecnicaTotal?: number;
   assessmentPromedio?: number;
 }): number | null {
   const pesos: Array<[number | undefined, number]> = [
     [input.matchCv, 0.3],
-    [input.stenPromedio !== undefined ? (input.stenPromedio / 10) * 100 : undefined, 0.25],
+    [input.ajustePsicometrico, 0.25],
     [input.tecnicaTotal, 0.25],
     [input.assessmentPromedio !== undefined ? (input.assessmentPromedio / 10) * 100 : undefined, 0.2],
   ];
@@ -35,6 +42,167 @@ export function calcularIdoneidadGlobal(input: {
   const pesoTotal = disponibles.reduce((s, [, p]) => s + p, 0);
   const suma = disponibles.reduce((s, [v, p]) => s + v * p, 0);
   return Math.round(suma / pesoTotal);
+}
+
+// ─── Ajuste al perfil psicométrico ──────────────────────────────────────────
+//
+// Por qué existe esto (auditoría 2026-09-08, con los resultados reales del
+// primer proceso en la mano): el ranking promediaba los 17 decatipos del
+// 16PF-5 y usaba ese número como "nivel psicométrico". Estaba mal por tres
+// razones independientes, y las tres a la vez explican por qué TODOS los
+// candidatos salían "Bajo":
+//
+//  1. El decatipo está normado con media 5.5 en CADA escala. Promediar 17
+//     escalas de cualquier persona da siempre ~5.5: el número no puede
+//     discriminar entre candidatos, por construcción.
+//  2. Los factores del 16PF-5 son BIPOLARES, no "más es mejor". Vigilancia
+//     (L) alta es desconfianza; Aprensión (O) alta es ansiedad; Tensión (Q4)
+//     alta es irritabilidad. El promedio premiaba "desconfiado, ansioso y
+//     tenso" exactamente igual que "cálido y estable".
+//  3. Metía el IM (Índice de manipulación) como si fuera una competencia. El
+//     IM es una escala de VALIDEZ: mide si respondió con sinceridad. Un IM
+//     alto hace que el perfil sea MENOS confiable, no mejor candidato.
+//
+// La única forma correcta de convertir un perfil de personalidad en un
+// puntaje de selección es contra un PERFIL OBJETIVO del puesto: qué factores
+// importan y en qué dirección. Eso no se infiere del test, lo define quien
+// conoce el cargo.
+
+export type DireccionFactor = "alto" | "medio" | "bajo";
+
+export type PerfilObjetivo16PF5 = Partial<Record<Escala16PF5, DireccionFactor>>;
+
+/**
+ * Perfil objetivo por defecto, derivado del cargo tipo "promotor/gestor
+ * social de campo" (acompañamiento a familias, visitas domiciliarias,
+ * talleres, gestión de fichas y expedientes, cumplimiento de políticas de
+ * protección) y validado con la consultora responsable del proceso.
+ *
+ * Los factores que NO aparecen aquí no puntúan a propósito: no tienen una
+ * dirección clara de "mejor" para este cargo, y puntuarlos sería inventar
+ * criterio. Se siguen mostrando completos en la ficha del candidato, que es
+ * donde el perfil se interpreta.
+ *
+ * B (Razonamiento) queda fuera deliberadamente: la escala de razonamiento del
+ * 16PF-5 es muy breve y no es un test cognitivo — usarla para rankear sería
+ * estirarla más de lo que aguanta.
+ *
+ * IM nunca entra aquí: es validez, no competencia (ver interpretarIM).
+ */
+export const PERFIL_16PF5_PROMOTOR_SOCIAL: PerfilObjetivo16PF5 = {
+  A: "alto",    // Afabilidad — trabaja cara a cara con las familias
+  C: "alto",    // Estabilidad emocional — sostiene situaciones duras
+  G: "alto",    // Atención a las normas — políticas de protección, no negociable
+  H: "medio",   // Atrevimiento — toca puertas, pero sin invadir
+  I: "alto",    // Sensibilidad — empatía real con población vulnerable
+  Q2: "alto",   // Autosuficiencia — trabaja solo en campo
+  Q3: "alto",   // Perfeccionismo — fichas, expedientes, registros
+  L: "bajo",    // Vigilancia — la desconfianza rompe el vínculo
+  O: "bajo",    // Aprensión — la ansiedad alta desgasta y rota
+  Q4: "bajo",   // Tensión — el puesto ya trae carga emocional propia
+};
+
+/**
+ * Qué tan cerca está un decatipo (1-10) del polo deseado, en 0-100.
+ * "medio" penaliza la desviación en AMBAS direcciones desde el centro (5.5).
+ */
+export function ajusteFactor(decatipo: number, direccion: DireccionFactor): number {
+  const d = Math.max(1, Math.min(10, decatipo));
+  if (direccion === "alto") return ((d - 1) / 9) * 100;
+  if (direccion === "bajo") return ((10 - d) / 9) * 100;
+  return Math.max(0, 1 - Math.abs(d - 5.5) / 4.5) * 100;
+}
+
+export interface DetalleAjusteFactor {
+  escala: Escala16PF5;
+  decatipo: number;
+  direccion: DireccionFactor;
+  ajuste: number;
+}
+
+/**
+ * Ajuste del candidato al perfil objetivo del puesto, en 0-100. `undefined`
+ * si no rindió el 16PF-5 o si ninguno de los factores del perfil llegó.
+ */
+export function calcularAjuste16PF5(
+  filas: { bateria: string; sten: number | null }[],
+  perfil: PerfilObjetivo16PF5 = PERFIL_16PF5_PROMOTOR_SOCIAL
+): { ajuste: number | undefined; detalle: DetalleAjusteFactor[] } {
+  const detalle: DetalleAjusteFactor[] = [];
+  for (const fila of filas) {
+    if (!fila.bateria.startsWith("16pf5_") || fila.sten === null) continue;
+    const escala = fila.bateria.replace("16pf5_", "") as Escala16PF5;
+    const direccion = perfil[escala];
+    if (!direccion) continue;
+    detalle.push({ escala, decatipo: fila.sten, direccion, ajuste: ajusteFactor(fila.sten, direccion) });
+  }
+  if (!detalle.length) return { ajuste: undefined, detalle };
+  return { ajuste: detalle.reduce((s, d) => s + d.ajuste, 0) / detalle.length, detalle };
+}
+
+/**
+ * Ajuste al estándar organizacional de VALANTI, en 0-100.
+ *
+ * VALANTI es IPSATIVO (el candidato reparte 3 puntos entre dos frases, el
+ * total está fijo), así que nadie puede salir alto en los cinco valores:
+ * subir en uno obliga a bajar en otro. Por eso no se mide "qué tan alto
+ * puntuó" sino qué tan parecida es la FORMA de su perfil a la que la
+ * organización busca — la desviación media absoluta contra el estándar que
+ * el propio instrumento define para cada valor.
+ *
+ * 0 puntos de desviación = 100. La escala se satura a 20 puntos de
+ * desviación media (2 desviaciones típicas), donde el ajuste llega a 0.
+ */
+const DESVIACION_MAXIMA_VALANTI = 20;
+
+export function calcularAjusteVALANTI(
+  filas: { bateria: string; puntaje_estandar?: number | null }[]
+): { ajuste: number | undefined; desviacionMedia: number | undefined } {
+  const desviaciones: number[] = [];
+  for (const fila of filas) {
+    if (!fila.bateria.startsWith("valanti_") || fila.puntaje_estandar === null || fila.puntaje_estandar === undefined) continue;
+    const escala = fila.bateria.replace("valanti_", "") as EscalaVALANTI;
+    const norma = NORMAS_VALANTI[escala];
+    if (!norma) continue;
+    desviaciones.push(Math.abs(fila.puntaje_estandar - norma.estandarOrganizacional));
+  }
+  if (!desviaciones.length) return { ajuste: undefined, desviacionMedia: undefined };
+  const desviacionMedia = desviaciones.reduce((s, d) => s + d, 0) / desviaciones.length;
+  const ajuste = Math.max(0, 1 - desviacionMedia / DESVIACION_MAXIMA_VALANTI) * 100;
+  return { ajuste, desviacionMedia };
+}
+
+/**
+ * El número psicométrico que entra al % de idoneidad: el promedio de los
+ * ajustes disponibles. Si el candidato rindió las dos baterías pesan igual;
+ * si rindió una sola, esa manda. `undefined` si no hay ninguna.
+ */
+export function calcularAjustePsicometrico(input: { ajuste16pf5?: number; ajusteValanti?: number }): number | undefined {
+  const partes = [input.ajuste16pf5, input.ajusteValanti].filter((v): v is number => v !== undefined);
+  if (!partes.length) return undefined;
+  return partes.reduce((s, v) => s + v, 0) / partes.length;
+}
+
+/**
+ * El IM no puntúa: avisa. Un decatipo alto significa que el candidato
+ * respondió buscando dar buena imagen, así que TODO su perfil debe leerse
+ * con cautela — no que sea peor candidato.
+ */
+export function interpretarIM(decatipo: number | null | undefined): { nivel: "ok" | "revisar" | "alerta"; mensaje: string } | null {
+  if (decatipo === null || decatipo === undefined) return null;
+  if (decatipo >= 8) {
+    return {
+      nivel: "alerta",
+      mensaje: "Índice de manipulación alto: respondió buscando dar una buena imagen. Interpreta todo su perfil con cautela y contrástalo en la entrevista.",
+    };
+  }
+  if (decatipo >= 7) {
+    return {
+      nivel: "revisar",
+      mensaje: "Índice de manipulación algo elevado: puede haber respondido pensando en lo que se espera de él. Contrasta los rasgos clave en la entrevista.",
+    };
+  }
+  return { nivel: "ok", mensaje: "Índice de manipulación dentro de lo esperado: el perfil se puede interpretar con normalidad." };
 }
 
 const PENALIZACION: Record<SeveridadAlerta, number> = { bajo: 0, medio: 5, alto: 15, critico: 30 };
