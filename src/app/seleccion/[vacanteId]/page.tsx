@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
@@ -258,7 +258,26 @@ export default function ProcesoVacante() {
       };
     });
 
-    conScore.sort((a, b) => (b.idoneidad ?? -1) - (a.idoneidad ?? -1));
+    // El orden es una carrera, no una lista: quien sigue compitiendo va
+    // arriba, ordenado por su puntaje, y quien ya salió del proceso va al
+    // fondo. Antes se ordenaba SOLO por idoneidad, así que un descartado con
+    // buen match de CV quedaba por encima de un candidato activo y el
+    // reclutador veía "aprobado, no aprobado, aprobado" en zigzag, sin poder
+    // leer quién iba primero de verdad.
+    //
+    // Contratados primero (el desenlace que se busca), después los activos
+    // por puntaje, y al final los descartados — también ordenados entre sí,
+    // para poder revisar a quién estuvo cerca del corte.
+    const rangoEstado = (c: CandidatoConScore): number => {
+      if (c.etapa_actual === "contratado") return 0;
+      if (c.etapa_actual === "descartado") return 2;
+      return 1;
+    };
+    conScore.sort((a, b) => {
+      const porEstado = rangoEstado(a) - rangoEstado(b);
+      if (porEstado !== 0) return porEstado;
+      return (b.idoneidad ?? -1) - (a.idoneidad ?? -1);
+    });
     setCandidatos(conScore);
     setLoading(false);
   }
@@ -1127,13 +1146,30 @@ export default function ProcesoVacante() {
               <tbody>
                 {candidatos.map((c, i) => {
                   const descartado = c.etapa_actual === "descartado";
+                  // La posición es del ranking real: los descartados no
+                  // consumen un número (antes el índice del array los
+                  // contaba, así que el "01" podía caerle a alguien que ya
+                  // estaba fuera del proceso).
+                  const posicion = descartado ? null : candidatos.filter((x, j) => j < i && x.etapa_actual !== "descartado").length + 1;
+                  // Frontera visible entre quien sigue en carrera y quien ya
+                  // salió — sin ella las dos mitades se leen como una sola
+                  // lista y no queda claro dónde termina el ranking real.
+                  const abreDescartados = descartado && (i === 0 || candidatos[i - 1].etapa_actual !== "descartado");
                   return (
-                    <tr key={c.id} style={{ borderTop: "1px solid #EEF1F7", opacity: descartado ? 0.55 : 1 }}>
+                    <React.Fragment key={c.id}>
+                    {abreDescartados && (
+                      <tr key="sep-descartados">
+                        <td colSpan={11} style={{ padding: "10px 20px", background: "#F7F9FD", borderTop: "2px solid #E3E8F2", fontSize: 11, fontWeight: 700, color: "#7C89A8", letterSpacing: 0.4 }}>
+                          FUERA DEL PROCESO · {candidatos.filter((x) => x.etapa_actual === "descartado").length} descartado{candidatos.filter((x) => x.etapa_actual === "descartado").length > 1 ? "s" : ""}
+                        </td>
+                      </tr>
+                    )}
+                    <tr style={{ borderTop: "1px solid #EEF1F7", opacity: descartado ? 0.55 : 1 }}>
                       <td style={{ padding: "12px 20px" }}>
                         <input type="checkbox" checked={seleccionados.has(c.id)} onChange={() => toggleSeleccionado(c.id)} disabled={descartado} style={{ cursor: descartado ? "not-allowed" : "pointer" }} />
                       </td>
-                      <td style={{ padding: "12px 20px", fontSize: 13, fontWeight: 800, color: i === 0 && !descartado ? GOLD : "#A7B2CC" }}>
-                        {String(i + 1).padStart(2, "0")}
+                      <td style={{ padding: "12px 20px", fontSize: 13, fontWeight: 800, color: posicion === 1 ? GOLD : "#A7B2CC" }}>
+                        {posicion === null ? "—" : String(posicion).padStart(2, "0")}
                       </td>
                       <td style={{ padding: "12px 20px", fontSize: 13, fontWeight: 700, color: NAVY }}>
                         {c.nombre_completo}
@@ -1269,6 +1305,7 @@ export default function ProcesoVacante() {
                         </div>
                       </td>
                     </tr>
+                    </React.Fragment>
                   );
                 })}
                 {candidatos.length === 0 && (
