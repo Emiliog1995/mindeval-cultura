@@ -208,8 +208,8 @@ export default function EvaluarToken360() {
           <h2 className="text-sm font-bold text-white">Cómo llenar esta evaluación</h2>
 
           <p className="text-xs text-gray-300 leading-relaxed">
-            Calificás <strong className="text-white">del 1 al 5</strong> (no hay 0). Podés usar decimales:
-            si dudás entre 3 y 4, dejá la barra en 3.5.
+            Calificas <strong className="text-white">del 1 al 5</strong> (no hay 0). Puedes usar decimales:
+            si dudas entre 3 y 4, deja la barra en 3.5.
           </p>
 
           <div className="space-y-1 pt-1">
@@ -228,7 +228,7 @@ export default function EvaluarToken360() {
 
           {data.token.fuente === "jefe" && (
             <div className="pt-2 mt-1 border-t border-[#10b981]/25 space-y-2">
-              <p className="text-xs font-bold text-white">Como jefe directo tenés dos secciones más</p>
+              <p className="text-xs font-bold text-white">Como jefe directo tienes dos secciones más</p>
               <p className="text-[11px] text-gray-300 leading-relaxed">
                 <strong className="text-white">Potencial:</strong> solo lo califica el jefe. No mide lo que la
                 persona ya hace bien, sino hasta dónde podría llegar. Se usa la misma escala del 1 al 5.
@@ -260,7 +260,7 @@ export default function EvaluarToken360() {
 
           <p className="text-[11px] text-gray-400 leading-relaxed pt-1 border-t border-[#10b981]/25">
             El punto <span className="text-amber-400">●</span> marca lo que todavía no calificaste. No podés enviar
-            hasta que no quede ninguno: mové cada barra aunque quieras dejarla donde está.
+            hasta que no quede ninguno: mueve cada barra aunque quieras dejarla donde está.
             Se responde una sola vez y tus respuestas se consolidan con las del resto de evaluadores.
           </p>
         </div>

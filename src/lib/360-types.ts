@@ -105,6 +105,11 @@ export interface Token360 {
   periodo: string;
   completado: boolean;
   created_at: string;
+  /** A quién hay que enviarle este enlace. Se guarda al generarlo. */
+  evaluador_nombre?: string | null;
+  evaluador_email?: string | null;
+  /** Cuándo salió el correo. null = todavía no se envió. */
+  enviado_en?: string | null;
 }
 
 export interface Pdi360 {

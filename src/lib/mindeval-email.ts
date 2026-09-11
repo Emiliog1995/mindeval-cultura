@@ -16,7 +16,7 @@ import { VENTANA_HORAS, limiteDeAcceso, formatoEcuador } from "@/lib/mindeval-ve
  * reclutador vea "falta configurar el remitente" en el panel a que crea que
  * la invitación salió cuando no salió.
  */
-function remitente(): { from: string } | { error: string } {
+export function remitente(): { from: string } | { error: string } {
   const from = process.env.RESEND_FROM;
   if (!from?.trim()) {
     return { error: "Falta configurar RESEND_FROM con un dominio verificado. Sin eso los correos no llegan a los candidatos." };
@@ -88,7 +88,7 @@ const LABEL_TIPO: Record<TipoSesionPrueba, string> = {
 // nombreCandidato/tituloVacante/empresa llegan de datos que el propio
 // candidato (o, para empresa/vacante, el reclutador) escribió en un
 // formulario — nunca se insertan crudos en el HTML del correo.
-function escapeHtml(texto: string): string {
+export function escapeHtml(texto: string): string {
   return texto
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

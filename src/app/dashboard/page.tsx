@@ -83,7 +83,9 @@ function DashboardInner() {
   // Nadie recibe un enlace sin que la consultora lo haya dejado marcado.
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [nuevoDestinatario, setNuevoDestinatario] = useState<{ fuente: FuenteEvaluacion; personaId: string }>({ fuente: "par", personaId: "" });
-  const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null } }> }>>([]);
+  const [enviandoCorreos, setEnviandoCorreos] = useState<{ hechos: number; total: number } | null>(null);
+  const [resultadoEnvio, setResultadoEnvio] = useState<{ enviados: number; fallidos: { email?: string; motivo?: string }[] } | null>(null);
+  const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ tokenId: string; fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null }; enviado?: boolean }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
   const [error360, setError360] = useState("");
   const [progresoMasivo360, setProgresoMasivo360] = useState<{ total: number; hecho: number } | null>(null);
@@ -330,7 +332,13 @@ function DashboardInner() {
       }
       // Sin nómina detrás (alta manual, o si falló la IA) se cae al
       // comportamiento anterior: un enlace por fuente aplicable.
-      const fuentes = envios.length > 0 ? envios.map((e) => e.fuente) : fuentesAplicables;
+      const fuentes = envios.length > 0
+        ? envios.map((e) => ({
+            fuente: e.fuente,
+            evaluador_nombre: e.destinatario.nombre,
+            evaluador_email: e.destinatario.email,
+          }))
+        : fuentesAplicables;
       const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
       const base = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -343,6 +351,7 @@ function DashboardInner() {
         porFuente.set(e.fuente, lista);
       }
       const links = tokens.map((t) => ({
+        tokenId: t.id,
         fuente: t.fuente,
         url: `${base}/evaluar-360/${t.token}`,
         destinatario: porFuente.get(t.fuente)?.shift(),
@@ -400,7 +409,7 @@ function DashboardInner() {
       for (const [nombre, cargo, departamento, jefe] of filas) {
         const evaluado = await crear360Evaluado({ nombre, cargo, departamento, empresa: nombreEmpresaSeleccionada, empresa_id: nuevaEmpresaId || undefined, jefe: jefe || undefined });
         const tokens: Token360[] = await crearTokens360(evaluado.id, datos360.periodo, fuentes);
-        const links = tokens.map((t) => ({ fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
+        const links = tokens.map((t) => ({ tokenId: t.id, fuente: t.fuente, url: `${base}/evaluar-360/${t.token}` }));
         nuevos.push({ evaluado, empresa: nombreEmpresaSeleccionada, links });
         setProgresoMasivo360((p) => p ? { ...p, hecho: p.hecho + 1 } : p);
       }
@@ -411,6 +420,45 @@ function DashboardInner() {
     } finally {
       setCreandoSesion(false);
       setProgresoMasivo360(null);
+    }
+  }
+
+  /**
+   * Manda los correos en lotes. La ruta acepta 20 por llamada porque cada
+   * envío lleva una pausa para no chocar con el límite de Resend, y una
+   * función de Vercel se corta a los 60 segundos.
+   */
+  async function enviarCorreos360(links: Array<{ tokenId: string }>, reenviar: boolean) {
+    const ids = links.map((l) => l.tokenId).filter(Boolean);
+    if (ids.length === 0) return;
+    setResultadoEnvio(null);
+    setEnviandoCorreos({ hechos: 0, total: ids.length });
+    const fallidos: { email?: string; motivo?: string }[] = [];
+    let enviados = 0;
+    const enviadosOk = new Set<string>();
+    try {
+      for (let i = 0; i < ids.length; i += 20) {
+        const lote = ids.slice(i, i + 20);
+        const res = await fetch("/api/360-enviar-invitaciones", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+          body: JSON.stringify({ token_ids: lote, origen: window.location.origin, reenviar }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "No se pudieron enviar los correos");
+        enviados += json.enviados ?? 0;
+        for (const f of json.fallidos ?? []) fallidos.push(f);
+        for (const r of json.resultados ?? []) if (r.ok) enviadosOk.add(r.id);
+        setEnviandoCorreos({ hechos: Math.min(i + 20, ids.length), total: ids.length });
+      }
+      setEvaluados360((prev) =>
+        prev.map((e) => ({ ...e, links: e.links.map((l) => (enviadosOk.has(l.tokenId) ? { ...l, enviado: true } : l)) })),
+      );
+      setResultadoEnvio({ enviados, fallidos });
+    } catch (e) {
+      setError360(e instanceof Error ? e.message : "Error al enviar los correos");
+    } finally {
+      setEnviandoCorreos(null);
     }
   }
 
@@ -1390,14 +1438,42 @@ function DashboardInner() {
                   <h2 className="text-base font-bold" style={{ color: "#0A1A32" }}>
                     Evaluaciones 360° generadas ({evaluados360.length})
                   </h2>
-                  <button
-                    onClick={exportarLinks360Excel}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    style={{ background: "#f0f4f8", color: "#0A1A32" }}
-                  >
-                    Exportar todos los links a Excel
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const pendientes = evaluados360.flatMap((e) => e.links.filter((l) => l.destinatario?.email && !l.enviado));
+                        if (pendientes.length === 0) return;
+                        if (!confirm(`Se enviarán ${pendientes.length} correos. Una vez enviados, las personas pueden empezar a responder. ¿Continuar?`)) return;
+                        enviarCorreos360(pendientes, false);
+                      }}
+                      disabled={!!enviandoCorreos}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50"
+                      style={{ background: "#0A1A32", color: "#10b981" }}
+                    >
+                      {enviandoCorreos
+                        ? `Enviando ${enviandoCorreos.hechos}/${enviandoCorreos.total}…`
+                        : `Enviar correos pendientes (${evaluados360.flatMap((e) => e.links.filter((l) => l.destinatario?.email && !l.enviado)).length})`}
+                    </button>
+                    <button
+                      onClick={exportarLinks360Excel}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                      style={{ background: "#f0f4f8", color: "#0A1A32" }}
+                    >
+                      Exportar a Excel
+                    </button>
+                  </div>
                 </div>
+                {resultadoEnvio && (
+                  <div className="mb-3 rounded-lg px-3 py-2 text-xs" style={{ background: resultadoEnvio.fallidos.length ? "#fffbeb" : "#ecfdf5", border: `1px solid ${resultadoEnvio.fallidos.length ? "#fde68a" : "#a7f3d0"}` }}>
+                    <p className="font-semibold" style={{ color: "#0A1A32" }}>
+                      {resultadoEnvio.enviados} correo(s) enviado(s).
+                      {resultadoEnvio.fallidos.length > 0 && ` ${resultadoEnvio.fallidos.length} no salieron:`}
+                    </p>
+                    {resultadoEnvio.fallidos.slice(0, 8).map((f, i) => (
+                      <p key={i} className="text-[11px] text-amber-800 mt-0.5">· {f.email ?? "sin correo"} — {f.motivo}</p>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-3">
                   {evaluados360.map(({ evaluado, empresa, links }) => (
                     <div key={evaluado.id} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -1415,6 +1491,26 @@ function DashboardInner() {
                       </button>
                       {expandido360 === evaluado.id && (
                         <div className="border-t border-gray-200 px-4 py-3 space-y-2 bg-gray-50">
+                          {links.some((l) => l.destinatario?.email) && (
+                            <div className="flex justify-end pb-1">
+                              <button
+                                onClick={() => {
+                                  const conCorreo = links.filter((l) => l.destinatario?.email);
+                                  const yaEnviados = conCorreo.filter((l) => l.enviado).length;
+                                  const msg = yaEnviados > 0
+                                    ? `${yaEnviados} de estos ya se enviaron. ¿Reenviar los ${conCorreo.length} correos de ${evaluado.nombre}?`
+                                    : `Se enviarán ${conCorreo.length} correos para evaluar a ${evaluado.nombre}. ¿Continuar?`;
+                                  if (!confirm(msg)) return;
+                                  enviarCorreos360(conCorreo, yaEnviados > 0);
+                                }}
+                                disabled={!!enviandoCorreos}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50"
+                                style={{ background: "#0A1A32", color: "#10b981" }}
+                              >
+                                Enviar los {links.filter((l) => l.destinatario?.email).length} correos
+                              </button>
+                            </div>
+                          )}
                           {links.map((l) => (
                             <div key={l.fuente} className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
@@ -1423,6 +1519,11 @@ function DashboardInner() {
                                   <span className="text-xs text-gray-500 ml-2">
                                     → {l.destinatario.nombre}
                                     {l.destinatario.email ? ` · ${l.destinatario.email}` : ""}
+                                  </span>
+                                )}
+                                {l.enviado && (
+                                  <span className="text-[10px] font-bold ml-2 px-1.5 py-0.5 rounded-full" style={{ background: "#dcfce7", color: "#166534" }}>
+                                    enviado
                                   </span>
                                 )}
                                 <p className="text-xs text-gray-400 truncate max-w-md">{l.url}</p>

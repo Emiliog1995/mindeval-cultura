@@ -320,17 +320,32 @@ export async function upsert360Pdi(
 
 // ── Tokens 360° (links de evaluadores) ──────────────────────────────────────
 
+/** Una fuente, con el destinatario ya resuelto si lo hay. */
+export interface EnvioToken360 {
+  fuente: FuenteEvaluacion;
+  evaluador_nombre?: string | null;
+  evaluador_email?: string | null;
+}
+
 export async function crearTokens360(
   evaluadoId: string,
   periodo: string,
-  fuentes: FuenteEvaluacion[],
+  // Acepta fuentes sueltas (alta manual, sin nómina detrás) o fuentes con
+  // destinatario. Guardar el destinatario en el token es lo que después
+  // permite enviar los correos y reenviarlos sin volver a generar nada.
+  fuentes: Array<FuenteEvaluacion | EnvioToken360>,
 ): Promise<Token360[]> {
-  const filas = fuentes.map((fuente) => ({
-    evaluado_id: evaluadoId,
-    periodo,
-    fuente,
-    completado: false,
-  }));
+  const filas = fuentes.map((f) => {
+    const envio: EnvioToken360 = typeof f === "string" ? { fuente: f } : f;
+    return {
+      evaluado_id: evaluadoId,
+      periodo,
+      fuente: envio.fuente,
+      completado: false,
+      evaluador_nombre: envio.evaluador_nombre ?? null,
+      evaluador_email: envio.evaluador_email ?? null,
+    };
+  });
   const { data, error } = await supabase
     .from('tokens_360')
     .insert(filas)
