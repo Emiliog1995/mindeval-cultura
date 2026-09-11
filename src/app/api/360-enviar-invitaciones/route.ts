@@ -30,7 +30,7 @@ interface TokenFila {
   enviado_en: string | null;
   evaluador_nombre: string | null;
   evaluador_email: string | null;
-  evaluados_360: { nombre: string; empresa: string | null } | null;
+  evaluados_360: { nombre: string; empresa_id: string | null } | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -64,11 +64,21 @@ export async function POST(req: NextRequest) {
     // nunca a que correo ni con que enlace.
     const { data, error } = await supabaseAdmin
       .from("tokens_360")
-      .select("id, token, fuente, periodo, completado, enviado_en, evaluador_nombre, evaluador_email, evaluados_360(nombre, empresa)")
+      .select("id, token, fuente, periodo, completado, enviado_en, evaluador_nombre, evaluador_email, evaluados_360(nombre, empresa_id)")
       .in("id", tokenIds);
     if (error) throw new Error(error.message);
 
     const filas = (data ?? []) as unknown as TokenFila[];
+
+    // El nombre de la organización encabeza el correo, y evaluados_360 solo
+    // guarda su id. Se resuelve una vez para todo el lote.
+    const empresaIds = [...new Set(filas.map((f) => f.evaluados_360?.empresa_id).filter(Boolean))] as string[];
+    const nombrePorEmpresa = new Map<string, string>();
+    if (empresaIds.length > 0) {
+      const { data: empresas } = await supabaseAdmin.from("empresas_mdt").select("id, nombre").in("id", empresaIds);
+      for (const e of empresas ?? []) nombrePorEmpresa.set(e.id, e.nombre);
+    }
+
     const resultados: Array<{ id: string; ok: boolean; email?: string; motivo?: string }> = [];
 
     for (const fila of filas) {
@@ -91,7 +101,7 @@ export async function POST(req: NextRequest) {
         nombreEvaluador: fila.evaluador_nombre ?? fila.evaluador_email,
         nombreEvaluado: fila.evaluados_360?.nombre ?? "un integrante del equipo",
         fuente: fila.fuente,
-        empresa: fila.evaluados_360?.empresa ?? "la organización",
+        empresa: nombrePorEmpresa.get(fila.evaluados_360?.empresa_id ?? "") ?? "la organización",
         periodo: fila.periodo,
         link: `${origen.replace(/\/$/, "")}/evaluar-360/${fila.token}`,
       });
