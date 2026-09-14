@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, FUENTE_LABELS, type CompetenciaKey, type PotencialKey } from "@/lib/360-types";
+import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, FUENTE_LABELS, type CompetenciaKey, type PotencialKey, type FuenteEvaluacion } from "@/lib/360-types";
 import type { Evaluado360, Token360 } from "@/lib/supabase";
 
 type CompetenciasMap = Record<CompetenciaKey, number>;
@@ -41,6 +41,32 @@ const ESCALA_INDICADOR = [
   { valor: 1, label: "Muy por debajo / no se ejecutó" },
 ];
 
+/**
+ * Modo demostración: /evaluar-360/demo
+ *
+ * Existe para poder mostrarle el formulario a la organización antes de
+ * lanzar el proceso — en una reunión, proyectado — sin gastar un enlace real
+ * ni ensuciar los resultados. Es la MISMA pantalla que verán los evaluadores,
+ * no una maqueta aparte: si se hace un cambio en el formulario, la demo lo
+ * refleja sola. Nada de lo que se haga aquí llega a la base de datos.
+ *
+ * El token real es un UUID, así que la palabra "demo" nunca colisiona con uno.
+ */
+const TOKEN_DEMO = "demo";
+
+const EVALUADO_DEMO: Evaluado360 = {
+  id: "demo",
+  nombre: "MARÍA EJEMPLO PÉREZ",
+  cargo: "Especialista de Correspondencia",
+  departamento: "Subproyecto y comunidades",
+} as Evaluado360;
+
+const INDICADORES_DEMO: IndicadorEsencialForm[] = [
+  { id: "demo-1", indicador: "Cumplimiento de plazos de envío de correspondencia", meta: "≥ 90%", formula: "(Envíos a tiempo / Total de envíos) x 100" },
+  { id: "demo-2", indicador: "Cartas respondidas dentro del período", meta: "100% en plazo", formula: "(Cartas respondidas / Cartas recibidas) x 100" },
+  { id: "demo-3", indicador: "Visitas de seguimiento realizadas", meta: "≥ 12 por trimestre", formula: "Número de visitas efectivas" },
+];
+
 export default function EvaluarToken360() {
   const { token } = useParams<{ token: string }>();
   const [cargando, setCargando] = useState(true);
@@ -54,8 +80,26 @@ export default function EvaluarToken360() {
   const [potencial, setPotencial] = useState<PotencialMap>(emptyPotencial());
   const [calificacionesIndicadores, setCalificacionesIndicadores] = useState<Record<string, number>>({});
   const [tocados, setTocados] = useState<Set<string>>(new Set());
+  const esDemo = token === TOKEN_DEMO;
+  const [demoFuente, setDemoFuente] = useState<FuenteEvaluacion>("par");
 
   useEffect(() => {
+    if (esDemo) {
+      // Se arma en el cliente: la demo nunca toca la base ni consume un token.
+      setData({
+        token: { fuente: demoFuente, completado: false } as Token360,
+        evaluado: EVALUADO_DEMO,
+      });
+      setIndicadoresEsenciales(demoFuente === "jefe" ? INDICADORES_DEMO : []);
+      setCalificacionesIndicadores(Object.fromEntries(INDICADORES_DEMO.map((i) => [i.id, 3])));
+      setCompetencias(emptyCompetencias());
+      setPotencial(emptyPotencial());
+      setTocados(new Set());
+      setEnviado(false);
+      setError("");
+      setCargando(false);
+      return;
+    }
     fetch(`/api/token/360/${token}`)
       .then(async (r) => {
         if (!r.ok) {
@@ -81,7 +125,7 @@ export default function EvaluarToken360() {
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Error al cargar"))
       .finally(() => setCargando(false));
-  }, [token]);
+  }, [token, esDemo, demoFuente]);
 
   function marcarTocado(clave: string) {
     setTocados((prev) => {
@@ -129,6 +173,11 @@ export default function EvaluarToken360() {
     const faltan = camposFaltantes();
     if (faltan.length > 0) {
       setError(`Falta calificar: ${faltan.join(", ")}.`);
+      return;
+    }
+    if (esDemo) {
+      // Se muestra la misma pantalla de agradecimiento, sin escribir nada.
+      setEnviado(true);
       return;
     }
     setEnviando(true);
@@ -179,13 +228,56 @@ export default function EvaluarToken360() {
     );
   }
 
+  const bandaDemo = esDemo ? (
+    <div style={{ background: "#fef3c7", borderBottom: "2px solid #f59e0b" }} className="px-6 py-3">
+      <div className="max-w-2xl mx-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-xs font-bold" style={{ color: "#92400e" }}>
+          MODO DEMOSTRACIÓN · nada de lo que hagas aquí se guarda
+        </span>
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="text-[11px]" style={{ color: "#92400e" }}>Ver como:</span>
+          {(["par", "jefe"] as FuenteEvaluacion[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setDemoFuente(f)}
+              className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+              style={
+                demoFuente === f
+                  ? { background: "#92400e", color: "#fef3c7" }
+                  : { background: "#fde68a", color: "#92400e" }
+              }
+            >
+              {f === "jefe" ? "Jefe directo" : "Par / Colaborador / Cliente interno"}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (enviado) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: "#0A1A32" }}>
-        <div className="bg-[#1e2a42] rounded-xl p-8 border border-[#2d3a50] max-w-md text-center space-y-3">
-          <div className="text-4xl">✅</div>
-          <h1 className="text-white font-bold text-lg">¡Gracias por tu evaluación!</h1>
-          <p className="text-gray-400 text-sm">Tu respuesta fue enviada correctamente.</p>
+      <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
+        {bandaDemo}
+        <div className="flex items-center justify-center px-4 py-24">
+          <div className="bg-[#1e2a42] rounded-xl p-8 border border-[#2d3a50] max-w-md text-center space-y-3">
+            <div className="text-4xl">✅</div>
+            <h1 className="text-white font-bold text-lg">¡Gracias por tu evaluación!</h1>
+            <p className="text-gray-400 text-sm">
+              {esDemo
+                ? "Así se ve al terminar. Como esto es una demostración, no se guardó nada."
+                : "Tu respuesta fue enviada correctamente."}
+            </p>
+            {esDemo && (
+              <button
+                onClick={() => { setEnviado(false); setTocados(new Set()); }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                style={{ background: "#10b981", color: "#0A1A32" }}
+              >
+                Volver a la demostración
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -195,6 +287,7 @@ export default function EvaluarToken360() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#0A1A32" }}>
+      {bandaDemo}
       <div className="border-b border-[#2d3a50] px-6 py-4">
         <h1 className="text-lg font-bold text-white">Evaluación 360°</h1>
         <p className="text-sm text-gray-400">
