@@ -18,8 +18,20 @@ export async function GET(
   }
 
   const { evaluados_360, ...tokenRow } = data as Record<string, unknown> & {
-    evaluados_360: { puesto_id?: string | null } | null;
+    evaluados_360: { puesto_id?: string | null; empresa_id?: string | null } | null;
   };
+
+  // Cómo llama esta organización a cada competencia. Quien llena el formulario
+  // tiene que ver el nombre que usa su organización, no el genérico.
+  let competenciaLabels: Record<string, string> | null = null;
+  if (evaluados_360?.empresa_id) {
+    const { data: empresa } = await supabaseAdmin
+      .from("empresas_mdt")
+      .select("competencias_labels")
+      .eq("id", evaluados_360.empresa_id)
+      .maybeSingle();
+    competenciaLabels = (empresa?.competencias_labels as Record<string, string> | null) ?? null;
+  }
 
   let indicadoresEsenciales: Array<{ id: string; indicador: string; meta: string; formula: string | null }> = [];
   const esJefe = (tokenRow as { fuente?: string }).fuente === "jefe";
@@ -38,7 +50,7 @@ export async function GET(
       .map(({ id, indicador, meta, formula }) => ({ id, indicador, meta, formula }));
   }
 
-  return NextResponse.json({ token: tokenRow, evaluado: evaluados_360, indicadoresEsenciales });
+  return NextResponse.json({ token: tokenRow, evaluado: evaluados_360, indicadoresEsenciales, competenciaLabels });
 }
 
 export async function POST(
@@ -47,10 +59,11 @@ export async function POST(
 ) {
   const { token } = await params;
   const body = await req.json();
-  const { competencias, potencial, indicadoresResultado } = body as {
+  const { competencias, potencial, indicadoresResultado, necesidades } = body as {
     competencias: Record<string, number>;
     potencial?: Record<string, number>;
-    indicadoresResultado?: Array<{ indicador_puesto_id: string; calificacion: number }>;
+    indicadoresResultado?: Array<{ indicador_puesto_id: string; calificacion: number | null; sin_registro?: boolean }>;
+    necesidades?: string | null;
   };
 
   const { data: tokenRow, error: tokenError } = await supabaseAdmin
@@ -72,6 +85,12 @@ export async function POST(
     fuente: tokenRow.fuente,
     competencias,
     potencial: tokenRow.fuente === "jefe" ? potencial : null,
+    // Las necesidades las declara la propia persona: solo tienen sentido en
+    // su autoevaluación, no en lo que otros opinan de ella.
+    necesidades:
+      tokenRow.fuente === "autoevaluacion" && typeof necesidades === "string" && necesidades.trim()
+        ? necesidades.trim().slice(0, 2000)
+        : null,
   });
 
   if (insertError) {
@@ -82,11 +101,15 @@ export async function POST(
     const { error: indicadoresError } = await supabaseAdmin
       .from("indicadores_resultado_360")
       .upsert(
+        // Sin registro no se guarda como un 1: la calificación queda en NULL y
+        // la marca explica por qué, para que el informe pueda distinguir
+        // "cumplió poco" de "aquí no hay nada que medir".
         indicadoresResultado.map((r) => ({
           evaluado_id: tokenRow.evaluado_id,
           periodo: tokenRow.periodo,
           indicador_puesto_id: r.indicador_puesto_id,
-          calificacion: r.calificacion,
+          calificacion: r.sin_registro ? null : r.calificacion,
+          sin_registro: r.sin_registro === true,
         })),
         { onConflict: "evaluado_id,periodo,indicador_puesto_id" },
       );

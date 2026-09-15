@@ -10,12 +10,13 @@ import {
   listarTokens360PorEvaluado,
   listarIndicadoresEsencialesDePuesto,
   listarIndicadoresResultado360,
+  obtenerCompetenciaLabels,
   type Pdi360,
   type Token360,
 } from "@/lib/supabase";
 import { construirResultadoBase360 } from "@/lib/360-scoring";
 import type { ResultadoConsolidado360 } from "@/lib/360-types";
-import { COMPETENCIAS_360, FUENTE_LABELS } from "@/lib/360-types";
+import { FUENTE_LABELS, competenciasConLabels, type CompetenciaLabels } from "@/lib/360-types";
 import RadarChart360 from "@/components/360/RadarChart360";
 import BrechasChart from "@/components/360/BrechasChart";
 import NineBoxMatrix from "@/components/360/NineBoxMatrix";
@@ -36,6 +37,8 @@ export default function EvaluadoIndividualPage() {
   const [tokens, setTokens] = useState<Token360[]>([]);
   const [evaluadoPendiente, setEvaluadoPendiente] = useState<{ nombre: string; cargo: string; departamento: string; empresa?: string } | null>(null);
   const radarRef = useRef<HTMLDivElement>(null);
+
+  const [competenciaLabels, setCompetenciaLabels] = useState<CompetenciaLabels | null>(null);
 
   useEffect(() => {
     async function cargar() {
@@ -60,14 +63,23 @@ export default function EvaluadoIndividualPage() {
           obtener360Pdi(id, periodo),
         ]);
 
-        const indicadoresEsenciales = indicadoresDefinidos.map((def) => ({
-          ...def,
-          calificacion: resultadosIndicadores.find((r) => r.indicador_puesto_id === def.id)?.calificacion ?? null,
-        }));
+        const indicadoresEsenciales = indicadoresDefinidos.map((def) => {
+          const fila = resultadosIndicadores.find((r) => r.indicador_puesto_id === def.id);
+          return {
+            ...def,
+            calificacion: fila?.calificacion ?? null,
+            sinRegistro: fila?.sin_registro === true,
+          };
+        });
+
+        // Cómo llama esta organización a sus competencias.
+        if (evaluado.empresa_id) {
+          setCompetenciaLabels(await obtenerCompetenciaLabels(evaluado.empresa_id).catch(() => null));
+        }
 
         const base = construirResultadoBase360(
           evaluaciones,
-          resultadosIndicadores.map((r) => r.calificacion),
+          resultadosIndicadores.map((r) => ({ calificacion: r.calificacion, sin_registro: r.sin_registro })),
         );
 
         setResultado({
@@ -159,9 +171,12 @@ export default function EvaluadoIndividualPage() {
   const { evaluado, periodo, puntaje360, nivelDesempeno, colorDesempeno,
           puntajePotencial, nivelPotencial, potencialPendiente, cuadrante, nombreCuadrante,
           accionCuadrante, colorCuadrante, puntajesPorCompetencia, brechas,
-          cumplimientoIndicadores, puntajeDesempenoFinal, indicadoresEsenciales } = resultado;
+          cumplimientoIndicadores, puntajeDesempenoFinal, indicadoresEsenciales,
+          evaluaciones } = resultado;
+  const indicadoresSinRegistro = resultado.indicadoresSinRegistro ?? 0;
 
-  const radarData = COMPETENCIAS_360.map((c) => ({
+  const competencias360 = competenciasConLabels(competenciaLabels);
+  const radarData = competencias360.map((c) => ({
     competencia: c.label,
     actual: parseFloat((puntajesPorCompetencia[c.key] ?? 0).toFixed(2)),
     meta: c.meta,
@@ -242,6 +257,18 @@ export default function EvaluadoIndividualPage() {
         {indicadoresEsenciales.length > 0 && (
           <div className="bg-[#1e2a42] rounded-xl p-5 border border-[#2d3a50]">
             <h2 className="text-white font-semibold mb-3 text-sm">Indicadores esenciales del puesto</h2>
+            {indicadoresSinRegistro > 0 && (
+              <div className="mb-3 rounded-lg px-3 py-2.5" style={{ background: "#2a1f0a", border: "1px solid #7c5e10" }}>
+                <p className="text-xs font-semibold" style={{ color: "#fbbf24" }}>
+                  {indicadoresSinRegistro} de {indicadoresEsenciales.length} indicadores sin registro
+                </p>
+                <p className="text-[11px] text-gray-400 mt-1 leading-snug">
+                  El jefe directo declaró que la organización no lleva registro de estos indicadores, así que
+                  quedaron fuera del promedio — no cuentan en contra de la persona. Que un puesto tenga metas
+                  definidas que nadie mide es un hallazgo del diagnóstico, no un problema de esta evaluación.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               {indicadoresEsenciales.map((ind) => (
                 <div key={ind.id} className="flex items-center justify-between gap-3 bg-[#162032] rounded-lg px-3 py-2">
@@ -249,14 +276,39 @@ export default function EvaluadoIndividualPage() {
                     <p className="text-white text-xs font-medium">{ind.indicador}</p>
                     <p className="text-[10px] text-gray-500">Meta: {ind.meta}</p>
                   </div>
-                  <span className="text-sm font-bold text-[#10b981] shrink-0">
-                    {ind.calificacion !== null ? ind.calificacion.toFixed(1) : "— pendiente"}
-                  </span>
+                  {ind.sinRegistro ? (
+                    <span className="text-[10px] font-bold shrink-0 px-2 py-1 rounded-full text-center leading-tight"
+                          style={{ background: "#3a2a0d", color: "#fbbf24" }}>
+                      sin registro
+                    </span>
+                  ) : (
+                    <span className="text-sm font-bold text-[#10b981] shrink-0">
+                      {ind.calificacion !== null ? ind.calificacion.toFixed(1) : "— pendiente"}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {(() => {
+          const auto = evaluaciones.find((e) => e.fuente === "autoevaluacion");
+          const texto = auto?.necesidades?.trim();
+          if (!texto) return null;
+          return (
+            <div className="bg-[#1e2a42] rounded-xl p-5 border border-[#2d3a50]">
+              <h2 className="text-white font-semibold text-sm">Qué pidió la propia persona</h2>
+              <p className="text-[11px] text-gray-500 mt-0.5 mb-3">
+                Declarado por {resultado.evaluado.nombre.split(" ").slice(0, 2).join(" ")} en su autoevaluación:
+                capacitación, materiales o apoyo que considera que necesita.
+              </p>
+              <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed bg-[#162032] rounded-lg px-3 py-2.5">
+                {texto}
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Cuadrante Nine Box */}
         {potencialPendiente ? (

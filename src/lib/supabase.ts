@@ -383,7 +383,17 @@ export async function listarTokens360(
 
 // ── Indicadores esenciales del Manual de Puestos (Desempeño = 360° 60% + indicadores 40%) ──
 
-import type { IndicadorEsencial, IndicadorResultado360 } from './360-types';
+import type { IndicadorEsencial, IndicadorResultado360, CompetenciaLabels } from './360-types';
+
+/** Cómo llama esta organización a sus competencias. null = usa las genéricas. */
+export async function obtenerCompetenciaLabels(empresaId: string): Promise<CompetenciaLabels | null> {
+  const { data } = await supabase
+    .from('empresas_mdt')
+    .select('competencias_labels')
+    .eq('id', empresaId)
+    .maybeSingle();
+  return (data?.competencias_labels as CompetenciaLabels | null) ?? null;
+}
 export type { IndicadorEsencial, IndicadorResultado360 };
 
 export interface PuestoResumen {

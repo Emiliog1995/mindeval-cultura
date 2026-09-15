@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { COMPETENCIAS_360, POTENCIAL_CRITERIOS, FUENTE_LABELS, type CompetenciaKey, type PotencialKey, type FuenteEvaluacion } from "@/lib/360-types";
+import {
+  COMPETENCIAS_360, POTENCIAL_CRITERIOS, FUENTE_LABELS, ESCALA_INDICADOR, LABEL_SIN_REGISTRO,
+  competenciasConLabels,
+  type CompetenciaKey, type PotencialKey, type FuenteEvaluacion, type CompetenciaLabels,
+} from "@/lib/360-types";
 import type { Evaluado360, Token360 } from "@/lib/supabase";
 
 type CompetenciasMap = Record<CompetenciaKey, number>;
@@ -33,13 +37,6 @@ const ESCALA_COMPETENCIA = [
   { valor: 1, label: "Rara vez o nunca. Muy por debajo de lo esperado." },
 ];
 
-const ESCALA_INDICADOR = [
-  { valor: 5, label: "Superó la meta" },
-  { valor: 4, label: "Cumplió la meta" },
-  { valor: 3, label: "Cerca de la meta" },
-  { valor: 2, label: "Por debajo de la meta" },
-  { valor: 1, label: "Muy por debajo / no se ejecutó" },
-];
 
 /**
  * Modo demostración: /evaluar-360/demo
@@ -79,19 +76,36 @@ export default function EvaluarToken360() {
   const [competencias, setCompetencias] = useState<CompetenciasMap>(emptyCompetencias());
   const [potencial, setPotencial] = useState<PotencialMap>(emptyPotencial());
   const [calificacionesIndicadores, setCalificacionesIndicadores] = useState<Record<string, number>>({});
+  // Indicadores que el jefe declaró sin registro: no se califican, se reportan.
+  const [sinRegistro, setSinRegistro] = useState<Set<string>>(new Set());
+  const [necesidades, setNecesidades] = useState("");
+  const [competenciaLabels, setCompetenciaLabels] = useState<CompetenciaLabels | null>(null);
   const [tocados, setTocados] = useState<Set<string>>(new Set());
   const esDemo = token === TOKEN_DEMO;
+  const competencias360 = competenciasConLabels(competenciaLabels);
   const [demoFuente, setDemoFuente] = useState<FuenteEvaluacion>("par");
 
   useEffect(() => {
     if (esDemo) {
-      // Se arma en el cliente: la demo nunca toca la base ni consume un token.
+      // Sin ?empresa= la demo no hace ni una petición. Con el parámetro pide
+      // solo los nombres de las competencias, para que al mostrársela a la
+      // organización aparezcan como ellos las llaman.
+      const empresaDemo = new URLSearchParams(window.location.search).get("empresa");
+      if (empresaDemo) {
+        fetch(`/api/360-competencias?empresa_id=${encodeURIComponent(empresaDemo)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => setCompetenciaLabels(j?.competenciaLabels ?? null))
+          .catch(() => {});
+      }
+      // El resto se arma en el cliente: nunca toca la base ni consume un token.
       setData({
         token: { fuente: demoFuente, completado: false } as Token360,
         evaluado: EVALUADO_DEMO,
       });
       setIndicadoresEsenciales(demoFuente === "jefe" ? INDICADORES_DEMO : []);
       setCalificacionesIndicadores(Object.fromEntries(INDICADORES_DEMO.map((i) => [i.id, 3])));
+      setSinRegistro(new Set());
+      setNecesidades("");
       setCompetencias(emptyCompetencias());
       setPotencial(emptyPotencial());
       setTocados(new Set());
@@ -110,6 +124,7 @@ export default function EvaluarToken360() {
           token: Token360;
           evaluado: Evaluado360;
           indicadoresEsenciales: IndicadorEsencialForm[];
+          competenciaLabels: CompetenciaLabels | null;
         }>;
       })
       .then((res) => {
@@ -117,6 +132,7 @@ export default function EvaluarToken360() {
           setEnviado(true);
         } else {
           setData(res);
+          setCompetenciaLabels(res.competenciaLabels ?? null);
           setIndicadoresEsenciales(res.indicadoresEsenciales ?? []);
           setCalificacionesIndicadores(
             Object.fromEntries((res.indicadoresEsenciales ?? []).map((i) => [i.id, 3])),
@@ -144,6 +160,16 @@ export default function EvaluarToken360() {
     setPotencial((prev) => ({ ...prev, [key]: val }));
     marcarTocado(`pot:${key}`);
   }
+  function alternarSinRegistro(id: string) {
+    setSinRegistro((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    marcarTocado(`ind:${id}`);
+  }
+
   function setIndicador(id: string, val: number) {
     setCalificacionesIndicadores((prev) => ({ ...prev, [id]: val }));
     marcarTocado(`ind:${id}`);
@@ -193,9 +219,11 @@ export default function EvaluarToken360() {
           indicadoresResultado: esJefe
             ? indicadoresEsenciales.map((ind) => ({
                 indicador_puesto_id: ind.id,
-                calificacion: calificacionesIndicadores[ind.id] ?? 3,
+                calificacion: sinRegistro.has(ind.id) ? null : calificacionesIndicadores[ind.id] ?? 3,
+                sin_registro: sinRegistro.has(ind.id),
               }))
             : undefined,
+          necesidades: data.token.fuente === "autoevaluacion" ? necesidades : undefined,
         }),
       });
       if (!res.ok) {
@@ -236,7 +264,7 @@ export default function EvaluarToken360() {
         </span>
         <div className="flex items-center gap-1.5 ml-auto">
           <span className="text-[11px]" style={{ color: "#92400e" }}>Ver como:</span>
-          {(["par", "jefe"] as FuenteEvaluacion[]).map((f) => (
+          {(["autoevaluacion", "par", "jefe"] as FuenteEvaluacion[]).map((f) => (
             <button
               key={f}
               onClick={() => setDemoFuente(f)}
@@ -247,7 +275,7 @@ export default function EvaluarToken360() {
                   : { background: "#fde68a", color: "#92400e" }
               }
             >
-              {f === "jefe" ? "Jefe directo" : "Par / Colaborador / Cliente interno"}
+              {f === "jefe" ? "Jefe directo" : f === "autoevaluacion" ? "Autoevaluación" : "Par / Colaborador / Cliente interno"}
             </button>
           ))}
         </div>
@@ -330,8 +358,9 @@ export default function EvaluarToken360() {
                 <>
                   <p className="text-[11px] text-gray-300 leading-relaxed">
                     <strong className="text-white">Indicadores de gestión:</strong> son los del Manual de Puestos,
-                    con la meta que se fijó para cada uno. Acá no calificás cómo se comportó la persona sino
-                    <strong className="text-white"> cuánto cumplió esa meta</strong> en el período:
+                    con la meta que se fijó para cada uno. Aquí no calificas cómo se comportó la persona sino
+                    <strong className="text-white"> cuánto cumplió esa meta</strong> en el período. Si de alguno
+                    no se lleva registro, puedes marcarlo como tal en vez de calificarlo al tanteo:
                   </p>
                   <div className="space-y-1">
                     {ESCALA_INDICADOR.map((op) => (
@@ -360,7 +389,7 @@ export default function EvaluarToken360() {
 
         <div className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] p-4 space-y-3">
           <p className="text-xs text-gray-500">Competencias (1.0 – 5.0)</p>
-          {COMPETENCIAS_360.map((comp) => (
+          {competencias360.map((comp) => (
             <div key={comp.key} className="flex items-center gap-3">
               <span className="text-xs text-gray-300 w-40 shrink-0 flex items-center gap-1">
                 {comp.label}
@@ -409,28 +438,71 @@ export default function EvaluarToken360() {
               <p className="text-[11px] text-gray-500 mt-0.5">
                 ¿Qué tan cumplida está la meta de cada indicador de este período?
               </p>
+              <p className="text-[11px] mt-1.5 leading-snug" style={{ color: "#fbbf24" }}>
+                Si de algún indicador no se lleva registro y no tienes el dato, márcalo abajo en vez
+                de calificarlo al tanteo. No cuenta en contra de la persona, y saber qué no se está
+                midiendo es parte de lo que busca esta evaluación.
+              </p>
             </div>
-            {indicadoresEsenciales.map((ind) => (
-              <div key={ind.id} className="space-y-1.5">
-                <p className="text-xs text-gray-300 flex items-center gap-1">
-                  {ind.indicador}
-                  {!tocados.has(`ind:${ind.id}`) && <span className="text-amber-400" title="Sin calificar">●</span>}
-                </p>
-                {ind.formula && (
-                  <p className="text-[10px] text-gray-500">Fórmula: {ind.formula}</p>
-                )}
-                <p className="text-[10px] text-gray-500">Meta: {ind.meta}</p>
-                <select
-                  value={calificacionesIndicadores[ind.id] ?? 3}
-                  onChange={(e) => setIndicador(ind.id, parseInt(e.target.value, 10))}
-                  className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#10b981]"
-                >
-                  {ESCALA_INDICADOR.map((op) => (
-                    <option key={op.valor} value={op.valor}>{op.valor} — {op.label}</option>
-                  ))}
-                </select>
-              </div>
-            ))}
+            {indicadoresEsenciales.map((ind) => {
+              const marcadoSinRegistro = sinRegistro.has(ind.id);
+              return (
+                <div key={ind.id} className="space-y-1.5">
+                  <p className="text-xs text-gray-300 flex items-center gap-1">
+                    {ind.indicador}
+                    {!tocados.has(`ind:${ind.id}`) && <span className="text-amber-400" title="Sin calificar">●</span>}
+                  </p>
+                  {ind.formula && (
+                    <p className="text-[10px] text-gray-500">Fórmula: {ind.formula}</p>
+                  )}
+                  <p className="text-[10px] text-gray-500">Meta: {ind.meta}</p>
+                  <select
+                    value={calificacionesIndicadores[ind.id] ?? 3}
+                    onChange={(e) => setIndicador(ind.id, parseInt(e.target.value, 10))}
+                    disabled={marcadoSinRegistro}
+                    className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#10b981] disabled:opacity-40"
+                  >
+                    {ESCALA_INDICADOR.map((op) => (
+                      <option key={op.valor} value={op.valor}>{op.valor} — {op.label}</option>
+                    ))}
+                  </select>
+                  <label className="flex items-start gap-2 cursor-pointer pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={marcadoSinRegistro}
+                      onChange={() => alternarSinRegistro(ind.id)}
+                      className="mt-0.5 accent-[#f59e0b]"
+                    />
+                    <span className="text-[11px] leading-snug" style={{ color: marcadoSinRegistro ? "#fbbf24" : "#9ca3af" }}>
+                      {LABEL_SIN_REGISTRO}
+                    </span>
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {data.token.fuente === "autoevaluacion" && (
+          <div className="bg-[#1e2a42] rounded-xl border border-[#2d3a50] p-4 space-y-2">
+            <div>
+              <p className="text-xs text-gray-500">¿Qué necesitas para hacer mejor tu trabajo?</p>
+              <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                Capacitaciones que te servirían, materiales o herramientas que te faltan, apoyo que
+                necesitas de otra área. Lo lee Talento Humano y se toma en cuenta para tu plan de
+                desarrollo. Puedes dejarlo en blanco si no tienes nada que pedir.
+              </p>
+            </div>
+            <textarea
+              id="necesidades-360"
+              value={necesidades}
+              onChange={(e) => setNecesidades(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              placeholder="Por ejemplo: un curso de Excel para llevar mejor los reportes, o una capacitación en atención a familias."
+              className="w-full bg-[#0A1A32] border border-[#2d3a50] rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#10b981]"
+            />
+            <p className="text-[10px] text-gray-600 text-right">{necesidades.length} / 2000</p>
           </div>
         )}
 

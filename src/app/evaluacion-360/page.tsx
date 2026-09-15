@@ -62,7 +62,7 @@ export default function Evaluacion360Page() {
           const periodo = evs[0]?.periodo ?? "";
           const calificacionesIndicadores = todosIndicadores
             .filter((r) => r.evaluado_id === ev.id && r.periodo === periodo)
-            .map((r) => r.calificacion);
+            .map((r) => ({ calificacion: r.calificacion, sin_registro: r.sin_registro }));
           const base = construirResultadoBase360(evs, calificacionesIndicadores);
           res.push({
             evaluado: ev,

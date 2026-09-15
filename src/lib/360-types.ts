@@ -9,6 +9,51 @@ export const COMPETENCIAS_360 = [
 
 export type CompetenciaKey = typeof COMPETENCIAS_360[number]['key'];
 
+/**
+ * Renombres de competencias por organización.
+ *
+ * Las 6 competencias son las mismas para todos, pero cómo se llaman no: una
+ * fundación de apadrinamiento no habla de "Servicio al Cliente". La CLAVE
+ * nunca cambia —las evaluaciones ya guardadas la tienen adentro de su JSON—,
+ * solo cambia el texto que se le muestra a la gente.
+ */
+export type CompetenciaLabels = Partial<Record<CompetenciaKey, string>>;
+
+export interface CompetenciaConMeta {
+  key: CompetenciaKey;
+  label: string;
+  meta: number;
+}
+
+/** Las competencias con el nombre que use esta organización. */
+export function competenciasConLabels(overrides?: CompetenciaLabels | null): CompetenciaConMeta[] {
+  return COMPETENCIAS_360.map((c) => ({
+    key: c.key,
+    label: overrides?.[c.key]?.trim() || c.label,
+    meta: c.meta,
+  }));
+}
+
+/**
+ * Cumplimiento de un indicador de gestión.
+ *
+ * SIN_REGISTRO no es una nota baja: es el jefe declarando que la organización
+ * no mide ese indicador. Se excluye del promedio en vez de castigar a la
+ * persona por algo que nadie registra, y se reporta aparte — cuántos
+ * indicadores no tienen registro es, en sí mismo, un hallazgo de la evaluación.
+ */
+export const SIN_REGISTRO = 0;
+
+export const ESCALA_INDICADOR = [
+  { valor: 5, label: 'Superó la meta' },
+  { valor: 4, label: 'Cumplió la meta' },
+  { valor: 3, label: 'Cerca de la meta' },
+  { valor: 2, label: 'Por debajo de la meta' },
+  { valor: 1, label: 'Muy por debajo / no se ejecutó' },
+] as const;
+
+export const LABEL_SIN_REGISTRO = 'No se lleva registro de este indicador';
+
 export const POTENCIAL_CRITERIOS = [
   { key: 'capacidad_aprendizaje',  label: 'Capacidad de Aprendizaje' },
   { key: 'aspiracion_crecimiento', label: 'Aspiración de Crecimiento' },
@@ -81,7 +126,10 @@ export interface IndicadorResultado360 {
   evaluado_id: string;
   periodo: string;
   indicador_puesto_id: string;
-  calificacion: number;
+  /** null cuando sin_registro es true: no hay dato que calificar. */
+  calificacion: number | null;
+  /** El jefe declaró que la organización no lleva registro de este indicador. */
+  sin_registro?: boolean;
   created_at: string;
 }
 
@@ -94,6 +142,8 @@ export interface Evaluacion360 {
   potencial?: Record<PotencialKey, number>;
   puntaje_total?: number;
   nivel?: string;
+  /** Solo en la autoevaluación: qué pide la propia persona (capacitación, materiales). */
+  necesidades?: string | null;
   created_at: string;
 }
 
@@ -147,7 +197,10 @@ export interface ResultadoConsolidado360 {
   puntaje360: number;
   cumplimientoIndicadores: number | null;
   puntajeDesempenoFinal: number;
-  indicadoresEsenciales: Array<IndicadorEsencial & { calificacion: number | null }>;
+  indicadoresEsenciales: Array<IndicadorEsencial & { calificacion: number | null; sinRegistro?: boolean }>;
+  /** Indicadores que el jefe declaró sin registro. Hallazgo del diagnóstico. */
+  indicadoresSinRegistro?: number;
+  indicadoresConDato?: number;
   nivelDesempeno: NivelDesempeno;
   colorDesempeno: string;
   puntajePotencial: number;

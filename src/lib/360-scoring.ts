@@ -117,10 +117,52 @@ export function determinarCuadrante(
   return CUADRANTES[key] ?? CUADRANTES['MEDIO-MEDIO'];
 }
 
-export function calcularCumplimientoIndicadores(calificaciones: number[]): number | null {
-  const vals = calificaciones.filter((v) => v > 0);
+/** Una calificación de indicador tal como quedó guardada. */
+export interface CalificacionIndicador {
+  calificacion: number | null;
+  sin_registro?: boolean;
+}
+
+/**
+ * Promedio de cumplimiento de los indicadores esenciales.
+ *
+ * Un indicador marcado "sin registro" NO entra al promedio y tampoco cuenta
+ * como cero: la organización no lo mide, y castigar a la persona por eso sería
+ * calificarla por una falta que no es suya. Si ninguno tiene registro, devuelve
+ * null y el desempeño se apoya 100% en el 360°.
+ */
+/** Acepta tanto filas completas como el formato viejo de solo números. */
+function normalizarCalificacion(c: CalificacionIndicador | number | null): CalificacionIndicador {
+  if (c === null) return { calificacion: null };
+  if (typeof c === 'number') return { calificacion: c };
+  return c;
+}
+
+function tieneDato(c: CalificacionIndicador): boolean {
+  return !c.sin_registro && typeof c.calificacion === 'number' && c.calificacion > 0;
+}
+
+export function calcularCumplimientoIndicadores(
+  calificaciones: Array<CalificacionIndicador | number | null>,
+): number | null {
+  const vals = calificaciones
+    .map(normalizarCalificacion)
+    .filter(tieneDato)
+    .map((c) => c.calificacion as number);
   if (!vals.length) return null;
   return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+}
+
+/** Cuántos indicadores quedaron sin registro. Es un hallazgo, no un error. */
+export function contarSinRegistro(
+  calificaciones: Array<CalificacionIndicador | number | null>,
+): { sinRegistro: number; conDato: number; total: number } {
+  const filas = calificaciones.map(normalizarCalificacion);
+  return {
+    sinRegistro: filas.filter((c) => c.sin_registro === true).length,
+    conDato: filas.filter(tieneDato).length,
+    total: filas.length,
+  };
 }
 
 export function calcularDesempenoFinal(
@@ -137,11 +179,14 @@ export function calcularDesempenoFinal(
 // que repiten todas las vistas del módulo, para no duplicar la lógica en cada página.
 export function construirResultadoBase360(
   evaluaciones: Evaluacion360[],
-  calificacionesIndicadores: number[],
+  calificacionesIndicadores: Array<CalificacionIndicador | number | null>,
 ): {
   puntajesPorCompetencia: Record<CompetenciaKey, number>;
   puntaje360: number;
   cumplimientoIndicadores: number | null;
+  /** Indicadores que el jefe declaró sin registro: se reporta, no se castiga. */
+  indicadoresSinRegistro: number;
+  indicadoresConDato: number;
   puntajeDesempenoFinal: number;
   nivelDesempeno: NivelDesempeno;
   colorDesempeno: string;
@@ -166,6 +211,8 @@ export function construirResultadoBase360(
     : { puntaje: 0, nivel: 'MEDIO' as NivelPotencial };
 
   const cumplimientoIndicadores = calcularCumplimientoIndicadores(calificacionesIndicadores);
+  const { sinRegistro: indicadoresSinRegistro, conDato: indicadoresConDato } =
+    contarSinRegistro(calificacionesIndicadores);
   const puntajeDesempenoFinal = calcularDesempenoFinal(puntaje360, cumplimientoIndicadores);
   const { nivel: nivelDesempeno, color: colorDesempeno } = clasificarNivelDesempeno(puntajeDesempenoFinal);
   const cuadranteInfo = determinarCuadrante(nivelDesempeno, nivelPotencial);
@@ -175,6 +222,8 @@ export function construirResultadoBase360(
     puntajesPorCompetencia,
     puntaje360,
     cumplimientoIndicadores,
+    indicadoresSinRegistro,
+    indicadoresConDato,
     puntajeDesempenoFinal,
     nivelDesempeno,
     colorDesempeno,

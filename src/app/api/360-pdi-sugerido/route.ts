@@ -104,19 +104,26 @@ Organización: ${emp.nombre}${emp.sector ? `\nSector / tipo de organización: ${
         if (indicadores?.length) {
           const { data: notas } = await supabaseAdmin
             .from("indicadores_resultado_360")
-            .select("indicador_puesto_id, calificacion")
+            .select("indicador_puesto_id, calificacion, sin_registro")
             .eq("evaluado_id", evaluado.id)
             .eq("periodo", periodo);
 
-          const notaPorIndicador = new Map(
-            (notas ?? []).map((n) => [n.indicador_puesto_id, n.calificacion]),
+          const filaPorIndicador = new Map(
+            (notas ?? []).map((n) => [n.indicador_puesto_id, n]),
           );
+          const sinRegistro = (notas ?? []).filter((n) => n.sin_registro).length;
           contextoPuesto += `\nIndicadores de gestión de esas actividades esenciales, con la calificación del jefe directo (escala 1-5, donde 5 = superó la meta):\n${indicadores
             .map((i) => {
-              const nota = notaPorIndicador.get(i.id);
-              return `  - ${i.indicador} | meta: ${i.meta} | calificación: ${nota ?? "sin calificar"}`;
+              const fila = filaPorIndicador.get(i.id);
+              const estado = fila?.sin_registro
+                ? "SIN REGISTRO (la organización no mide este indicador)"
+                : fila?.calificacion ?? "sin calificar";
+              return `  - ${i.indicador} | meta: ${i.meta} | calificación: ${estado}`;
             })
             .join("\n")}\n`;
+          if (sinRegistro > 0) {
+            contextoPuesto += `\nATENCIÓN: ${sinRegistro} de esos indicadores están SIN REGISTRO — la organización no los mide hoy. No los uses como evidencia de bajo desempeño de la persona; si son relevantes para su puesto, propone como acción del plan establecer la forma de medirlos.\n`;
+          }
         }
       }
     }
