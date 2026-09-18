@@ -71,6 +71,10 @@ export async function exportarFichaPDF(
   instruccion: Instruccion,
   indicadores: Indicador[],
   esBorrador = false,
+  // false = versión para compartir con el colaborador: se omite la sección
+  // de indicadores de gestión por completo (ni encabezado ni placeholder),
+  // no solo su contenido — así no se ve como una ficha a medio llenar.
+  incluirIndicadores = true,
 ) {
   const doc = new jsPDF()
   const { regular, bold } = await cargarFuentesDejaVu()
@@ -269,20 +273,23 @@ export async function exportarFichaPDF(
   })
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
 
-  // 10. Indicadores de gestión
-  seccion(10, 'INDICADORES DE GESTIÓN')
-  if (indicadores.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      head: [['Indicador', 'Fórmula', 'Meta', 'Cliente / Beneficiario']],
-      body: indicadores.map(ind => [ind.indicador, ind.formula ?? '', ind.meta ?? '', ind.cliente ?? '']),
-      headStyles: { fillColor: DARK, fontSize: 8, font: FUENTE },
-      styles: { fontSize: 7, cellPadding: 2, font: FUENTE },
-      margin: { left: 14, right: 14 },
-    })
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
-  } else {
-    doc.setFontSize(8); doc.text('[ Por completar ]', 14, y); y += 10
+  // 10. Indicadores de gestión — se omite del todo en la versión para
+  // colaborador (incluirIndicadores = false), no solo su contenido.
+  if (incluirIndicadores) {
+    seccion(10, 'INDICADORES DE GESTIÓN')
+    if (indicadores.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        head: [['Indicador', 'Fórmula', 'Meta', 'Cliente / Beneficiario']],
+        body: indicadores.map(ind => [ind.indicador, ind.formula ?? '', ind.meta ?? '', ind.cliente ?? '']),
+        headStyles: { fillColor: DARK, fontSize: 8, font: FUENTE },
+        styles: { fontSize: 7, cellPadding: 2, font: FUENTE },
+        margin: { left: 14, right: 14 },
+      })
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+    } else {
+      doc.setFontSize(8); doc.text('[ Por completar ]', 14, y); y += 10
+    }
   }
 
   // Pie de página en todas las páginas
@@ -296,6 +303,7 @@ export async function exportarFichaPDF(
     doc.text(`Pág. ${i} / ${totalPaginas}  ·  Generado: ${new Date().toLocaleDateString('es-EC')}`, 196, 290, { align: 'right' })
   }
 
-  const nombreArchivo = `Ficha-${puesto.nombre_puesto.replace(/\s+/g, '-')}-${puesto.fecha ?? 'sin-fecha'}.pdf`
+  const sufijo = incluirIndicadores ? '' : '-colaborador'
+  const nombreArchivo = `Ficha-${puesto.nombre_puesto.replace(/\s+/g, '-')}-${puesto.fecha ?? 'sin-fecha'}${sufijo}.pdf`
   doc.save(nombreArchivo)
 }

@@ -62,7 +62,7 @@ export default function FichaPuesto() {
     return puntos
   }
 
-  const exportarPDF = async () => {
+  const exportarPDF = async (incluirIndicadores = true) => {
     if (!puesto) return
     setExportando(true)
     const { exportarFichaPDF } = await import('@/lib/exportar-ficha-pdf')
@@ -74,6 +74,7 @@ export default function FichaPuesto() {
       instruccion,
       indicadores.map(ind => ({ indicador: ind.indicador, formula: ind.formula, meta: ind.meta, cliente: ind.cliente })),
       completitud < 80,
+      incluirIndicadores,
     )
     setExportando(false)
   }
@@ -128,7 +129,11 @@ export default function FichaPuesto() {
             style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '.5rem 1.25rem', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
             ✏️ Editar
           </button>
-          <button onClick={exportarPDF} disabled={exportando}
+          <button onClick={() => exportarPDF(false)} disabled={exportando} title="Ficha sin la sección de indicadores de gestión, para compartir con el colaborador"
+            style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '.5rem 1rem', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer', fontWeight: 600, fontSize: 13, opacity: exportando ? 0.6 : 1 }}>
+            {exportando ? 'Generando...' : '📄 PDF para colaborador'}
+          </button>
+          <button onClick={() => exportarPDF(true)} disabled={exportando}
             style={{ background: GOLD, color: DARK, padding: '.5rem 1.25rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: exportando ? 0.6 : 1 }}>
             {exportando ? 'Generando...' : 'Exportar PDF'}
           </button>
