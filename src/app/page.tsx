@@ -51,8 +51,23 @@ export default function Login() {
 
   if (loading) return null;
 
+  const FONT_SYSTEM = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  const EASE_APPLE = "cubic-bezier(0.16, 1, 0.3, 1)";
+
   return (
-    <div className="min-h-screen flex" style={{ background: "#f3f4f6" }}>
+    <div
+      className="min-h-screen flex"
+      style={{ background: "linear-gradient(160deg, #f7f8fb 0%, #eef1f7 55%, #eaeef7 100%)", fontFamily: FONT_SYSTEM }}
+    >
+      <style jsx>{`
+        @keyframes cardIn {
+          from { opacity: 0; transform: translateY(14px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .login-card {
+          animation: cardIn 0.65s ${EASE_APPLE} both;
+        }
+      `}</style>
 
       {/* Panel izquierdo — branding */}
       <div
@@ -81,7 +96,7 @@ export default function Login() {
           >
             ECOSISTEMA DE TALENTO HUMANO
           </div>
-          <h1 className="text-4xl font-bold text-white leading-tight mb-6">
+          <h1 className="text-4xl font-bold text-white leading-tight mb-6" style={{ letterSpacing: "-0.02em" }}>
             Diagnóstica, desarrolla<br />y potencia el talento<br />de tu organización
           </h1>
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.95rem", lineHeight: "1.7" }}>
@@ -120,8 +135,20 @@ export default function Login() {
         </div>
 
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-xl p-10">
-            <h2 className="text-2xl font-bold mb-1" style={{ color: "#0A1A32" }}>Iniciar sesión</h2>
+          <div
+            className="login-card bg-white rounded-2xl p-10"
+            style={{
+              boxShadow: "0 24px 50px -18px rgba(10,26,50,0.28), 0 8px 20px -10px rgba(16,185,129,0.12), 0 1px 0 rgba(255,255,255,0.6) inset",
+              borderTop: "3px solid #F9B912",
+            }}
+          >
+            <div
+              className="inline-block text-[10px] font-bold tracking-widest px-2.5 py-1 rounded-full mb-4"
+              style={{ background: "rgba(16,185,129,0.1)", color: "#059669", border: "1px solid rgba(16,185,129,0.25)" }}
+            >
+              ACCESO SEGURO
+            </div>
+            <h2 className="text-2xl font-bold mb-1" style={{ color: "#0A1A32", letterSpacing: "-0.01em" }}>Iniciar sesión</h2>
             <p className="text-sm mb-8" style={{ color: "#9ca3af" }}>Ingresa tus credenciales de acceso</p>
 
             {error && (
@@ -142,14 +169,15 @@ export default function Login() {
                   onChange={e => { setEmail(e.target.value); setError(""); }}
                   placeholder="tu@correo.com"
                   required
-                  className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-xl text-sm outline-none"
                   style={{
                     background: "#f8fafc",
                     border: "1.5px solid #e5e7eb",
                     color: "#111",
+                    transition: `border-color 200ms ${EASE_APPLE}, box-shadow 200ms ${EASE_APPLE}`,
                   }}
-                  onFocus={e => e.target.style.borderColor = "#10b981"}
-                  onBlur={e => e.target.style.borderColor = "#e5e7eb"}
+                  onFocus={e => { e.target.style.borderColor = "#10b981"; e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.12)"; }}
+                  onBlur={e => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; }}
                 />
               </div>
 
@@ -165,20 +193,21 @@ export default function Login() {
                     onChange={e => { setPassword(e.target.value); setError(""); }}
                     placeholder="••••••••"
                     required
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all pr-12"
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none pr-12"
                     style={{
                       background: "#f8fafc",
                       border: "1.5px solid #e5e7eb",
                       color: "#111",
+                      transition: `border-color 200ms ${EASE_APPLE}, box-shadow 200ms ${EASE_APPLE}`,
                     }}
-                    onFocus={e => e.target.style.borderColor = "#10b981"}
-                    onBlur={e => e.target.style.borderColor = "#e5e7eb"}
+                    onFocus={e => { e.target.style.borderColor = "#10b981"; e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.12)"; }}
+                    onBlur={e => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPass(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2"
-                    style={{ color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: 4 }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 active:scale-90"
+                    style={{ color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: 4, transition: `transform 150ms ${EASE_APPLE}, color 150ms ${EASE_APPLE}` }}
                   >
                     {showPass ? (
                       <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,8 +226,8 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={enviando}
-                className="w-full py-3 rounded-xl font-semibold text-sm mt-2 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
-                style={{ background: "#10b981", color: "#0A1A32" }}
+                className="w-full py-3 rounded-xl font-semibold text-sm mt-2 hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
+                style={{ background: "#10b981", color: "#0A1A32", transition: `transform 150ms ${EASE_APPLE}, opacity 150ms ${EASE_APPLE}` }}
               >
                 {enviando ? "Ingresando…" : "Iniciar sesión"}
               </button>
