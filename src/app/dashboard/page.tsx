@@ -88,6 +88,7 @@ function DashboardInner() {
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ tokenId: string; fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null }; enviado?: boolean }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
   const [eliminando360, setEliminando360] = useState<string | null>(null);
+  const [cargandoEvaluaciones360, setCargandoEvaluaciones360] = useState(false);
   const [error360, setError360] = useState("");
   const [progresoMasivo360, setProgresoMasivo360] = useState<{ total: number; hecho: number } | null>(null);
 
@@ -95,6 +96,52 @@ function DashboardInner() {
   const [climaData, setClimaData]         = useState<ClimaRespuesta[]>([]);
   const [cargandoClima, setCargandoClima] = useState(true);
   const [errorClima, setErrorClima]       = useState("");
+
+  /**
+   * Trae del servidor las evaluaciones 360 ya generadas.
+   *
+   * Sin esto el panel solo conocia lo generado en esta misma pestana: al
+   * recargar quedaba vacio y con el se perdia el boton de enviar, aunque los
+   * enlaces siguieran vivos en la base.
+   */
+  useEffect(() => {
+    if (verificando) return;
+    let cancelado = false;
+    setCargandoEvaluaciones360(true);
+    (async () => {
+      try {
+        const qs = nuevaEmpresaId ? `?empresa_id=${encodeURIComponent(nuevaEmpresaId)}` : "";
+        const res = await fetch(`/api/360-evaluaciones${qs}`, { headers: await authHeaders() });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelado) return;
+        const base = window.location.origin;
+        setEvaluados360(
+          (json.evaluaciones ?? []).map((e: {
+            evaluado: Evaluado360;
+            empresa?: string;
+            links: Array<{ tokenId: string; token: string; fuente: FuenteEvaluacion; destinatario?: { nombre: string; email: string | null }; enviado?: boolean }>;
+          }) => ({
+            evaluado: e.evaluado,
+            empresa: e.empresa,
+            links: e.links.map((l) => ({
+              tokenId: l.tokenId,
+              fuente: l.fuente,
+              url: `${base}/evaluar-360/${l.token}`,
+              destinatario: l.destinatario,
+              enviado: l.enviado,
+            })),
+          })),
+        );
+      } catch {
+        // El panel se queda como este: no vale la pena un error a pantalla
+        // completa por no haber podido refrescar una lista.
+      } finally {
+        if (!cancelado) setCargandoEvaluaciones360(false);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [verificando, nuevaEmpresaId]);
 
   useEffect(() => {
     if (verificando) return;
@@ -1495,6 +1542,9 @@ function DashboardInner() {
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-base font-bold" style={{ color: "#0A1A32" }}>
                     Evaluaciones 360° generadas ({evaluados360.length})
+                    {cargandoEvaluaciones360 && (
+                      <span className="ml-2 text-xs font-medium text-gray-400">actualizando…</span>
+                    )}
                   </h2>
                   <div className="flex items-center gap-2">
                     <button
