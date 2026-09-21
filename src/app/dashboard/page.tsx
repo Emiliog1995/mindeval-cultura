@@ -87,6 +87,7 @@ function DashboardInner() {
   const [resultadoEnvio, setResultadoEnvio] = useState<{ enviados: number; fallidos: { email?: string; motivo?: string }[] } | null>(null);
   const [evaluados360, setEvaluados360] = useState<Array<{ evaluado: Evaluado360; empresa?: string; links: Array<{ tokenId: string; fuente: FuenteEvaluacion; url: string; destinatario?: { nombre: string; email: string | null }; enviado?: boolean }> }>>([]);
   const [expandido360, setExpandido360] = useState<string | null>(null);
+  const [eliminando360, setEliminando360] = useState<string | null>(null);
   const [error360, setError360] = useState("");
   const [progresoMasivo360, setProgresoMasivo360] = useState<{ total: number; hecho: number } | null>(null);
 
@@ -459,6 +460,63 @@ function DashboardInner() {
       setError360(e instanceof Error ? e.message : "Error al enviar los correos");
     } finally {
       setEnviandoCorreos(null);
+    }
+  }
+
+  /**
+   * Borra una evaluacion generada y todo lo que cuelga de ella.
+   *
+   * Se consulta primero que hay adentro para que la confirmacion diga la
+   * verdad: una cosa es descartar un duplicado recien generado y otra muy
+   * distinta borrar respuestas que alguien ya contesto.
+   */
+  async function eliminarEvaluado360(evaluadoId: string, nombre: string) {
+    if (eliminando360) return;
+    setError360("");
+    setEliminando360(evaluadoId);
+    try {
+      const cabeceras = { "Content-Type": "application/json", ...(await authHeaders()) };
+      const previa = await fetch("/api/360-eliminar-evaluado", {
+        method: "POST",
+        headers: cabeceras,
+        body: JSON.stringify({ evaluado_id: evaluadoId, solo_contar: true }),
+      });
+      const datos = await previa.json();
+      if (!previa.ok) throw new Error(datos.error ?? "No se pudo consultar la evaluacion");
+
+      const r = datos.resumen as {
+        tokens: number; enviados: number; respondidos: number; respuestas: number;
+      };
+      const detalle = [
+        `${r.tokens} enlace(s)`,
+        r.enviados > 0 ? `${r.enviados} ya enviado(s) por correo` : null,
+        r.respuestas > 0 ? `${r.respuestas} respuesta(s) YA CONTESTADA(S)` : null,
+      ].filter(Boolean).join("\n· ");
+
+      const aviso = r.respuestas > 0
+        ? `ATENCION: esta evaluacion tiene respuestas contestadas que se perderan.\n\n`
+        : "";
+      if (!confirm(`${aviso}Se eliminara la evaluacion de ${nombre}:\n· ${detalle}\n\nEsta accion no se puede deshacer. ¿Continuar?`)) {
+        return;
+      }
+      if (r.respuestas > 0 && !confirm(`Confirma por segunda vez: se borraran ${r.respuestas} respuesta(s) reales de ${nombre}.`)) {
+        return;
+      }
+
+      const res = await fetch("/api/360-eliminar-evaluado", {
+        method: "POST",
+        headers: cabeceras,
+        body: JSON.stringify({ evaluado_id: evaluadoId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "No se pudo eliminar");
+
+      setEvaluados360((prev) => prev.filter((e) => e.evaluado.id !== evaluadoId));
+      if (expandido360 === evaluadoId) setExpandido360(null);
+    } catch (e) {
+      setError360(e instanceof Error ? e.message : "Error al eliminar la evaluacion");
+    } finally {
+      setEliminando360(null);
     }
   }
 
@@ -1491,8 +1549,17 @@ function DashboardInner() {
                       </button>
                       {expandido360 === evaluado.id && (
                         <div className="border-t border-gray-200 px-4 py-3 space-y-2 bg-gray-50">
-                          {links.some((l) => l.destinatario?.email) && (
-                            <div className="flex justify-end pb-1">
+                          <div className="flex items-center justify-between gap-2 pb-1">
+                            <button
+                              onClick={() => eliminarEvaluado360(evaluado.id, evaluado.nombre)}
+                              disabled={!!eliminando360 || !!enviandoCorreos}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50 transition-colors"
+                              style={{ background: "#fff", color: "#b3261e", border: "1px solid #f3c9c6" }}
+                              title="Borra esta evaluación y todos sus enlaces. Úsalo si se generó dos veces."
+                            >
+                              {eliminando360 === evaluado.id ? "Eliminando…" : "Eliminar evaluación"}
+                            </button>
+                            {links.some((l) => l.destinatario?.email) && (
                               <button
                                 onClick={() => {
                                   const conCorreo = links.filter((l) => l.destinatario?.email);
@@ -1509,8 +1576,8 @@ function DashboardInner() {
                               >
                                 Enviar los {links.filter((l) => l.destinatario?.email).length} correos
                               </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                           {links.map((l) => (
                             <div key={l.fuente} className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
