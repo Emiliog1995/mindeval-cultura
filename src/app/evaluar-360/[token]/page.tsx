@@ -29,6 +29,16 @@ interface IndicadorEsencialForm {
 // La escala es 1-5 y no arranca en 0: un 1 ya significa "muy por debajo", no
 // "no evaluado". Quien llena el formulario tiene que ver esto antes de mover
 // la primera barra, o cada evaluador califica con un criterio distinto.
+/**
+ * Meses que abarca la evaluacion, tal como se le muestra a quien califica.
+ *
+ * Va aparte del `periodo` del token ("2026-S1"), que es la llave tecnica que
+ * une tokens, respuestas e indicadores: esa llave no dice nada legible y el
+ * ciclo real no siempre coincide con el semestre calendario. Hay que
+ * actualizarlo al abrir cada ciclo nuevo.
+ */
+const PERIODO_EVALUADO = "enero a agosto de 2026";
+
 const ESCALA_COMPETENCIA = [
   { valor: 5, label: "Siempre lo demuestra. Es un referente para los demás." },
   { valor: 4, label: "Casi siempre. Por encima de lo que el puesto espera." },
@@ -329,6 +339,12 @@ export default function EvaluarToken360() {
           <h2 className="text-sm font-bold text-white">Cómo llenar esta evaluación</h2>
 
           <p className="text-xs text-gray-300 leading-relaxed">
+            Estás evaluando el período de{" "}
+            <strong className="text-white">{PERIODO_EVALUADO}</strong>. Piensa en cómo fue el trabajo
+            durante todos esos meses, no solo en las últimas semanas.
+          </p>
+
+          <p className="text-xs text-gray-300 leading-relaxed">
             Calificas <strong className="text-white">del 1 al 5</strong> (no hay 0). Puedes usar decimales:
             si dudas entre 3 y 4, deja la barra en 3.5.
           </p>
@@ -359,8 +375,9 @@ export default function EvaluarToken360() {
                   <p className="text-[11px] text-gray-300 leading-relaxed">
                     <strong className="text-white">Indicadores de gestión:</strong> son los del Manual de Puestos,
                     con la meta que se fijó para cada uno. Aquí no calificas cómo se comportó la persona sino
-                    <strong className="text-white"> cuánto cumplió esa meta</strong> en el período. Si de alguno
-                    no se lleva registro, puedes marcarlo como tal en vez de calificarlo al tanteo:
+                    <strong className="text-white"> cuánto cumplió esa meta</strong>, tomando en cuenta lo
+                    ejecutado <strong className="text-white">hasta el mes de agosto de 2026</strong>. Si de
+                    alguno no se lleva registro, puedes marcarlo como tal en vez de calificar sin evidencia:
                   </p>
                   <div className="space-y-1">
                     {ESCALA_INDICADOR.map((op) => (
@@ -436,11 +453,11 @@ export default function EvaluarToken360() {
             <div>
               <p className="text-xs text-gray-500">Cumplimiento de indicadores esenciales</p>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                ¿Qué tan cumplida está la meta de cada indicador de este período?
+                ¿Qué tan cumplida está la meta de cada indicador con lo ejecutado hasta agosto de 2026?
               </p>
               <p className="text-[11px] mt-1.5 leading-snug" style={{ color: "#fbbf24" }}>
                 Si de algún indicador no se lleva registro y no tienes el dato, márcalo abajo en vez
-                de calificarlo al tanteo. No cuenta en contra de la persona, y saber qué no se está
+                de calificar sin evidencia. No cuenta en contra de la persona, y saber qué no se está
                 midiendo es parte de lo que busca esta evaluación.
               </p>
             </div>
