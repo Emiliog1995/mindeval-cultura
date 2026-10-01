@@ -120,8 +120,10 @@ function CuestionarioInner() {
     try {
       const scores = calcularScores(respuestas);
       await guardarEvaluacion({ ...datos, empresa_id: empresaId, respuestas, scores });
+      // El nombre NO se hereda: la encuesta de clima es anónima a propósito
+      // (ver el comentario de DatosClima en /clima). Solo pasa lo que el
+      // análisis por área necesita.
       sessionStorage.setItem("clima_datos_heredados", JSON.stringify({
-        nombre:  datos.nombre,
         cargo:   datos.cargo,
         area:    datos.area,
         empresa: datos.empresa,

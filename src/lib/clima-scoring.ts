@@ -32,13 +32,32 @@ export function getClimaLevelColor(level: string): string {
   }
 }
 
+/**
+ * Calcula el perfil de clima a partir de las 30 respuestas.
+ *
+ * Exige el cuestionario completo a propósito. Antes un ítem sin responder se
+ * convertía en un 3 ("ni de acuerdo ni en desacuerdo") sin avisar a nadie, o
+ * sea que fabricaba una respuesta neutral y la promediaba como si la persona
+ * la hubiera dado. Hoy el formulario obliga a responder todo, así que esto no
+ * se dispara; el riesgo era el día que los datos entraran por importación o
+ * por API. Mejor que reviente a que contamine el diagnóstico en silencio.
+ */
 export function calcularClimaScores(respuestas: Record<string, number>): ClimaResult {
   const dimCodes = Object.keys(CLIMA_DIMENSIONS) as ClimaDimension[];
+
+  const faltantes = CLIMA_ITEMS
+    .filter((i) => typeof respuestas[String(i.id)] !== "number")
+    .map((i) => i.id);
+  if (faltantes.length) {
+    throw new Error(
+      `Cuestionario de clima incompleto: faltan los ítems ${faltantes.join(", ")}.`
+    );
+  }
 
   const dimensions: ClimaDimensionScore[] = dimCodes.map((code) => {
     const items = CLIMA_ITEMS.filter((i) => i.dimension === code);
     const values = items.map((item) => {
-      const raw = respuestas[String(item.id)] ?? 3;
+      const raw = respuestas[String(item.id)];
       return item.inverse ? 6 - raw : raw;
     });
     const mean = parseFloat((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2));

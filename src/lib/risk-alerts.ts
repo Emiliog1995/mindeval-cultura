@@ -1,6 +1,7 @@
 import type { Evaluacion, ClimaRespuesta } from "./supabase";
 import type { ScoringResult } from "./scoring";
 import type { ClimaResult } from "./clima-scoring";
+import { normalizarArea, MIN_RESPUESTAS_CLIMA_AREA } from "./salud-scoring";
 
 export type RiskLevel = "ALTO" | "MEDIO" | "BAJO";
 
@@ -25,6 +26,10 @@ export interface AlertTrigger {
 export interface AreaRisk {
   area: string;
   nEvaluados: number;
+  /** Respuestas de clima encontradas para esta área. */
+  nClima: number;
+  /** true = el área no llegó al mínimo y se evaluó con el clima global. */
+  climaEsGlobal: boolean;
   overallRisk: RiskLevel | null;
   alerts: AlertTrigger[];
 }
@@ -90,25 +95,51 @@ export function calcularAlertas(
 ): AreaRisk[] {
   if (!climaData.length || !evaluaciones.length) return [];
 
-  const climaMeans: Record<string, number> = {};
-  ["A", "B", "C", "D", "E", "F"].forEach((code) => {
-    const vals = climaData.map((r) => {
-      const s = r.scores as ClimaResult;
-      return s.dimensions.find((d) => d.code === code)?.mean ?? 0;
+  const DIMS_CLIMA = ["A", "B", "C", "D", "E", "F"];
+
+  const mediasClima = (rs: ClimaRespuesta[]): Record<string, number> => {
+    const out: Record<string, number> = {};
+    DIMS_CLIMA.forEach((code) => {
+      const vals = rs.map((r) => {
+        const s = r.scores as ClimaResult;
+        return s.dimensions.find((d) => d.code === code)?.mean ?? 0;
+      });
+      out[code] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     });
-    climaMeans[code] = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return out;
+  };
+
+  // Clima de la organización completa: solo respaldo para las áreas sin
+  // muestra propia suficiente.
+  const climaGlobalMeans = mediasClima(climaData);
+
+  // Clima POR ÁREA. Antes las alertas comparaban la cultura de cada área
+  // contra el clima global: como el clima era el mismo número para todas, el
+  // cruce no distinguía nada y las alertas salían del lado de la cultura
+  // únicamente. Un área con cultura aceptable y clima pésimo no disparaba.
+  const climaPorArea = new Map<string, ClimaRespuesta[]>();
+  climaData.forEach((r) => {
+    const key = normalizarArea(r.area);
+    if (!climaPorArea.has(key)) climaPorArea.set(key, []);
+    climaPorArea.get(key)!.push(r);
   });
 
   const areaMap = new Map<string, Evaluacion[]>();
+  const areaLabel = new Map<string, string>();
   evaluaciones.forEach((e) => {
-    const a = e.area?.trim() || "Sin área";
-    if (!areaMap.has(a)) areaMap.set(a, []);
-    areaMap.get(a)!.push(e);
+    const key = normalizarArea(e.area);
+    if (!areaMap.has(key)) areaMap.set(key, []);
+    areaMap.get(key)!.push(e);
+    if (!areaLabel.has(key)) areaLabel.set(key, (e.area ?? "").trim() || "Sin área");
   });
 
   const result: AreaRisk[] = [];
 
-  areaMap.forEach((evals, area) => {
+  areaMap.forEach((evals, areaKey) => {
+    const area = areaLabel.get(areaKey) ?? "Sin área";
+    const climaArea = climaPorArea.get(areaKey) ?? [];
+    const climaEsGlobal = climaArea.length < MIN_RESPUESTAS_CLIMA_AREA;
+    const climaMeans = climaEsGlobal ? climaGlobalMeans : mediasClima(climaArea);
     const cultMeans: Record<string, number> = {};
     ["I", "II", "III", "IV"].forEach((dim) => {
       const vals = evals.map((e) => {
@@ -131,7 +162,14 @@ export function calcularAlertas(
     else if (alerts.some((a) => a.severity === "MEDIO")) overallRisk = "MEDIO";
     else if (alerts.length) overallRisk = "BAJO";
 
-    result.push({ area, nEvaluados: evals.length, overallRisk, alerts });
+    result.push({
+      area,
+      nEvaluados: evals.length,
+      nClima: climaArea.length,
+      climaEsGlobal,
+      overallRisk,
+      alerts,
+    });
   });
 
   return result.sort((a, b) => {

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { Evaluacion, ClimaRespuesta } from "@/lib/supabase";
+import { MIN_RESPUESTAS_CLIMA_AREA } from "@/lib/salud-scoring";
 import { calcularAlertas, type AreaRisk, type RiskLevel } from "@/lib/risk-alerts";
 
 interface Props {
@@ -32,7 +33,7 @@ function ScoreBadge({ label, score }: { label: string; score: number }) {
 }
 
 function AreaCard({ areaRisk }: { areaRisk: AreaRisk }) {
-  const { area, nEvaluados, overallRisk, alerts } = areaRisk;
+  const { area, nEvaluados, nClima, climaEsGlobal, overallRisk, alerts } = areaRisk;
 
   if (!overallRisk) {
     return (
@@ -40,7 +41,9 @@ function AreaCard({ areaRisk }: { areaRisk: AreaRisk }) {
         style={{ background: "#f0fdf4", borderColor: "#86efac" }}>
         <div>
           <span className="text-base font-bold" style={{ color: "#15803d" }}>✅ {area}</span>
-          <p className="text-xs mt-0.5" style={{ color: "#166534" }}>{nEvaluados} evaluado{nEvaluados !== 1 ? "s" : ""}</p>
+          <p className="text-xs mt-0.5" style={{ color: "#166534" }}>
+            {nEvaluados} evaluado{nEvaluados !== 1 ? "s" : ""} · {nClima} respuesta{nClima !== 1 ? "s" : ""} de clima
+          </p>
         </div>
         <span className="text-xs font-semibold px-3 py-1 rounded-full"
           style={{ background: "#dcfce7", color: "#15803d" }}>
@@ -62,7 +65,14 @@ function AreaCard({ areaRisk }: { areaRisk: AreaRisk }) {
           <span className="text-base font-bold" style={{ color: "#0A1A32" }}>
             {cfg.emoji} {area}
           </span>
-          <p className="text-xs mt-0.5 text-gray-500">{nEvaluados} evaluado{nEvaluados !== 1 ? "s" : ""} en esta área</p>
+          <p className="text-xs mt-0.5 text-gray-500">
+            {nEvaluados} evaluado{nEvaluados !== 1 ? "s" : ""} · {nClima} respuesta{nClima !== 1 ? "s" : ""} de clima
+          </p>
+          {climaEsGlobal && (
+            <p className="text-xs mt-0.5 text-amber-700">
+              Clima tomado del promedio global (el área no llega a {MIN_RESPUESTAS_CLIMA_AREA} respuestas)
+            </p>
+          )}
         </div>
         <span className="text-xs font-bold px-3 py-1.5 rounded-full"
           style={{ background: cfg.border, color: cfg.text }}>
@@ -116,7 +126,7 @@ export default function RadarRiesgoTab({ evaluaciones, climaData }: Props) {
           Radar de Riesgo Organizacional
         </h2>
         <p className="text-sm text-gray-500 mt-1">
-          Cruza automáticamente los resultados de Cultura por área con el Clima global. Solo muestra alertas cuando existen datos de ambos instrumentos.
+          Cruza automáticamente los resultados de Cultura y de Clima de cada área. Solo muestra alertas cuando existen datos de ambos instrumentos.
         </p>
       </div>
 
@@ -161,7 +171,7 @@ export default function RadarRiesgoTab({ evaluaciones, climaData }: Props) {
       {!sinDatos && (
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <p className="text-xs text-gray-500 leading-relaxed">
-            <span className="font-semibold">Nota metodológica:</span> Las alertas se activan cuando ambas dimensiones de un patrón se encuentran por debajo de 3.0 (nivel BAJO o MUY BAJO). El Clima se toma como promedio global (datos anónimos). La Cultura se calcula por área con los evaluados de cada una.
+            <span className="font-semibold">Nota metodológica:</span> Las alertas se activan cuando ambas dimensiones de un patrón se encuentran por debajo de 3.0 (nivel BAJO o MUY BAJO). Cultura y Clima se calculan por área con las respuestas de cada una. Un área con menos de {MIN_RESPUESTAS_CLIMA_AREA} respuestas de clima usa el promedio global como respaldo: con menos muestra la media es ruido y además dejaría de ser confidencial.
           </p>
         </div>
       )}

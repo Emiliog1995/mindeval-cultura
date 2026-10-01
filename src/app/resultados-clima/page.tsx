@@ -58,7 +58,9 @@ function ResultadosClimaContent() {
       startY: 50,
       head: [],
       body: [
-        ["Nombre",  rec.nombre  ?? "—"],
+        // El clima dejó de pedir nombre (es anónimo). Los registros antiguos
+        // sí lo tienen, así que la fila se muestra solo cuando existe.
+        ...(rec.nombre ? [["Nombre", rec.nombre]] : []),
         ["Cargo",   rec.cargo   ?? "—"],
         ["Área",    rec.area    ?? "—"],
         ["Empresa", rec.empresa ?? "—"],
@@ -163,7 +165,7 @@ function ResultadosClimaContent() {
           <h1 className="text-xl font-bold mb-1" style={{ color: "#0A1A32" }}>Informe Individual — Clima Laboral</h1>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
             {[
-              { l: "Nombre",  v: rec.nombre  ?? "—" },
+              ...(rec.nombre ? [{ l: "Nombre", v: rec.nombre }] : []),
               { l: "Cargo",   v: rec.cargo   ?? "—" },
               { l: "Área",    v: rec.area    ?? "—" },
               { l: "Empresa", v: rec.empresa ?? "—" },

@@ -18,7 +18,17 @@ const STEP_LABELS = [
   "Condiciones y Desarrollo",
 ];
 
-type DatosClima = { nombre: string; cargo: string; area: string; empresa: string };
+/**
+ * El clima NO pide nombre, a propósito.
+ *
+ * 5 de los 30 ítems preguntan directamente por el jefe inmediato ("Mi jefe
+ * rara vez reconoce los logros del equipo"). Con el nombre puesto nadie
+ * responde eso con honestidad, así que la dimensión Liderazgo salía inflada y
+ * el diagnóstico quedaba sesgado justo donde más importa. Cargo y área sí se
+ * piden: son lo que permite el análisis por área, y no identifican a nadie
+ * mientras haya muestra suficiente (ver MIN_RESPUESTAS_CLIMA_AREA).
+ */
+type DatosClima = { cargo: string; area: string; empresa: string };
 
 export default function ClimaPage() {
   return (
@@ -31,7 +41,7 @@ export default function ClimaPage() {
 function ClimaPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [datos, setDatos] = useState<DatosClima>({ nombre: "", cargo: "", area: "", empresa: "" });
+  const [datos, setDatos] = useState<DatosClima>({ cargo: "", area: "", empresa: "" });
   const [empresaId, setEmpresaId] = useState<string | undefined>(undefined);
   const [empresaBloqueada, setEmpresaBloqueada] = useState(false);
   const [heredado, setHeredado] = useState(false);
@@ -79,7 +89,7 @@ function ClimaPageInner() {
 
   function handleDatos(e: React.FormEvent) {
     e.preventDefault();
-    if (!datos.nombre.trim() || !datos.cargo.trim() || !datos.area.trim() || !datos.empresa.trim()) {
+    if (!datos.cargo.trim() || !datos.area.trim() || !datos.empresa.trim()) {
       setError("Por favor completa todos los campos.");
       return;
     }
@@ -157,12 +167,12 @@ function ClimaPageInner() {
           <div className="bg-white rounded-2xl shadow-md p-8">
             <h1 className="text-2xl font-bold mb-1 text-gray-900">Encuesta de Clima Laboral</h1>
             <p className="text-gray-600 mb-8 text-sm">
-              Completa tus datos para comenzar. La encuesta es anónima y toma aproximadamente 5 minutos.
+              Completa tus datos para comenzar. La encuesta es anónima —no te pedimos tu nombre— y
+              toma aproximadamente 5 minutos.
             </p>
             {error && <p className="text-red-600 bg-red-50 rounded-lg px-4 py-3 mb-6 text-sm">{error}</p>}
             <form onSubmit={handleDatos} className="space-y-5">
               {[
-                { field: "nombre",  label: "Nombre completo",       placeholder: "Ej. María García López" },
                 { field: "cargo",   label: "Cargo",                  placeholder: "Ej. Gerente de Operaciones" },
                 { field: "area",    label: "Área / Departamento",    placeholder: "Ej. Recursos Humanos" },
                 { field: "empresa", label: "Empresa",                placeholder: "Ej. MINDTALENT" },
@@ -189,9 +199,9 @@ function ClimaPageInner() {
                 style={{ background: "#f8f6f0", borderLeft: "3px solid #10b981" }}
               >
                 <p style={{ color: "#0A1A32" }}>
-                  Tu nombre se registra solo para validar tu participación. Tus respuestas son
-                  confidenciales y los resultados se reportan únicamente de forma grupal por área.
-                  Tu nombre nunca aparecerá ligado a tus respuestas.
+                  <strong>No te pedimos tu nombre.</strong> Esta encuesta es anónima: solo se
+                  registran tu cargo, tu área y tu empresa, y los resultados se reportan
+                  únicamente de forma grupal por área. Nadie puede saber qué respondiste tú.
                 </p>
               </div>
               <label className="flex items-start gap-3 cursor-pointer">
@@ -237,7 +247,7 @@ function ClimaPageInner() {
                 style={{ background: "#f8f6f0", borderLeft: "3px solid #10b981", color: "#0A1A32" }}
               >
                 <span>✓</span>
-                <span>Datos heredados de Cultura Organizacional — <strong>{datos.nombre}</strong>, {datos.cargo}, {datos.area}</span>
+                <span>Datos heredados de Cultura Organizacional — {datos.cargo}, {datos.area}. <strong>Esta encuesta es anónima:</strong> tu nombre no se registra.</span>
               </div>
             )}
 

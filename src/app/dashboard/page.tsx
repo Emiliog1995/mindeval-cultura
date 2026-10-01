@@ -689,6 +689,11 @@ function DashboardInner() {
   const areasClima  = [...new Set(climaDataEmpresa.map((r) => r.area).filter(Boolean))].sort() as string[];
   const cargosClima = [...new Set(climaDataEmpresa.map((r) => r.cargo).filter(Boolean))].sort() as string[];
 
+  // El clima pasó a ser anónimo: los registros nuevos no traen nombre. La
+  // columna solo se muestra si hay registros antiguos que sí lo tienen, para
+  // no dejar una columna entera de guiones.
+  const mostrarNombreClima = climaDataEmpresa.some((r) => !!r.nombre);
+
   const climaFiltrada = climaDataEmpresa.filter((r) => {
     if (filtroAreaClima  && r.area  !== filtroAreaClima)  return false;
     if (filtroCargoClima && r.cargo !== filtroCargoClima) return false;
@@ -1135,7 +1140,8 @@ function DashboardInner() {
             {/* Tabla evaluados clima */}
             <div className="card-in bg-white rounded-2xl p-6" style={{ boxShadow: CARD_SHADOW, border: CARD_BORDER }}>
               <h2 className="text-base font-bold mb-4" style={{ color: "#0A1A32" }}>
-                Listado de Evaluados{climaFiltrada.length !== climaDataEmpresa.length && ` (${climaFiltrada.length} de ${climaDataEmpresa.length})`}
+                Respuestas registradas{climaFiltrada.length !== climaDataEmpresa.length && ` (${climaFiltrada.length} de ${climaDataEmpresa.length})`}
+                <span className="ml-2 text-xs font-normal text-gray-400">· encuesta anónima</span>
               </h2>
 
               {cargandoClima ? (
@@ -1162,7 +1168,7 @@ function DashboardInner() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ background: "#0A1A32" }}>
-                        {["Fecha", "Nombre", "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo", ""].map((h) => (
+                        {["Fecha", ...(mostrarNombreClima ? ["Nombre"] : []), "Cargo", "Área", "Global", "Nivel", "Liderazgo", "Comunicación", "Trabajo en Equipo", "Reconocimiento", "Condiciones", "Desarrollo", ""].map((h) => (
                           <th key={h} className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap uppercase" style={{ color: "#10b981", letterSpacing: "0.04em" }}>{h}</th>
                         ))}
                       </tr>
@@ -1175,7 +1181,9 @@ function DashboardInner() {
                             <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                               {new Date(r.created_at).toLocaleDateString("es-EC")}
                             </td>
-                            <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{r.nombre ?? "—"}</td>
+                            {mostrarNombreClima && (
+                              <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{r.nombre ?? "—"}</td>
+                            )}
                             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.cargo ?? "—"}</td>
                             <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.area ?? "—"}</td>
                             <td className="px-3 py-2 font-bold tabular-nums" style={{ color: getClimaLevelColor(r.nivel ?? "") }}>
