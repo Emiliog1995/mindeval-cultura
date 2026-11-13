@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import type { AlertaFraude, EstadoSesionPrueba, SeveridadAlerta, TipoSesionPrueba, Vacante } from "@/lib/mindeval-types";
@@ -48,6 +48,9 @@ export default function MonitoreoVacante() {
   const params = useParams<{ vacanteId: string }>();
   const router = useRouter();
   const { verificando } = useAuthGuard();
+  // ?inst=1 lo manda la pantalla de proceso de una institución (USECIPOL):
+  // misma vista, pero sin acciones de reclutamiento (perfil/CV, eliminar).
+  const esInstitucion = useSearchParams().get("inst") === "1";
 
   const [vacante, setVacante] = useState<Vacante | null>(null);
   const [sesiones, setSesiones] = useState<SesionConCandidato[]>([]);
@@ -144,7 +147,7 @@ export default function MonitoreoVacante() {
       <div style={{ background: NAVY, color: "#FFFFFF", padding: "1rem 1.5rem", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div>
           <button
-            onClick={() => router.push(`/seleccion/${params.vacanteId}`)}
+            onClick={() => router.push(esInstitucion ? `/seleccion/proceso/${params.vacanteId}` : `/seleccion/${params.vacanteId}`)}
             style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)", padding: "6px 12px", borderRadius: 7, fontSize: 12, cursor: "pointer", marginBottom: 8 }}
           >
             ← Volver al proceso
@@ -160,7 +163,7 @@ export default function MonitoreoVacante() {
       <div style={{ maxWidth: 1150, margin: "0 auto", padding: "1.75rem 1.5rem", display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 20 }}>
         <section style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 16, padding: "20px 22px" }}>
           <h2 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: NAVY }}>Sesiones activas</h2>
-          <p style={{ margin: "0 0 16px", fontSize: 12, color: "#7C89A8" }}>Pruebas programadas o en curso — sin grabación de video, solo señales de comportamiento.</p>
+          <p style={{ margin: "0 0 16px", fontSize: 12, color: "#7C89A8" }}>{esInstitucion ? "Estado de cada evaluado en tiempo real. El video se revisa desde el proceso, cuando termine la prueba." : "Pruebas programadas o en curso — sin grabación de video, solo señales de comportamiento."}</p>
           {sesiones.length === 0 ? (
             <div style={{ fontSize: 12.5, color: "#7C89A8" }}>No hay sesiones programadas ni en curso en este momento.</div>
           ) : (
@@ -179,20 +182,20 @@ export default function MonitoreoVacante() {
                   <span style={{ background: badgeSesion[s.estado].bg, color: badgeSesion[s.estado].color, fontWeight: 700, fontSize: 10.5, padding: "3px 9px", borderRadius: 20, flex: "none" }}>
                     {badgeSesion[s.estado].label}
                   </span>
-                  <button
+                  {!esInstitucion && (<button
                     onClick={() => router.push(`/seleccion/${params.vacanteId}/candidato/${s.candidato_id}`)}
                     style={{ background: "none", border: `1px solid ${NAVY}`, color: NAVY, fontSize: 11, padding: "5px 10px", borderRadius: 6, cursor: "pointer", flex: "none" }}
                   >
                     Ver perfil
-                  </button>
-                  <button
+                  </button>)}
+                  {!esInstitucion && (<button
                     onClick={() => eliminarSesion(s.id)}
                     disabled={eliminando === s.id}
                     title="Eliminar esta sesión agendada"
                     style={{ background: "none", border: "1px solid #C4402F", color: "#C4402F", fontSize: 11, padding: "5px 10px", borderRadius: 6, cursor: eliminando === s.id ? "not-allowed" : "pointer", flex: "none", opacity: eliminando === s.id ? 0.5 : 1 }}
                   >
                     {eliminando === s.id ? "…" : "Eliminar"}
-                  </button>
+                  </button>)}
                 </div>
               ))}
             </div>

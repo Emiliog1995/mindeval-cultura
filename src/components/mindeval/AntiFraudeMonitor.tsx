@@ -156,6 +156,9 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
     function onFullscreenChange() {
       const activo = !!document.fullscreenElement;
       setFullscreenActivo(activo);
+      // El portal de instituciones la activa por su cuenta (en el clic de
+      // "Continuar"), no desde el botón de este componente: también cuenta.
+      if (activo) fullscreenLogrado.current = true;
       // Solo se penaliza salir de un modo que de verdad llegó a activarse.
       // Sin esta guarda, un dispositivo que no soporta pantalla completa
       // podía acumular alertas graves sin que el candidato hiciera nada.

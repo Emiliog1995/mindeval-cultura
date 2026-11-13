@@ -22,6 +22,14 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Portal del evaluado: las pruebas de instituciones (USECIPOL) graban
+        // cámara + micrófono por contrato. Solo esta ruta los habilita, y solo
+        // para el propio sitio (self). Va DESPUÉS de la regla general: en
+        // Next.js, si dos reglas fijan la misma cabecera, gana la última.
+        source: "/seleccion/prueba/:path*",
+        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" }],
+      },
     ];
   },
 };

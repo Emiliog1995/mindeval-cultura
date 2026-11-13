@@ -22,6 +22,44 @@ interface RecursoSeleccion {
   candidatoIds?: string[];
 }
 
+export type RolUsuario = "super_admin" | "administrador" | "evaluador" | null;
+
+export interface ContextoUsuario {
+  email: string;
+  empresaId: string | null;
+  rol: RolUsuario;
+  modulos: string[] | null;
+}
+
+/**
+ * Devuelve quién hace la request (email, empresa, rol) si la sesión es válida
+ * y está en la allowlist, o null si no. Lo usan las rutas de gestión de
+ * usuarios para decidir qué puede hacer cada rol. No reemplaza a requireAuth:
+ * esto identifica, requireAuth autoriza por módulo/recurso.
+ */
+export async function getContextoUsuario(req: Request): Promise<ContextoUsuario | null> {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user?.email) return null;
+
+  const { data: fila } = await supabaseAdmin
+    .from("usuarios_autorizados")
+    .select("empresa_id, rol, modulos_permitidos")
+    .eq("email", data.user.email)
+    .eq("activo", true)
+    .maybeSingle();
+  if (!fila) return null;
+
+  return {
+    email: data.user.email,
+    empresaId: (fila.empresa_id as string | null) ?? null,
+    rol: (fila.rol as RolUsuario) ?? null,
+    modulos: (fila.modulos_permitidos as string[] | null) ?? null,
+  };
+}
+
 export async function requireAuth(req: Request, modulo?: Modulo, recurso?: RecursoSeleccion): Promise<NextResponse | null> {
   const authHeader = req.headers.get("authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "");

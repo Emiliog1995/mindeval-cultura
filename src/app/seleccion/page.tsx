@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import { authHeaders } from "@/lib/auth-headers";
 import type { Vacante } from "@/lib/mindeval-types";
 
 const NAVY = "#1B2A5B";
@@ -16,6 +17,7 @@ interface VacanteConConteo extends Vacante {
 interface Empresa {
   id: string;
   nombre: string;
+  tipo?: string;
 }
 
 export default function PanelSeleccion() {
@@ -35,6 +37,21 @@ function PanelSeleccionInner() {
   const [empresaId, setEmpresaId] = useState(searchParams.get("empresa") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Quién soy: null mientras carga. Un cliente externo (ej. USECIPOL) tiene
+  // empresaId y NO debe ver el Portal ni el selector de empresas.
+  const [yo, setYo] = useState<{ rol: string | null; empresaId: string | null; empresaTipo?: string | null } | null>(null);
+
+  useEffect(() => {
+    if (verificando) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/mindeval-usuarios?contexto=1", { headers: await authHeaders() });
+        if (res.ok) setYo(await res.json());
+      } catch {
+        /* sin contexto: se muestra la vista de staff por defecto */
+      }
+    })();
+  }, [verificando]);
 
   useEffect(() => {
     if (verificando) return;
@@ -63,8 +80,16 @@ function PanelSeleccionInner() {
 
   useEffect(() => {
     if (verificando) return;
-    supabase.from("empresas_mdt").select("id, nombre").order("nombre").then(({ data }) => setEmpresas(data ?? []));
+    supabase.from("empresas_mdt").select("id, nombre, tipo").order("nombre").then(({ data }) => setEmpresas(data ?? []));
   }, [verificando]);
+
+  // Una vacante es "proceso de institución" si su empresa es tipo institución.
+  const esProceso = (v: Vacante) =>
+    v.empresa_id && v.empresa_id === yo?.empresaId
+      ? yo?.empresaTipo === "institucion"
+      : empresas.find((e) => e.id === v.empresa_id)?.tipo === "institucion";
+  const soloInstitucion = yo?.empresaTipo === "institucion";
+  const hayInstituciones = soloInstitucion || empresas.some((e) => e.tipo === "institucion");
 
   const vacantesFiltradas = empresaId ? vacantes.filter((v) => v.empresa_id === empresaId) : vacantes;
 
@@ -78,21 +103,42 @@ function PanelSeleccionInner() {
             MindEval <span style={{ color: GOLD }}>Selección</span>
           </div>
           <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 1.2, color: "#8FA0CC", marginTop: 2 }}>
-            BY MINDTALENT · 7 ETAPAS + IA
+            {soloInstitucion ? "BY MINDTALENT · PRUEBAS PSICOMÉTRICAS" : "BY MINDTALENT · 7 ETAPAS + IA"}
           </div>
         </div>
-        <button
-          onClick={() => router.push("/portal")}
-          style={{ marginLeft: "auto", background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
-        >
-          ← Portal
-        </button>
-        <button
-          onClick={() => router.push("/seleccion/nueva")}
-          style={{ background: GOLD, color: NAVY, border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
-        >
-          + Nueva vacante
-        </button>
+        <div style={{ marginLeft: "auto" }} />
+        {(yo?.rol === "super_admin" || yo?.rol === "administrador") && (
+          <button
+            onClick={() => router.push("/seleccion/usuarios")}
+            style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+          >
+            Gestión de usuarios
+          </button>
+        )}
+        {yo && !yo.empresaId && (
+          <button
+            onClick={() => router.push("/portal")}
+            style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+          >
+            ← Portal
+          </button>
+        )}
+        {hayInstituciones && (yo?.rol === "super_admin" || yo?.rol === "administrador") && (
+          <button
+            onClick={() => router.push("/seleccion/proceso/nuevo")}
+            style={{ background: GOLD, color: NAVY, border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+          >
+            + Nuevo proceso
+          </button>
+        )}
+        {!soloInstitucion && (
+          <button
+            onClick={() => router.push("/seleccion/nueva")}
+            style={{ background: hayInstituciones && yo?.rol === "super_admin" ? "rgba(255,255,255,0.08)" : GOLD, color: hayInstituciones && yo?.rol === "super_admin" ? "#FFFFFF" : NAVY, border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+          >
+            + Nueva vacante
+          </button>
+        )}
       </div>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "2rem 1.5rem" }}>
@@ -102,6 +148,7 @@ function PanelSeleccionInner() {
           </div>
         )}
 
+        {(!yo || !yo.empresaId) && (
         <div style={{ marginBottom: 16 }}>
           <select
             value={empresaId}
@@ -114,18 +161,19 @@ function PanelSeleccionInner() {
             ))}
           </select>
         </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 24 }}>
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "18px 20px" }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>VACANTES ABIERTAS</div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>{soloInstitucion ? "PROCESOS ABIERTOS" : "VACANTES ABIERTAS"}</div>
             <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>{vacantesFiltradas.filter((v) => v.estado === "abierta").length}</div>
           </div>
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "18px 20px" }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>TOTAL VACANTES</div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>{soloInstitucion ? "TOTAL PROCESOS" : "TOTAL VACANTES"}</div>
             <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>{vacantesFiltradas.length}</div>
           </div>
           <div style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: "18px 20px" }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>CANDIDATOS TOTALES</div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "#7C89A8" }}>{soloInstitucion ? "EVALUADOS TOTALES" : "CANDIDATOS TOTALES"}</div>
             <div style={{ fontSize: 30, fontWeight: 800, color: NAVY }}>
               {vacantesFiltradas.reduce((s, v) => s + v.total_candidatos, 0)}
             </div>
@@ -139,7 +187,7 @@ function PanelSeleccionInner() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#F7F9FD" }}>
-                  {["Vacante", "Empresa", "Estado", "Candidatos", "Creada", "Acciones"].map((h) => (
+                  {[soloInstitucion ? "Proceso" : "Vacante", soloInstitucion ? "Institución" : "Empresa", "Estado", soloInstitucion ? "Evaluados" : "Candidatos", "Creada", "Acciones"].map((h) => (
                     <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8", letterSpacing: 0.5 }}>
                       {h}
                     </th>
@@ -171,7 +219,7 @@ function PanelSeleccionInner() {
                     </td>
                     <td style={{ padding: "12px 20px" }}>
                       <button
-                        onClick={() => router.push(`/seleccion/${v.id}`)}
+                        onClick={() => router.push(esProceso(v) ? `/seleccion/proceso/${v.id}` : `/seleccion/${v.id}`)}
                         style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "6px 14px", borderRadius: 6, fontSize: 11.5, cursor: "pointer" }}
                       >
                         Ver proceso
@@ -182,12 +230,12 @@ function PanelSeleccionInner() {
                 {vacantesFiltradas.length === 0 && (
                   <tr>
                     <td colSpan={6} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>
-                      No hay vacantes registradas.{" "}
+                      {soloInstitucion ? "No hay procesos registrados." : "No hay vacantes registradas."}{" "}
                       <button
-                        onClick={() => router.push("/seleccion/nueva")}
+                        onClick={() => router.push(soloInstitucion ? "/seleccion/proceso/nuevo" : "/seleccion/nueva")}
                         style={{ color: NAVY, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
                       >
-                        Crear la primera
+                        {soloInstitucion ? "Crear el primero" : "Crear la primera"}
                       </button>
                     </td>
                   </tr>

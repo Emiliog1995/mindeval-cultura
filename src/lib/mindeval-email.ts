@@ -460,3 +460,79 @@ export async function enviarAvisoPruebaRendida(params: {
     return { ok: false, error: e instanceof Error ? e.message : "Error al enviar el correo" };
   }
 }
+
+/**
+ * Invitación para instituciones (USECIPOL): lleva el enlace Y la contraseña
+ * temporal con la que el evaluado entra a rendir. La clave solo viaja en este
+ * correo -- en la base queda únicamente su hash.
+ */
+export async function enviarInvitacionInstitucion(params: {
+  to: string;
+  nombreEvaluado: string;
+  proceso: string;
+  institucion: string;
+  fechaProgramada: string;
+  tiempoLimiteMin: number | null;
+  pruebas: string[];
+  link: string;
+  clave: string;
+  contacto?: ContactoVacante;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY no configurada" };
+  const emisor = remitente();
+  if ("error" in emisor) return { ok: false, error: emisor.error };
+
+  const fecha = formatoEcuador(new Date(params.fechaProgramada));
+  const limite = formatoEcuador(limiteDeAcceso({ fecha_programada: params.fechaProgramada, estado: "programada" }));
+  const nombre = escapeHtml(params.nombreEvaluado);
+  const proceso = escapeHtml(params.proceso);
+  const institucion = escapeHtml(params.institucion);
+  const pruebas = params.pruebas.map(escapeHtml).join(", ");
+  const tiempo = params.tiempoLimiteMin ? `${params.tiempoLimiteMin} minutos` : "el indicado en la prueba";
+
+  const cuerpo = `
+    <p style="font-size: 14px; color: #1B2A5B;">Estimado/a ${nombre},</p>
+    <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
+      Ha sido convocado/a a rendir pruebas psicométricas en el proceso <strong>${proceso}</strong>
+      de la Institución <strong>${institucion}</strong>.
+    </p>
+    <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
+      <strong>Pruebas:</strong> ${pruebas}<br />
+      <strong>Puede empezar desde:</strong> ${fecha} (hora Ecuador)<br />
+      <strong>Plazo para entrar hasta:</strong> ${limite} (hora Ecuador)<br />
+      <strong>Tiempo para rendir:</strong> ${tiempo}, que empieza a correr cuando abra la prueba.
+    </p>
+    <div style="background: #F7F9FD; border: 1px solid #E3E8F2; border-radius: 10px; padding: 16px 18px; margin: 20px 0;">
+      <div style="font-size: 12px; color: #7C89A8; margin-bottom: 4px;">Su contraseña temporal</div>
+      <div style="font-size: 24px; font-weight: 800; letter-spacing: 3px; color: ${NAVY}; font-family: Menlo, Consolas, monospace;">${escapeHtml(params.clave)}</div>
+      <div style="font-size: 12px; color: #7C89A8; margin-top: 8px;">
+        Le pediremos esta contraseña y su número de cédula para entrar. No la comparta con nadie.
+      </div>
+    </div>
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${params.link}" style="background: ${GOLD}; color: ${NAVY}; text-decoration: none; font-weight: 700; font-size: 14px; padding: 12px 24px; border-radius: 8px; display: inline-block;">
+        Ir a mi prueba
+      </a>
+    </div>
+    <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
+      Si el botón no funciona, copie y pegue este enlace en su navegador:<br />
+      <a href="${params.link}" style="color: ${NAVY};">${params.link}</a>
+    </p>
+    <p style="font-size: 12px; color: #7C89A8; line-height: 1.6;">
+      Use una conexión estable y un solo dispositivo. Durante la prueba se registra el uso de la pantalla y de la cámara según el contrato del proceso.
+    </p>
+  `;
+
+  try {
+    const { error } = await getResend().emails.send({
+      from: emisor.from,
+      to: params.to,
+      subject: `Convocatoria a pruebas psicométricas — ${params.proceso}`,
+      html: plantilla({ cuerpo, contacto: params.contacto, empresa: params.institucion }),
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error al enviar el correo" };
+  }
+}

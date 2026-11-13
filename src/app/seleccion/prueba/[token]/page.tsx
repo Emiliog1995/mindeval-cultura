@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AntiFraudeMonitor from "@/components/mindeval/AntiFraudeMonitor";
+import { supabase } from "@/lib/supabase";
+import { useGrabacionProctoring } from "@/lib/mindeval-grabacion";
 import { BATERIAS_EJEMPLO } from "@/lib/mindeval-baterias";
 import type { OpcionPregunta } from "@/lib/mindeval-types";
 
@@ -49,6 +51,7 @@ interface DatosPsicometricaReal {
   candidato_id: string;
   candidato_nombre: string;
   iniciada_en: string;
+  tiempo_limite_min?: number | null;
   tests: {
     "16pf5"?: { num: number; texto: string; opciones: { letra: "a" | "b" | "c"; texto: string }[] }[];
     kostick?: { num: number; a: string; b: string }[];
@@ -118,6 +121,8 @@ interface InfoSesion {
   tipo: "tecnica" | "psicometrica" | "assessment";
   candidato_nombre: string;
   requiere_cedula: boolean;
+  requiere_clave?: boolean;
+  requiere_grabacion?: boolean;
   composicion?: { duracion_minutos: number; bloques: BloqueComposicion[] };
   ya_iniciada?: boolean;
 }
@@ -144,6 +149,8 @@ function claveBorrador(token: string): string {
 function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessment): number {
   if (datos.tipo === "psicometrica") {
     if (datos.modo === "real") {
+      // Instituciones: el proceso fija el tiempo total.
+      if (datos.tiempo_limite_min) return datos.tiempo_limite_min;
       const tiene16pf5 = !!datos.tests["16pf5"];
       const tieneKostick = !!datos.tests.kostick;
       const tieneDisc = !!datos.tests.disc;
@@ -219,6 +226,14 @@ export default function PruebaTokenPage() {
   const [instruccionesVistas, setInstruccionesVistas] = useState(false);
 
   const [cedulaConfirmar, setCedulaConfirmar] = useState("");
+  const [claveConfirmar, setClaveConfirmar] = useState("");
+  // Instituciones: cámara + audio grabados para revisión posterior.
+  const grab = useGrabacionProctoring();
+  const [subiendoVideo, setSubiendoVideo] = useState(false);
+  useEffect(() => {
+    if (grab.estado === "grabando") grab.adjuntarPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grab.estado, datos]);
   const [verificandoCedula, setVerificandoCedula] = useState(false);
   const [errorCedula, setErrorCedula] = useState("");
 
@@ -259,7 +274,7 @@ export default function PruebaTokenPage() {
         // tiempo a una pantalla que ya leyó.
         if (d.ya_iniciada) {
           setInstruccionesVistas(true);
-          if (!d.requiere_cedula) desbloquearContenido("");
+          if (!d.requiere_cedula && !d.requiere_clave) desbloquearContenido("", "");
         }
       })
       .catch((e) => setError(e.message))
@@ -267,19 +282,28 @@ export default function PruebaTokenPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  async function desbloquearContenido(cedula: string) {
+  async function desbloquearContenido(cedula: string, clave: string) {
     setErrorCedula("");
     setVerificandoCedula(true);
     try {
+      // Antes de desbloquear (y arrancar el cronómetro) se comprueba que haya
+      // cámara y micrófono con permiso: si no, no se pierde tiempo de examen.
+      if (info?.requiere_grabacion) {
+        const chequeo = await grab.chequearDispositivos();
+        if (!chequeo.camara || !chequeo.microfono) {
+          throw new Error(chequeo.errores.join(" ") || "Se necesita cámara y micrófono para rendir esta prueba.");
+        }
+      }
       const res = await fetch(`/api/mindeval-prueba/${token}/contenido`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cedula }),
+        body: JSON.stringify({ cedula, clave }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "No se pudo verificar tu cédula.");
+      if (!res.ok) throw new Error(d.error ?? "No se pudo verificar tus datos.");
 
       setDatos(d);
+      if (info?.requiere_grabacion) await grab.iniciar();
       if (d.tipo === "psicometrica" && d.modo === "placeholder") {
         const iniciales: Record<string, number[]> = {};
         Object.keys(d.items).forEach((k) => {
@@ -332,6 +356,8 @@ export default function PruebaTokenPage() {
         setSeccionActual(idx);
       }
     } catch (e) {
+      // Si no pasó la verificación, no se queda en pantalla completa.
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       setErrorCedula(e instanceof Error ? e.message : "No se pudo verificar tu cédula.");
     } finally {
       setVerificandoCedula(false);
@@ -377,11 +403,36 @@ export default function PruebaTokenPage() {
     respuestasValanti,
   ]);
 
+  /**
+   * Corta la grabación y la sube a Storage con una URL firmada. Es
+   * best-effort a propósito: si la subida falla, igual se envían las
+   * respuestas -- perder el examen entero por un video sería peor.
+   */
+  async function subirGrabacion() {
+    setSubiendoVideo(true);
+    try {
+      const { blob, mime } = await grab.detener();
+      if (!blob || blob.size === 0) return;
+      const h = { "Content-Type": "application/json" };
+      const r1 = await fetch(`/api/mindeval-prueba/${token}/grabacion`, { method: "POST", headers: h, body: JSON.stringify({ accion: "url" }) });
+      const u = await r1.json();
+      if (!r1.ok) throw new Error(u.error);
+      const { error: upErr } = await supabase.storage.from("mindeval-grabaciones").uploadToSignedUrl(u.path, u.token, blob, { contentType: mime.split(";")[0] });
+      if (upErr) throw new Error(upErr.message);
+      await fetch(`/api/mindeval-prueba/${token}/grabacion`, { method: "POST", headers: h, body: JSON.stringify({ accion: "confirmar", path: u.path }) });
+    } catch (e) {
+      console.error("No se pudo subir la grabación", e);
+    } finally {
+      setSubiendoVideo(false);
+    }
+  }
+
   async function enviar() {
     if (!datos) return;
     setEnviando(true);
     setError("");
     try {
+      if (info?.requiere_grabacion) await subirGrabacion();
       const body =
         datos.tipo === "tecnica"
           ? datos.modo === "banco"
@@ -414,6 +465,7 @@ export default function PruebaTokenPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setEnviado(true);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       try {
         localStorage.removeItem(claveBorrador(token));
       } catch {
@@ -690,12 +742,17 @@ export default function PruebaTokenPage() {
             <button
               onClick={() => {
                 setInstruccionesVistas(true);
-                if (!info.requiere_cedula) desbloquearContenido("");
+                if (!info.requiere_cedula && !info.requiere_clave) desbloquearContenido("", "");
               }}
               style={{ width: "100%", background: GOLD, color: NAVY, border: "none", padding: "13px", borderRadius: 8, fontSize: 14.5, fontWeight: 800, cursor: "pointer" }}
             >
-              Entendido, continuar
+              {info.requiere_clave ? "Entendido, ir a verificar mi identidad" : "Entendido, continuar"}
             </button>
+            {info.requiere_clave && (
+              <p style={{ fontSize: 12, color: "#7C89A8", textAlign: "center", marginTop: 10 }}>
+                En el siguiente paso le pediremos su cédula y la contraseña temporal del correo. La prueba empieza después de eso.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -709,7 +766,12 @@ export default function PruebaTokenPage() {
           <div style={{ fontSize: 10, letterSpacing: 1.2, color: GOLD, fontWeight: 700, marginBottom: 6 }}>MINDEVAL · BY MINDTALENT</div>
           <h2 style={{ color: NAVY, marginBottom: 6 }}>Hola, {info.candidato_nombre}</h2>
           <p style={{ color: "#7C89A8", fontSize: 13, marginBottom: 12 }}>
-            Antes de comenzar, confirma tu número de cédula para verificar que eres tú quien va a rendir la prueba.
+            {info.requiere_grabacion
+              ? "Esta prueba se graba (cámara y micrófono) para su revisión posterior. Al continuar, el navegador le pedirá permiso. "
+              : ""}
+            {info.requiere_clave
+              ? "Antes de comenzar, ingresa tu cédula y la contraseña temporal que recibiste por correo."
+              : "Antes de comenzar, confirma tu número de cédula para verificar que eres tú quien va a rendir la prueba."}
           </p>
           <p style={{ color: "#A9B6D8", fontSize: 11, marginBottom: 20 }}>
             Esta prueba tiene monitoreo anti-fraude activo durante todo el intento. Tus respuestas se tratan
@@ -726,12 +788,29 @@ export default function PruebaTokenPage() {
             onChange={(e) => setCedulaConfirmar(e.target.value.replace(/\D/g, "").slice(0, 10))}
             style={{ width: "100%", padding: "11px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 12, textAlign: "center" }}
           />
+          {info.requiere_clave && (
+            <input
+              value={claveConfirmar}
+              maxLength={12}
+              autoComplete="off"
+              placeholder="Contraseña temporal"
+              onChange={(e) => setClaveConfirmar(e.target.value.toUpperCase())}
+              style={{ width: "100%", padding: "11px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 12, textAlign: "center", letterSpacing: 2 }}
+            />
+          )}
           {errorCedula && (
             <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{errorCedula}</div>
           )}
           <button
-            onClick={() => desbloquearContenido(cedulaConfirmar)}
-            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar)}
+            onClick={() => {
+              // Los navegadores solo permiten pantalla completa dentro de un
+              // clic del usuario, y antes de cualquier await: por eso va aquí,
+              // lo primero. iOS Safari no la soporta: falla en silencio y la
+              // prueba sigue (el monitor no penaliza lo que no se pudo activar).
+              if (info.requiere_grabacion) document.documentElement.requestFullscreen?.().catch(() => {});
+              desbloquearContenido(cedulaConfirmar, claveConfirmar);
+            }}
+            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && claveConfirmar.trim().length < 6)}
             style={{
               width: "100%",
               background: GOLD,
@@ -857,6 +936,16 @@ export default function PruebaTokenPage() {
             Aviso de Privacidad
           </a>.
         </div>
+
+        {info?.requiere_grabacion && (
+          <div style={{ position: "fixed", right: 16, bottom: 16, zIndex: 50, background: "#0B1020", borderRadius: 12, padding: 6, boxShadow: "0 6px 24px rgba(0,0,0,0.25)" }}>
+            <video ref={grab.videoRef} muted playsInline style={{ width: 132, height: 99, borderRadius: 8, objectFit: "cover", display: "block", transform: "scaleX(-1)" }} />
+            <div style={{ color: "#FFFFFF", fontSize: 10.5, textAlign: "center", marginTop: 4, display: "flex", gap: 5, justifyContent: "center", alignItems: "center" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: subiendoVideo || grab.estado === "grabando" ? "#E5484D" : "#7C89A8", display: "inline-block" }} />
+              {subiendoVideo ? "Subiendo video…" : grab.estado === "grabando" ? "Grabando" : "Sin grabar"}
+            </div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <AntiFraudeMonitor

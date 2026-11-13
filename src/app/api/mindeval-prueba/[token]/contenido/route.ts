@@ -10,6 +10,7 @@ import { ITEMS_DISC } from "@/lib/mindeval-disc";
 import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
 import type { EjercicioBanco, PreguntaBanco, Vacante } from "@/lib/mindeval-types";
 import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible } from "@/lib/mindeval-ventana-prueba";
+import { MAX_INTENTOS_CLAVE, verificarClave } from "@/lib/mindeval-clave";
 
 // generarCasoTecnico (caso técnico abierto) llama a Claude y puede superar
 // el límite por defecto de las funciones serverless de Vercel con un cold
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params;
 
   try {
-    const { cedula }: { cedula?: string } = await req.json().catch(() => ({}));
+    const { cedula, clave }: { cedula?: string; clave?: string } = await req.json().catch(() => ({}));
 
     const { data: sesion, error } = await supabaseAdmin
       .from("mindeval_sesiones_prueba")
@@ -72,6 +73,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     }
     if (todaviaNoDisponible(sesion)) {
       return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
+    }
+
+    // Invitaciones de institución llevan contraseña temporal (solo existe su
+    // hash). Tras MAX_INTENTOS_CLAVE fallos se bloquea hasta reinvitar.
+    if (sesion.clave_hash) {
+      if ((sesion.clave_intentos ?? 0) >= MAX_INTENTOS_CLAVE) {
+        return NextResponse.json(
+          { error: "Demasiados intentos fallidos. Pide al administrador que te reenvíe la invitación." },
+          { status: 423 }
+        );
+      }
+      if (!clave || !verificarClave(clave, sesion.clave_hash)) {
+        await supabaseAdmin
+          .from("mindeval_sesiones_prueba")
+          .update({ clave_intentos: (sesion.clave_intentos ?? 0) + 1 })
+          .eq("id", sesion.id);
+        return NextResponse.json({ error: "La contraseña temporal no es correcta." }, { status: 403 });
+      }
+      if ((sesion.clave_intentos ?? 0) > 0) {
+        await supabaseAdmin.from("mindeval_sesiones_prueba").update({ clave_intentos: 0 }).eq("id", sesion.id);
+      }
     }
 
     const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;
@@ -267,6 +289,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         candidato_id: sesion.candidato_id,
         candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
         iniciada_en: iniciadaEn,
+        tiempo_limite_min: (vacante as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min ?? null,
         tests,
       });
     }

@@ -77,10 +77,12 @@ async function composicion(sesion: { tipo: string; vacante_id: string }) {
 
   const { data: vacante } = await supabaseAdmin
     .from("mindeval_vacantes")
-    .select("tests_psicometricos")
+    .select("*")
     .eq("id", sesion.vacante_id)
     .maybeSingle();
   const activos: string[] = vacante?.tests_psicometricos ?? [];
+  // Instituciones (USECIPOL): el proceso fija el tiempo total del examen.
+  const tiempoFijado: number | null = (vacante as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min ?? null;
 
   if (!activos.length) {
     const items = Object.values(ITEMS_EJEMPLO).reduce((n, arr) => n + arr.length, 0);
@@ -105,7 +107,15 @@ async function composicion(sesion: { tipo: string; vacante_id: string }) {
     bloques.push({ nombre: "VALANTI — Valores", items: ITEMS_VALANTI.length, formato: "Reparte 3 puntos entre dos frases" });
     minutos += 15;
   }
-  return { duracion_minutos: minutos || 30, bloques };
+  return { duracion_minutos: tiempoFijado ?? (minutos || 30), bloques };
+}
+
+/** Las pruebas de instituciones (USECIPOL) se graban por contrato. */
+async function esInstitucion(vacanteId: string): Promise<boolean> {
+  const { data: v } = await supabaseAdmin.from("mindeval_vacantes").select("empresa_id").eq("id", vacanteId).maybeSingle();
+  if (!v?.empresa_id) return false;
+  const { data: e } = await supabaseAdmin.from("empresas_mdt").select("tipo").eq("id", v.empresa_id).maybeSingle();
+  return e?.tipo === "institucion";
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -140,6 +150,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     tipo: sesion.tipo,
     candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
     requiere_cedula: !!sesion.mindeval_candidatos?.cedula,
+    requiere_clave: !!sesion.clave_hash,
+    requiere_grabacion: await esInstitucion(sesion.vacante_id),
     composicion: await composicion(sesion),
     // Si ya la había empezado, las instrucciones no vuelven a bloquearle el
     // paso: su cronómetro ya está corriendo.
