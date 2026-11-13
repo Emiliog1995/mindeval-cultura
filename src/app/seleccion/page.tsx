@@ -126,6 +126,14 @@ function PanelSeleccionInner() {
             ← Portal
           </button>
         )}
+        {soloInstitucion && (
+          <button
+            onClick={() => router.push(yo?.empresaTipo === "institucion" ? "/seleccion/historico" : `/seleccion/historico?empresa=${empresaId}`)}
+            style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}
+          >
+            Evaluaciones anteriores
+          </button>
+        )}
         {hayInstituciones && (yo?.rol === "super_admin" || yo?.rol === "administrador") && (
           <button
             onClick={() => router.push("/seleccion/proceso/nuevo")}
