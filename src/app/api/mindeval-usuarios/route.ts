@@ -154,17 +154,21 @@ export async function PATCH(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   if (!puedeGestionar(ctx.rol)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
 
-  let body: { email?: string; activo?: boolean };
+  let body: { email?: string; activo?: boolean; password?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
   const email = body.email?.trim().toLowerCase();
-  if (!email || typeof body.activo !== "boolean") {
-    return NextResponse.json({ error: "Faltan datos (email, activo)" }, { status: 400 });
+  const cambiaClave = typeof body.password === "string";
+  if (!email || (typeof body.activo !== "boolean" && !cambiaClave)) {
+    return NextResponse.json({ error: "Faltan datos (email y activo, o email y password)" }, { status: 400 });
   }
-  if (email === ctx.email) {
+  if (cambiaClave && (body.password ?? "").length < 8) {
+    return NextResponse.json({ error: "La contraseña debe tener al menos 8 caracteres" }, { status: 400 });
+  }
+  if (!cambiaClave && email === ctx.email) {
     return NextResponse.json({ error: "No puedes desactivar tu propia cuenta" }, { status: 400 });
   }
 
@@ -180,6 +184,26 @@ export async function PATCH(req: NextRequest) {
   }
   if (objetivo.rol === "super_admin") {
     return NextResponse.json({ error: "No se puede modificar un super administrador" }, { status: 403 });
+  }
+
+  // Restablecer contraseña: mismo alcance que activar/desactivar (el
+  // administrador solo en su empresa; nunca a un super_admin). Se busca el
+  // login de Auth por correo y se le fija la clave nueva.
+  if (cambiaClave) {
+    const { permitido } = checkRateLimit(req, "mindeval-usuarios-clave");
+    if (!permitido) return rateLimitResponse();
+
+    let authId: string | null = null;
+    for (let pagina = 1; pagina <= 10 && !authId; pagina++) {
+      const { data, error: lErr } = await supabaseAdmin.auth.admin.listUsers({ page: pagina, perPage: 200 });
+      if (lErr || !data?.users?.length) break;
+      authId = data.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null;
+    }
+    if (!authId) return NextResponse.json({ error: "No se encontró el login de ese usuario" }, { status: 404 });
+
+    const { error: pErr } = await supabaseAdmin.auth.admin.updateUserById(authId, { password: body.password });
+    if (pErr) return NextResponse.json({ error: "No se pudo cambiar la contraseña" }, { status: 502 });
+    return NextResponse.json({ ok: true, email });
   }
 
   const { error } = await supabaseAdmin

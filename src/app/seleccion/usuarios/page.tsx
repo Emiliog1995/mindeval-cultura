@@ -128,6 +128,32 @@ export default function GestionUsuariosPage() {
     }
   }
 
+  async function cambiarClave(u: UsuarioFila) {
+    setError("");
+    setOk("");
+    const nueva = window.prompt(`Nueva contraseña para ${u.email} (mínimo 8 caracteres):`);
+    if (nueva === null) return;
+    if (nueva.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/mindeval-usuarios", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ email: u.email, password: nueva }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "No se pudo cambiar la contraseña.");
+        return;
+      }
+      setOk(`Contraseña de ${u.email} actualizada. Entrégasela a la persona.`);
+    } catch {
+      setError("No se pudo cambiar la contraseña.");
+    }
+  }
+
   if (verificando) return null;
 
   if (sinPermiso) {
@@ -232,6 +258,14 @@ export default function GestionUsuariosPage() {
                     </span>
                   </td>
                   <td style={{ padding: "9px 14px", textAlign: "right" }}>
+                    {u.rol !== "super_admin" && (
+                      <button
+                        onClick={() => cambiarClave(u)}
+                        style={{ background: "none", border: "1px solid #CBD5E1", borderRadius: 7, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", color: NAVY, marginRight: 8 }}
+                      >
+                        Cambiar clave
+                      </button>
+                    )}
                     {u.rol !== "super_admin" && (
                       <button
                         onClick={() => alternarActivo(u)}
