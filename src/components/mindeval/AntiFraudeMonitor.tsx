@@ -14,6 +14,14 @@ interface Props {
   // Authorization de la sesión en su lugar.
   token?: string;
   onInvalidar?: () => void;
+  // Modo estricto (instituciones, ej. USECIPOL): cada salida de la prueba se
+  // registra EN EL MOMENTO de salir (no al volver), cuenta como una de las
+  // `maxSalidas` permitidas, y al exceder se llama a `onExcedido` (el portal
+  // envía lo respondido y cierra). Cerrar NO invalida: las respuestas se
+  // conservan y quien revisa decide con las alertas y el video.
+  estricto?: boolean;
+  maxSalidas?: number;
+  onExcedido?: () => void;
 }
 
 interface AlertaLocal {
@@ -66,7 +74,7 @@ const UMBRAL_LARGO_S = 5 * 60;
  *     candidato honesto que rendía desde su teléfono llegaba al final con la
  *     integridad hundida sin haber hecho nada malo.
  */
-export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onInvalidar }: Props) {
+export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onInvalidar, estricto = false, maxSalidas = 2, onExcedido }: Props) {
   const [alertas, setAlertas] = useState<AlertaLocal[]>([]);
   const [fullscreenActivo, setFullscreenActivo] = useState(false);
   const [soportaFullscreen, setSoportaFullscreen] = useState(true);
@@ -74,8 +82,18 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
   const fullscreenLogrado = useRef(false);
   const ocultoDesde = useRef<number | null>(null);
   const tactil = useRef(false);
+  // Modo estricto
+  const salidasEstrictas = useRef(0);
+  const episodioActivo = useRef(false);
+  const ultimaSalida = useRef(0);
+  const excedido = useRef(false);
+  const [aviso, setAviso] = useState<{ n: number } | null>(null);
+  // Siempre la versión más reciente: los listeners se crean una sola vez y, si
+  // capturaran `onExcedido` directo, enviarían la prueba con respuestas viejas.
+  const onExcedidoRef = useRef(onExcedido);
+  onExcedidoRef.current = onExcedido;
 
-  async function registrarAlerta(tipo: string, severidad: SeveridadAlerta, detalle?: string) {
+  async function registrarAlerta(tipo: string, severidad: SeveridadAlerta, detalle?: string, keepalive = false) {
     setAlertas((prev) => [{ tipo, severidad, hora: new Date().toLocaleTimeString("es-EC") }, ...prev].slice(0, 20));
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -84,6 +102,8 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
       await fetch("/api/mindeval-alerta-fraude", {
         method: "POST",
         headers,
+        // keepalive: la petición sigue aunque la pestaña ya esté oculta.
+        keepalive,
         body: JSON.stringify({
           token,
           candidato_id: candidatoId,
@@ -97,6 +117,39 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
       // Fallback amigable: si falla el insert (ej. sin conexión), la prueba sigue.
       // La alerta ya quedó reflejada localmente para el candidato/reclutador.
     }
+  }
+
+  /**
+   * Modo estricto: registra la salida al instante y cuenta una de las
+   * permitidas. `esEpisodio` = salida por ocultar pestaña / perder foco (dura
+   * hasta volver); la de pantalla completa es puntual. 1,5 s de margen para no
+   * contar dos veces un mismo gesto que dispara varios eventos a la vez.
+   */
+  function salidaEstricta(motivo: string, esEpisodio: boolean) {
+    if (!estricto || excedido.current) return;
+    const ahora = Date.now();
+    if (ahora - ultimaSalida.current < 1500) return;
+    if (esEpisodio) {
+      if (episodioActivo.current) return;
+      episodioActivo.current = true;
+    }
+    ultimaSalida.current = ahora;
+    salidasEstrictas.current += 1;
+    const n = salidasEstrictas.current;
+    const supera = n > maxSalidas;
+    registrarAlerta(`${motivo} (salida ${n} de ${maxSalidas} permitidas)`, supera ? "critico" : "alto", undefined, true);
+    if (supera) {
+      excedido.current = true;
+      registrarAlerta("Prueba cerrada automáticamente por exceder las salidas permitidas", "critico", undefined, true);
+      onExcedidoRef.current?.();
+      return;
+    }
+    setAviso({ n });
+  }
+
+  function volvioALaPrueba() {
+    if (!estricto) return;
+    episodioActivo.current = false;
   }
 
   /**
@@ -122,6 +175,11 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
 
   useEffect(() => {
     function onVisibilityChange() {
+      if (estricto) {
+        if (document.hidden) salidaEstricta("Salió de la prueba (cambio de pestaña o de aplicación)", true);
+        else volvioALaPrueba();
+        return;
+      }
       if (document.hidden) {
         ocultoDesde.current = Date.now();
         return;
@@ -159,6 +217,11 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
       // El portal de instituciones la activa por su cuenta (en el clic de
       // "Continuar"), no desde el botón de este componente: también cuenta.
       if (activo) fullscreenLogrado.current = true;
+      if (estricto) {
+        // En estricto, salir de pantalla completa es una salida más.
+        if (!activo && fullscreenLogrado.current) salidaEstricta("Salió de pantalla completa", false);
+        return;
+      }
       // Solo se penaliza salir de un modo que de verdad llegó a activarse.
       // Sin esta guarda, un dispositivo que no soporta pantalla completa
       // podía acumular alertas graves sin que el candidato hiciera nada.
@@ -176,11 +239,25 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
       registrarAlerta("Intento de pegar contenido", "medio");
     }
 
+    // Escritorio: cambiar de ventana sin cambiar de pestaña (Cmd/Alt+Tab,
+    // otra app encima) no dispara visibilitychange pero sí blur. En celular
+    // blur salta con el teclado o el selector del sistema: ahí solo cuenta
+    // ocultar la app.
+    function onBlur() {
+      if (estricto && !tactil.current) salidaEstricta("Salió de la ventana de la prueba", true);
+    }
+    function onFocus() {
+      if (!document.hidden) volvioALaPrueba();
+    }
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibilityChange);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("copy", onCopy);
     document.addEventListener("paste", onPaste);
     return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       document.removeEventListener("copy", onCopy);
@@ -195,6 +272,30 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
   const colorIndice = indice >= 80 ? "#12805C" : indice >= 50 ? "#F5B800" : "#C4402F";
 
   return (
+    <>
+      {estricto && aviso && !excedido.current && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(11,16,32,0.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 16, padding: "28px 26px", maxWidth: 420, textAlign: "center" }}>
+            <div style={{ fontSize: 34, marginBottom: 8 }}>⚠️</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#1B2A5B", marginBottom: 8 }}>
+              Salió de la prueba ({aviso.n} de {maxSalidas} permitidas)
+            </div>
+            <p style={{ fontSize: 13.5, color: "#33405F", lineHeight: 1.6, marginBottom: 6 }}>
+              Esta salida quedó registrada. {aviso.n >= maxSalidas ? <strong>Si vuelve a salir, la prueba se cerrará y se enviará lo que haya respondido.</strong> : `Le queda ${maxSalidas - aviso.n} salida permitida.`}
+            </p>
+            <p style={{ fontSize: 12, color: "#7C89A8", marginBottom: 16 }}>El tiempo de la prueba sigue corriendo.</p>
+            <button
+              onClick={() => {
+                setAviso(null);
+                document.documentElement.requestFullscreen?.().catch(() => {});
+              }}
+              style={{ background: "#F5B800", color: "#1B2A5B", border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+            >
+              Entendido, volver a la prueba
+            </button>
+          </div>
+        </div>
+      )}
     <div
       style={{
         background: "#18244C",
@@ -278,5 +379,6 @@ export default function AntiFraudeMonitor({ candidatoId, sesionTipo, token, onIn
         </button>
       )}
     </div>
+    </>
   );
 }

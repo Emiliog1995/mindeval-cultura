@@ -227,6 +227,9 @@ export default function PruebaTokenPage() {
 
   const [cedulaConfirmar, setCedulaConfirmar] = useState("");
   const [claveConfirmar, setClaveConfirmar] = useState("");
+  // Instituciones: estudiante o docente, y cierre automático por exceder salidas.
+  const [perfilElegido, setPerfilElegido] = useState<"estudiante" | "docente" | "">("");
+  const [cerradaPorSalidas, setCerradaPorSalidas] = useState(false);
   // Instituciones: cámara + audio grabados para revisión posterior.
   const grab = useGrabacionProctoring();
   const [subiendoVideo, setSubiendoVideo] = useState(false);
@@ -282,7 +285,7 @@ export default function PruebaTokenPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  async function desbloquearContenido(cedula: string, clave: string) {
+  async function desbloquearContenido(cedula: string, clave: string, perfil?: string) {
     setErrorCedula("");
     setVerificandoCedula(true);
     try {
@@ -297,7 +300,7 @@ export default function PruebaTokenPage() {
       const res = await fetch(`/api/mindeval-prueba/${token}/contenido`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cedula, clave }),
+        body: JSON.stringify({ cedula, clave, perfil }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "No se pudo verificar tus datos.");
@@ -425,6 +428,12 @@ export default function PruebaTokenPage() {
     } finally {
       setSubiendoVideo(false);
     }
+  }
+
+  /** Excedió las salidas permitidas: se envía lo respondido y se cierra. */
+  function cerrarPorSalidas() {
+    setCerradaPorSalidas(true);
+    enviar();
   }
 
   async function enviar() {
@@ -788,6 +797,33 @@ export default function PruebaTokenPage() {
             onChange={(e) => setCedulaConfirmar(e.target.value.replace(/\D/g, "").slice(0, 10))}
             style={{ width: "100%", padding: "11px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 12, textAlign: "center" }}
           />
+          {info.requiere_grabacion && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#7C89A8", marginBottom: 6 }}>Rindo como:</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["estudiante", "docente"] as const).map((op) => (
+                  <button
+                    key={op}
+                    type="button"
+                    onClick={() => setPerfilElegido(op)}
+                    style={{
+                      flex: 1,
+                      padding: "11px 8px",
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: perfilElegido === op ? `2px solid ${NAVY}` : "1.5px solid #D5DCEB",
+                      background: perfilElegido === op ? NAVY : "#FFFFFF",
+                      color: perfilElegido === op ? "#FFFFFF" : NAVY,
+                    }}
+                  >
+                    {op === "estudiante" ? "Estudiante" : "Docente"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {info.requiere_clave && (
             <input
               value={claveConfirmar}
@@ -808,9 +844,9 @@ export default function PruebaTokenPage() {
               // lo primero. iOS Safari no la soporta: falla en silencio y la
               // prueba sigue (el monitor no penaliza lo que no se pudo activar).
               if (info.requiere_grabacion) document.documentElement.requestFullscreen?.().catch(() => {});
-              desbloquearContenido(cedulaConfirmar, claveConfirmar);
+              desbloquearContenido(cedulaConfirmar, claveConfirmar, perfilElegido || undefined);
             }}
-            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && claveConfirmar.trim().length < 6)}
+            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && claveConfirmar.trim().length < 6) || (!!info.requiere_grabacion && !perfilElegido)}
             style={{
               width: "100%",
               background: GOLD,
@@ -841,6 +877,11 @@ export default function PruebaTokenPage() {
             Gracias, {datos?.candidato_nombre}. El equipo de reclutamiento revisará tus resultados y te contactará
             con los siguientes pasos.
           </p>
+          {cerradaPorSalidas && (
+            <p style={{ color: "#C4402F", fontSize: 12.5, marginTop: 12 }}>
+              La prueba se cerró automáticamente por exceder las salidas permitidas. Se enviaron las respuestas que alcanzó a dar.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -937,6 +978,17 @@ export default function PruebaTokenPage() {
           </a>.
         </div>
 
+        {cerradaPorSalidas && !enviado && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(11,16,32,0.95)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#FFFFFF", borderRadius: 16, padding: "28px 26px", maxWidth: 420, textAlign: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Prueba cerrada</div>
+              <p style={{ fontSize: 13.5, color: "#33405F", lineHeight: 1.6 }}>
+                Excedió las salidas permitidas. {enviando ? "Enviando sus respuestas…" : error ? `No se pudieron enviar sus respuestas (${error}). Avise al administrador.` : "Se está cerrando su prueba."}
+              </p>
+            </div>
+          </div>
+        )}
+
         {info?.requiere_grabacion && (
           <div style={{ position: "fixed", right: 16, bottom: 16, zIndex: 50, background: "#0B1020", borderRadius: 12, padding: 6, boxShadow: "0 6px 24px rgba(0,0,0,0.25)" }}>
             <video ref={grab.videoRef} muted playsInline style={{ width: 132, height: 99, borderRadius: 8, objectFit: "cover", display: "block", transform: "scaleX(-1)" }} />
@@ -952,6 +1004,9 @@ export default function PruebaTokenPage() {
             candidatoId={datos.candidato_id}
             sesionTipo={datos.tipo === "tecnica" ? "tecnica" : datos.tipo === "assessment" ? "assessment" : "psicometricas"}
             token={token}
+            estricto={!!info?.requiere_grabacion}
+            maxSalidas={2}
+            onExcedido={cerrarPorSalidas}
           />
         </div>
 

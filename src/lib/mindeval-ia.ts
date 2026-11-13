@@ -379,3 +379,59 @@ el reclutador puede ajustar el valor manualmente después, así que sé objetivo
     notas: typeof resultado.notas === "string" ? resultado.notas : "",
   };
 }
+
+/**
+ * Informe descriptivo de un evaluado de institución (USECIPOL), a partir de
+ * sus puntajes psicométricos.
+ *
+ * Reglas duras, aprendidas de la plataforma anterior de la Policía (donde un
+ * LLM decidía la validez y las cohortes salían "PRUEBA INVALIDADA"):
+ *  - La IA SOLO describe lo que los puntajes muestran. No decide aptitud, no
+ *    recomienda contratar/descartar, no dictamina validez de la prueba.
+ *  - No recibe nombre ni cédula: solo perfil (estudiante/docente), escalas,
+ *    puntajes, completitud y conteo de alertas.
+ *  - Si una prueba está incompleta, lo dice y no interpreta sus puntajes.
+ */
+export async function generarInformePsicometricoInstitucion(datos: {
+  perfil: "estudiante" | "docente" | null;
+  pruebas: {
+    prueba: string;
+    patron: string | null;
+    incompleta: boolean;
+    respondidos: number | null;
+    esperados: number | null;
+    escalas: { escala: string; puntaje: number | string | null; percentil: number | null }[];
+  }[];
+  alertas: { total: number; graves: number };
+}): Promise<string> {
+  const lineas = datos.pruebas.map((p) => {
+    const cab = `${p.prueba}${p.patron ? ` (patrón ${p.patron})` : ""} — ${p.respondidos ?? "?"}/${p.esperados ?? "?"} ítems${p.incompleta ? " — INCOMPLETA" : ""}`;
+    const esc = p.escalas.map((e) => `  - ${e.escala}: ${e.puntaje ?? "s/d"}${e.percentil !== null ? ` (percentil ${e.percentil})` : ""}`).join("\n");
+    return `${cab}\n${esc}`;
+  });
+
+  const prompt = `Eres un psicólogo organizacional que redacta un informe DESCRIPTIVO para quien revisará a un evaluado de una institución pública.
+
+Perfil rendido: ${datos.perfil ?? "no indicado"}
+Alertas de navegador durante la prueba: ${datos.alertas.total} (graves: ${datos.alertas.graves})
+
+Resultados:
+${lineas.join("\n\n")}
+
+Reglas obligatorias:
+- Describe SOLO lo que los puntajes muestran. No inventes datos ni características que no estén en ellos.
+- NO digas si la persona es apta o no apta, NO recomiendes contratar, aprobar ni descartar, y NO declares la prueba válida o inválida. Esa decisión la toma una persona.
+- Si una prueba está marcada INCOMPLETA, indica que sus puntajes no son interpretables y no los describas.
+- Las alertas de navegador se mencionan solo como un hecho a considerar (cantidad), sin concluir que hubo fraude.
+- Escribe en español claro, en texto plano (sin markdown, sin asteriscos), con estas secciones en MAYÚSCULAS: RESUMEN DEL PERFIL, FORTALEZAS OBSERVABLES, ASPECTOS A OBSERVAR, CONSIDERACIONES DE LA APLICACIÓN.
+- Máximo 350 palabras. Termina con la línea: "Este informe es un apoyo descriptivo generado con IA. La valoración final corresponde a quien revisa."`;
+
+  const message = await getClient().messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1500,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const texto = textoDeMensaje(message).trim();
+  if (!texto) throw new Error("La IA no devolvió texto");
+  return texto;
+}
