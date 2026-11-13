@@ -88,7 +88,10 @@ function PanelSeleccionInner() {
     v.empresa_id && v.empresa_id === yo?.empresaId
       ? yo?.empresaTipo === "institucion"
       : empresas.find((e) => e.id === v.empresa_id)?.tipo === "institucion";
-  const soloInstitucion = yo?.empresaTipo === "institucion";
+  // Vista de institución: la cuenta es de una institución, o el super_admin
+  // tiene elegida una en el filtro. En esa vista no hay "vacantes" ni CV.
+  const soloInstitucion =
+    yo?.empresaTipo === "institucion" || (!!empresaId && empresas.find((e) => e.id === empresaId)?.tipo === "institucion");
   const hayInstituciones = soloInstitucion || empresas.some((e) => e.tipo === "institucion");
 
   const vacantesFiltradas = empresaId ? vacantes.filter((v) => v.empresa_id === empresaId) : vacantes;

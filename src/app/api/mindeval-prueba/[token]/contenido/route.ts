@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params;
 
   try {
-    const { cedula, clave, perfil }: { cedula?: string; clave?: string; perfil?: string } = await req.json().catch(() => ({}));
+    const { cedula, clave }: { cedula?: string; clave?: string } = await req.json().catch(() => ({}));
 
     const { data: sesion, error } = await supabaseAdmin
       .from("mindeval_sesiones_prueba")
@@ -99,16 +99,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;
     if (cedulaRegistrada && cedulaRegistrada !== (cedula ?? "").trim()) {
       return NextResponse.json({ error: "La cédula no coincide con la registrada para este candidato." }, { status: 403 });
-    }
-
-    // Instituciones (invitación con clave): el evaluado indica si rinde como
-    // estudiante o docente, una sola vez, ANTES de arrancar el cronómetro.
-    const perfilValido = perfil === "estudiante" || perfil === "docente";
-    if (sesion.clave_hash && !sesion.perfil_evaluado) {
-      if (!perfilValido) {
-        return NextResponse.json({ error: "Indica si rindes como estudiante o como docente." }, { status: 400 });
-      }
-      await supabaseAdmin.from("mindeval_sesiones_prueba").update({ perfil_evaluado: perfil }).eq("id", sesion.id);
     }
 
     const { data: vacante } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).single();

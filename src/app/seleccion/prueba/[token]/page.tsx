@@ -227,8 +227,7 @@ export default function PruebaTokenPage() {
 
   const [cedulaConfirmar, setCedulaConfirmar] = useState("");
   const [claveConfirmar, setClaveConfirmar] = useState("");
-  // Instituciones: estudiante o docente, y cierre automático por exceder salidas.
-  const [perfilElegido, setPerfilElegido] = useState<"estudiante" | "docente" | "">("");
+  // Instituciones: cierre automático por exceder las salidas permitidas.
   const [cerradaPorSalidas, setCerradaPorSalidas] = useState(false);
   // Instituciones: cámara + audio grabados para revisión posterior.
   const grab = useGrabacionProctoring();
@@ -285,7 +284,7 @@ export default function PruebaTokenPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  async function desbloquearContenido(cedula: string, clave: string, perfil?: string) {
+  async function desbloquearContenido(cedula: string, clave: string) {
     setErrorCedula("");
     setVerificandoCedula(true);
     try {
@@ -300,7 +299,7 @@ export default function PruebaTokenPage() {
       const res = await fetch(`/api/mindeval-prueba/${token}/contenido`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cedula, clave, perfil }),
+        body: JSON.stringify({ cedula, clave }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "No se pudo verificar tus datos.");
@@ -797,33 +796,6 @@ export default function PruebaTokenPage() {
             onChange={(e) => setCedulaConfirmar(e.target.value.replace(/\D/g, "").slice(0, 10))}
             style={{ width: "100%", padding: "11px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 12, textAlign: "center" }}
           />
-          {info.requiere_grabacion && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: "#7C89A8", marginBottom: 6 }}>Rindo como:</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["estudiante", "docente"] as const).map((op) => (
-                  <button
-                    key={op}
-                    type="button"
-                    onClick={() => setPerfilElegido(op)}
-                    style={{
-                      flex: 1,
-                      padding: "11px 8px",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      border: perfilElegido === op ? `2px solid ${NAVY}` : "1.5px solid #D5DCEB",
-                      background: perfilElegido === op ? NAVY : "#FFFFFF",
-                      color: perfilElegido === op ? "#FFFFFF" : NAVY,
-                    }}
-                  >
-                    {op === "estudiante" ? "Estudiante" : "Docente"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           {info.requiere_clave && (
             <input
               value={claveConfirmar}
@@ -844,9 +816,9 @@ export default function PruebaTokenPage() {
               // lo primero. iOS Safari no la soporta: falla en silencio y la
               // prueba sigue (el monitor no penaliza lo que no se pudo activar).
               if (info.requiere_grabacion) document.documentElement.requestFullscreen?.().catch(() => {});
-              desbloquearContenido(cedulaConfirmar, claveConfirmar, perfilElegido || undefined);
+              desbloquearContenido(cedulaConfirmar, claveConfirmar);
             }}
-            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && claveConfirmar.trim().length < 6) || (!!info.requiere_grabacion && !perfilElegido)}
+            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && claveConfirmar.trim().length < 6)}
             style={{
               width: "100%",
               background: GOLD,

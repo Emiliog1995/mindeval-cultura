@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
       cedula: cedulaRaw,
       email: emailRaw,
       cv_path: cvPath,
-    }: { vacante_id: string; nombre_completo: string; cedula?: string; email?: string; cv_path?: string } = await req.json();
+      perfil_evaluado: perfilRaw,
+    }: { vacante_id: string; nombre_completo: string; cedula?: string; email?: string; cv_path?: string; perfil_evaluado?: string } = await req.json();
+    const perfil = perfilRaw === "estudiante" || perfilRaw === "docente" ? perfilRaw : null;
     const nombreCompleto = nombreCompletoRaw?.trim();
     const cedula = cedulaRaw || null;
     const email = emailRaw || null;
@@ -43,6 +45,18 @@ export async function POST(req: NextRequest) {
 
     const { permitido } = checkRateLimit(req, "mindeval-alta-candidato");
     if (!permitido) return rateLimitResponse();
+
+    // Instituciones (USECIPOL): el administrador debe indicar si el evaluado
+    // es estudiante o docente. Los demás clientes no usan este campo.
+    if (!perfil) {
+      const { data: v } = await supabaseAdmin.from("mindeval_vacantes").select("empresa_id").eq("id", vacanteId).maybeSingle();
+      if (v?.empresa_id) {
+        const { data: emp } = await supabaseAdmin.from("empresas_mdt").select("tipo").eq("id", v.empresa_id).maybeSingle();
+        if (emp?.tipo === "institucion") {
+          return NextResponse.json({ error: "Indica si el evaluado es estudiante o docente" }, { status: 400 });
+        }
+      }
+    }
     if (cedula && !/^\d{10}$/.test(cedula)) {
       return NextResponse.json({ error: "La cédula debe tener 10 dígitos" }, { status: 400 });
     }
@@ -94,6 +108,7 @@ export async function POST(req: NextRequest) {
         email,
         cv_texto: cvTexto || null,
         cv_url: cvPath || null,
+        ...(perfil ? { perfil_evaluado: perfil } : {}),
       })
       .select()
       .single();

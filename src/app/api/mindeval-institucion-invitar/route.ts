@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   // Solo evaluados de ESTE proceso.
   const { data: candidatos } = await supabaseAdmin
     .from("mindeval_candidatos")
-    .select("id, nombre_completo, email")
+    .select("id, nombre_completo, email, perfil_evaluado")
     .eq("vacante_id", vacanteId)
     .in("id", candidatoIds);
 
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
         tipo: "psicometrica",
         fecha_programada: new Date(fecha).toISOString(),
         clave_hash: hashClave(clave),
+        perfil_evaluado: c.perfil_evaluado ?? null,
       })
       .select("token")
       .single();

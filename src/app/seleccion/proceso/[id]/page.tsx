@@ -23,9 +23,11 @@ interface Evaluado {
   nombre_completo: string;
   cedula: string | null;
   email: string | null;
+  perfil_evaluado: string | null;
 }
 interface Sesion {
   id: string;
+  perfil_evaluado: string | null;
   grabacion_path: string | null;
   candidato_id: string;
   estado: "programada" | "en_curso" | "completada" | "expirada";
@@ -72,6 +74,7 @@ export default function ProcesoInstitucion() {
   const [nombre, setNombre] = useState("");
   const [cedula, setCedula] = useState("");
   const [correo, setCorreo] = useState("");
+  const [perfilNuevo, setPerfilNuevo] = useState<"estudiante" | "docente" | "">("");
   const [agregando, setAgregando] = useState(false);
 
   const [seleccion, setSeleccion] = useState<string[]>([]);
@@ -88,8 +91,8 @@ export default function ProcesoInstitucion() {
   const cargar = useCallback(async () => {
     const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
       supabase.from("mindeval_vacantes").select("id, titulo, empresa, estado, tests_psicometricos, tiempo_limite_min").eq("id", id).maybeSingle(),
-      supabase.from("mindeval_candidatos").select("id, nombre_completo, cedula, email").eq("vacante_id", id).order("nombre_completo"),
-      supabase.from("mindeval_sesiones_prueba").select("id, grabacion_path, candidato_id, estado, fecha_programada, created_at").eq("vacante_id", id).eq("tipo", "psicometrica").order("created_at", { ascending: false }),
+      supabase.from("mindeval_candidatos").select("id, nombre_completo, cedula, email, perfil_evaluado").eq("vacante_id", id).order("nombre_completo"),
+      supabase.from("mindeval_sesiones_prueba").select("id, perfil_evaluado, grabacion_path, candidato_id, estado, fecha_programada, created_at").eq("vacante_id", id).eq("tipo", "psicometrica").order("created_at", { ascending: false }),
     ]);
     if (!p) setError("No se encontró el proceso.");
     setProceso(p as Proceso | null);
@@ -127,13 +130,14 @@ export default function ProcesoInstitucion() {
       const res = await fetch("/api/mindeval-alta-candidato", {
         method: "POST",
         headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify({ vacante_id: id, nombre_completo: nombre, cedula, email: correo.trim().toLowerCase() }),
+        body: JSON.stringify({ vacante_id: id, nombre_completo: nombre, cedula, email: correo.trim().toLowerCase(), perfil_evaluado: perfilNuevo }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "No se pudo agregar al evaluado");
       setNombre("");
       setCedula("");
       setCorreo("");
+      setPerfilNuevo("");
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo agregar al evaluado");
@@ -239,7 +243,7 @@ export default function ProcesoInstitucion() {
     return { t: `Invitado · ${new Date(s.fecha_programada).toLocaleString("es-EC", { dateStyle: "short", timeStyle: "short" })}`, bg: "#EAF0FF", c: NAVY };
   };
 
-  const datosCompletos = nombre.trim().length > 2 && /^\d{10}$/.test(cedula) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim());
+  const datosCompletos = nombre.trim().length > 2 && /^\d{10}$/.test(cedula) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim()) && !!perfilNuevo;
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F6FA" }}>
@@ -303,6 +307,29 @@ export default function ProcesoInstitucion() {
                     {agregando ? "…" : "Agregar"}
                   </button>
                 </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#7C89A8" }}>ES:</span>
+                  {(["estudiante", "docente"] as const).map((op) => (
+                    <button
+                      key={op}
+                      type="button"
+                      onClick={() => setPerfilNuevo(op)}
+                      style={{
+                        padding: "8px 18px",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: perfilNuevo === op ? `2px solid ${NAVY}` : "1.5px solid #D5DCEB",
+                        background: perfilNuevo === op ? NAVY : "#FFFFFF",
+                        color: perfilNuevo === op ? "#FFFFFF" : NAVY,
+                      }}
+                    >
+                      {op === "estudiante" ? "Estudiante" : "Docente"}
+                    </button>
+                  ))}
+                  {!perfilNuevo && <span style={{ fontSize: 12, color: "#A9B6D8" }}>Elige uno para poder agregar</span>}
+                </div>
               </div>
             )}
 
@@ -313,7 +340,7 @@ export default function ProcesoInstitucion() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#F7F9FD" }}>
-                    {["", "Nombre", "Cédula", "Correo", "Estado", "Resultados", "Grabación"].map((h) => (
+                    {["", "Nombre", "Cédula", "Correo", "Perfil", "Estado", "Resultados", "Grabación"].map((h) => (
                       <th key={h} style={{ padding: "9px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>{h}</th>
                     ))}
                   </tr>
@@ -335,6 +362,9 @@ export default function ProcesoInstitucion() {
                         <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: 700, color: NAVY }}>{e.nombre_completo}</td>
                         <td style={{ padding: "10px 16px", fontSize: 12.5, color: "#41507A" }}>{e.cedula ?? "—"}</td>
                         <td style={{ padding: "10px 16px", fontSize: 12.5, color: "#41507A" }}>{e.email ?? "—"}</td>
+                        <td style={{ padding: "10px 16px", fontSize: 12.5, color: "#41507A", textTransform: "capitalize" }}>
+                          {e.perfil_evaluado ?? "—"}
+                        </td>
                         <td style={{ padding: "10px 16px" }}>
                           <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: et.bg, color: et.c }}>{et.t}</span>
                         </td>
@@ -369,7 +399,7 @@ export default function ProcesoInstitucion() {
                   })}
                   {evaluados.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>Aún no hay evaluados. Agrégalos arriba.</td>
+                      <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>Aún no hay evaluados. Agrégalos arriba.</td>
                     </tr>
                   )}
                 </tbody>
