@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import BotonCerrarSesion from "@/components/mindeval/BotonCerrarSesion";
 import { authHeaders } from "@/lib/auth-headers";
 import PerfilBarras from "@/components/mindeval/PerfilBarras";
 
@@ -266,6 +267,7 @@ export default function ProcesoInstitucion() {
         >
           ← Procesos
         </button>
+        <BotonCerrarSesion />
       </div>
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "2rem 1.5rem" }}>

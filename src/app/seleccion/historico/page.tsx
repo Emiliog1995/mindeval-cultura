@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import BotonCerrarSesion from "@/components/mindeval/BotonCerrarSesion";
 import { authHeaders } from "@/lib/auth-headers";
 import PerfilBarras, { type FilaPerfil } from "@/components/mindeval/PerfilBarras";
 
@@ -150,6 +151,7 @@ function HistoricoInner() {
         >
           ← Procesos
         </button>
+        <BotonCerrarSesion />
       </div>
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "2rem 1.5rem" }}>

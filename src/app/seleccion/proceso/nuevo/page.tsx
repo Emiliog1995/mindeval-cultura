@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import BotonCerrarSesion from "@/components/mindeval/BotonCerrarSesion";
 import { authHeaders } from "@/lib/auth-headers";
 
 const NAVY = "#1B2A5B";
@@ -77,6 +78,7 @@ export default function NuevoProceso() {
         >
           ← Procesos
         </button>
+        <BotonCerrarSesion />
       </div>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "2rem 1.5rem" }}>
