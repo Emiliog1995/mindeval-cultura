@@ -55,6 +55,24 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Si ya tiene una invitación vigente para ESA MISMA fecha/hora, no se
+    // reenvía: reenviar anula la contraseña anterior y el evaluado termina con
+    // varios correos y claves distintas (pasó al reintentar un envío masivo).
+    // Para reenviarle, se le invita con otra hora.
+    const { data: vigente } = await supabaseAdmin
+      .from("mindeval_sesiones_prueba")
+      .select("id")
+      .eq("candidato_id", id)
+      .eq("vacante_id", vacanteId)
+      .eq("tipo", "psicometrica")
+      .in("estado", ["programada", "en_curso"])
+      .eq("fecha_programada", new Date(fecha).toISOString())
+      .limit(1);
+    if (vigente?.length) {
+      resultados.push({ candidato_id: id, nombre: c.nombre_completo, ok: true, motivo: "Ya estaba invitado a esa hora; no se reenvió." });
+      continue;
+    }
+
     await supabaseAdmin
       .from("mindeval_sesiones_prueba")
       .update({ estado: "expirada" })

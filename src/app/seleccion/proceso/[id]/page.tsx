@@ -496,6 +496,19 @@ export default function ProcesoInstitucion() {
               <div style={{ padding: "14px 20px", fontSize: 13, fontWeight: 800, color: NAVY }}>
                 {cerrado ? "Evaluados" : "2 · Elige quiénes rinden"} <span style={{ color: "#7C89A8", fontWeight: 600 }}>({evaluados.length})</span>
               </div>
+              {!cerrado && (() => {
+                const marcables = evaluados.filter((e) => ultima.get(e.id)?.estado !== "completada").map((e) => e.id);
+                const sinInvitar = evaluados.filter((e) => { const st = ultima.get(e.id)?.estado; return !st || st === "expirada"; }).map((e) => e.id);
+                const chip = (activo: boolean): import("react").CSSProperties => ({ background: activo ? "#EAF0FF" : "#F4F6FA", color: activo ? NAVY : "#A9B6D8", border: "1px solid #D5DCEB", padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: activo ? "pointer" : "default" });
+                return (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "0 20px 12px" }}>
+                    <button onClick={() => setSeleccion(marcables)} disabled={!marcables.length} style={chip(!!marcables.length)}>Marcar todos ({marcables.length})</button>
+                    <button onClick={() => setSeleccion(sinInvitar)} disabled={!sinInvitar.length} style={chip(!!sinInvitar.length)}>Marcar solo los sin invitar ({sinInvitar.length})</button>
+                    <button onClick={() => setSeleccion([])} disabled={!seleccion.length} style={chip(!!seleccion.length)}>Desmarcar</button>
+                    <span style={{ fontSize: 12, color: "#7C89A8", marginLeft: "auto" }}>{seleccion.length} marcado(s)</span>
+                  </div>
+                );
+              })()}
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#F7F9FD" }}>
@@ -762,7 +775,7 @@ export default function ProcesoInstitucion() {
                   <div style={{ marginTop: 14, display: "grid", gap: 6 }}>
                     {resultados.map((r) => (
                       <div key={r.candidato_id} style={{ fontSize: 12.5, padding: "8px 12px", borderRadius: 8, background: r.ok ? "#E8F6EF" : "#FDEDEA", color: r.ok ? "#12805C" : "#C4402F" }}>
-                        <strong>{r.nombre}</strong>: {r.ok ? "invitación enviada" : r.motivo}
+                        <strong>{r.nombre}</strong>: {r.ok ? (r.motivo ?? "invitación enviada") : r.motivo}
                         {r.clave_manual && <span> — Clave temporal: <strong style={{ fontFamily: "monospace", letterSpacing: 1 }}>{r.clave_manual}</strong></span>}
                       </div>
                     ))}
