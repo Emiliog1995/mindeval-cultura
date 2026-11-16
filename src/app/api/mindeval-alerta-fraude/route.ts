@@ -25,9 +25,6 @@ const TIPOS_SESION_VALIDOS = ["psicometricas", "tecnica", "assessment"];
  *     empresa si la cuenta está restringida.
  */
 export async function POST(req: NextRequest) {
-  const { permitido } = checkRateLimit(req, "mindeval-alerta-fraude");
-  if (!permitido) return rateLimitResponse();
-
   try {
     const { token, candidato_id, sesion_tipo, tipo_alerta, severidad, detalle }: {
       token?: string;
@@ -37,6 +34,10 @@ export async function POST(req: NextRequest) {
       severidad: string;
       detalle?: string;
     } = await req.json();
+
+    // Por evaluado (token del examen) cuando viene del portal; por IP si no.
+    const { permitido } = checkRateLimit(req, "mindeval-alerta-fraude", token ? { clave: token, limite: 60 } : undefined);
+    if (!permitido) return rateLimitResponse();
 
     if (!candidato_id || !tipo_alerta) {
       return NextResponse.json({ error: "Faltan datos" }, { status: 400 });

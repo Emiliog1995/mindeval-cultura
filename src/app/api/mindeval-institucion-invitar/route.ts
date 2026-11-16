@@ -11,6 +11,10 @@ import { enviarInvitacionInstitucion } from "@/lib/mindeval-email";
  * guarda su hash) y correo con enlace + clave. Reinvitar invalida la
  * invitación anterior y genera una clave nueva.
  */
+// Invitar a muchos evaluados toma tiempo (BD + un correo por persona). La
+// pantalla manda tandas de 20; esto da margen a cada tanda.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const vacanteId = body?.vacante_id as string | undefined;
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "El proceso está cerrado. Reábrelo para enviar invitaciones." }, { status: 409 });
   }
 
-  const { permitido } = checkRateLimit(req, "mindeval-institucion-invitar");
+  const { permitido } = checkRateLimit(req, "mindeval-institucion-invitar", { limite: 20 }); // tandas de 20 evaluados
   if (!permitido) return rateLimitResponse();
 
   // Solo evaluados de ESTE proceso.
@@ -92,6 +96,9 @@ export async function POST(req: NextRequest) {
       clave,
       contacto: { nombre: aut.ctx.email, email: aut.ctx.email },
     });
+
+    // Pausa corta entre correos para no pasar el límite por segundo de Resend.
+    await new Promise((r) => setTimeout(r, 300));
 
     resultados.push(
       envio.ok

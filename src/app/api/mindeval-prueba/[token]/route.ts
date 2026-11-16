@@ -124,10 +124,10 @@ async function esInstitucion(vacanteId: string): Promise<boolean> {
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const { permitido } = checkRateLimit(req, "mindeval-prueba");
-  if (!permitido) return rateLimitResponse();
-
   const { token } = await params;
+  // Por evaluado (token), no por IP: ver rate-limit.ts.
+  const { permitido } = checkRateLimit(req, "mindeval-prueba-info", { clave: token, limite: 30 });
+  if (!permitido) return rateLimitResponse();
 
   const { data: sesion, error } = await supabaseAdmin
     .from("mindeval_sesiones_prueba")
@@ -195,10 +195,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
  * perdidos en silencio) es muchísimo más grave y frecuente.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const { permitido } = checkRateLimit(req, "mindeval-prueba");
-  if (!permitido) return rateLimitResponse();
-
   const { token } = await params;
+  // Por evaluado (token), no por IP: ver rate-limit.ts.
+  const { permitido } = checkRateLimit(req, "mindeval-prueba-enviar", { clave: token, limite: 10 });
+  if (!permitido) return rateLimitResponse();
 
   try {
     const body = await req.json();

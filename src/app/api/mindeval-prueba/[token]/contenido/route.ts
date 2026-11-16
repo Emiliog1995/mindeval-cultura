@@ -46,10 +46,10 @@ function etiquetaOpcion16PF5(texto: string): string {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const { permitido } = checkRateLimit(req, "mindeval-prueba");
-  if (!permitido) return rateLimitResponse();
-
   const { token } = await params;
+  // Por evaluado (token), no por IP: ver rate-limit.ts.
+  const { permitido } = checkRateLimit(req, "mindeval-prueba-contenido", { clave: token, limite: 15 });
+  if (!permitido) return rateLimitResponse();
 
   try {
     const { cedula, clave, acepta_datos }: { cedula?: string; clave?: string; acepta_datos?: boolean } = await req.json().catch(() => ({}));

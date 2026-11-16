@@ -18,10 +18,9 @@ const BUCKET = "mindeval-grabaciones";
  * prueba, el tramo anterior no se pisa (la revisión lista todos los tramos).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-  const { permitido } = checkRateLimit(req, "mindeval-grabacion");
-  if (!permitido) return rateLimitResponse();
-
   const { token } = await params;
+  const { permitido } = checkRateLimit(req, "mindeval-grabacion", { clave: token, limite: 20 });
+  if (!permitido) return rateLimitResponse();
   const body = await req.json().catch(() => null);
   const accion = body?.accion as string | undefined;
 
@@ -31,7 +30,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq("token", token)
     .maybeSingle();
   if (!sesion) return NextResponse.json({ error: "Link no válido" }, { status: 404 });
-  if (sesion.estado !== "en_curso") {
+  // La URL de subida solo se entrega con la sesión en curso. La confirmación
+  // también se acepta ya completada: las respuestas se envían ANTES de subir
+  // el video, para que una subida lenta nunca retrase ni ponga en riesgo las
+  // respuestas.
+  const accionPermitida = sesion.estado === "en_curso" || (accion === "confirmar" && sesion.estado === "completada");
+  if (!accionPermitida) {
     return NextResponse.json({ error: "La sesión no está en curso" }, { status: 409 });
   }
 

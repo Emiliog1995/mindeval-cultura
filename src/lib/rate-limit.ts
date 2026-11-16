@@ -1,11 +1,21 @@
 const ventanas = new Map<string, { conteo: number; resetEn: number }>();
 
-const LIMITE = 5;
+const LIMITE_DEFECTO = 5;
 const VENTANA_MS = 60_000;
 
-export function checkRateLimit(req: Request, ruta: string): { permitido: boolean; restantes: number } {
+/**
+ * Por defecto limita por IP. Las rutas del examen pasan `clave` (el token de
+ * la prueba) para limitar por evaluado: en un aula todos salen a internet
+ * con la MISMA IP pública, y limitar por IP dejaría entrar solo a 5 por minuto.
+ */
+export function checkRateLimit(
+  req: Request,
+  ruta: string,
+  opciones?: { clave?: string; limite?: number }
+): { permitido: boolean; restantes: number } {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'desconocido';
-  const key = `${ruta}:${ip}`;
+  const LIMITE = opciones?.limite ?? LIMITE_DEFECTO;
+  const key = `${ruta}:${opciones?.clave ? `k:${opciones.clave}` : ip}`;
   const ahora = Date.now();
   const entrada = ventanas.get(key);
 

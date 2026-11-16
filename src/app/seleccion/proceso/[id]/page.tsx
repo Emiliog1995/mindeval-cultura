@@ -188,14 +188,26 @@ export default function ProcesoInstitucion() {
     setResultados([]);
     setEnviando(true);
     try {
-      const res = await fetch("/api/mindeval-institucion-invitar", {
-        method: "POST",
-        headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify({ vacante_id: id, candidato_ids: seleccion, fecha_programada: new Date(fecha).toISOString() }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "No se pudieron enviar las invitaciones");
-      setResultados(d.resultados);
+      // En tandas de 20: con 100 evaluados una sola llamada podría pasar el
+      // tiempo máximo del servidor y cortarse a la mitad.
+      const TANDA = 20;
+      const acumulados: typeof resultados = [];
+      for (let i = 0; i < seleccion.length; i += TANDA) {
+        setAviso(`Enviando invitaciones… ${Math.min(i + TANDA, seleccion.length)} de ${seleccion.length}`);
+        const res = await fetch("/api/mindeval-institucion-invitar", {
+          method: "POST",
+          headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+          body: JSON.stringify({ vacante_id: id, candidato_ids: seleccion.slice(i, i + TANDA), fecha_programada: new Date(fecha).toISOString() }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setResultados(acumulados);
+          throw new Error(`${d.error ?? "No se pudieron enviar las invitaciones"}. Se enviaron ${acumulados.filter((r) => r.ok).length} antes del error.`);
+        }
+        acumulados.push(...d.resultados);
+        setResultados([...acumulados]);
+      }
+      setAviso("");
       setSeleccion([]);
       await cargar();
     } catch (e) {

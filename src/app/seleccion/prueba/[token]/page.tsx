@@ -427,18 +427,32 @@ export default function PruebaTokenPage() {
    * best-effort a propósito: si la subida falla, igual se envían las
    * respuestas -- perder el examen entero por un video sería peor.
    */
-  async function subirGrabacion() {
-    setSubiendoVideo(true);
+  /**
+   * Detiene la cámara y pide la URL firmada de subida (requiere la sesión en
+   * curso, así que va ANTES de enviar las respuestas). Devuelve null si no hay
+   * video o falló: la prueba se envía igual.
+   */
+  async function prepararGrabacion(): Promise<{ blob: Blob; mime: string; path: string; token: string } | null> {
     try {
       const { blob, mime } = await grab.detener();
-      if (!blob || blob.size === 0) return;
-      const h = { "Content-Type": "application/json" };
-      const r1 = await fetch(`/api/mindeval-prueba/${token}/grabacion`, { method: "POST", headers: h, body: JSON.stringify({ accion: "url" }) });
+      if (!blob || blob.size === 0) return null;
+      const r1 = await fetch(`/api/mindeval-prueba/${token}/grabacion`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "url" }) });
       const u = await r1.json();
       if (!r1.ok) throw new Error(u.error);
-      const { error: upErr } = await supabase.storage.from("mindeval-grabaciones").uploadToSignedUrl(u.path, u.token, blob, { contentType: mime.split(";")[0] });
+      return { blob, mime, path: u.path, token: u.token };
+    } catch (e) {
+      console.error("No se pudo preparar la grabación", e);
+      return null;
+    }
+  }
+
+  /** Sube el video ya preparado (después de enviar las respuestas). */
+  async function subirGrabacion(g: { blob: Blob; mime: string; path: string; token: string }) {
+    setSubiendoVideo(true);
+    try {
+      const { error: upErr } = await supabase.storage.from("mindeval-grabaciones").uploadToSignedUrl(g.path, g.token, g.blob, { contentType: g.mime.split(";")[0] });
       if (upErr) throw new Error(upErr.message);
-      await fetch(`/api/mindeval-prueba/${token}/grabacion`, { method: "POST", headers: h, body: JSON.stringify({ accion: "confirmar", path: u.path }) });
+      await fetch(`/api/mindeval-prueba/${token}/grabacion`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accion: "confirmar", path: g.path }) });
     } catch (e) {
       console.error("No se pudo subir la grabación", e);
     } finally {
@@ -457,7 +471,7 @@ export default function PruebaTokenPage() {
     setEnviando(true);
     setError("");
     try {
-      if (info?.requiere_grabacion) await subirGrabacion();
+      const grabacion = info?.requiere_grabacion ? await prepararGrabacion() : null;
       const body =
         datos.tipo === "tecnica"
           ? datos.modo === "banco"
@@ -492,6 +506,8 @@ export default function PruebaTokenPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      // Respuestas ya guardadas. Recién ahora se sube el video.
+      if (grabacion) await subirGrabacion(grabacion);
       setEnviado(true);
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       try {
@@ -1009,7 +1025,7 @@ export default function PruebaTokenPage() {
               <style>{`@keyframes mdGiro{to{transform:rotate(360deg)}}`}</style>
               <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Enviando sus respuestas…</div>
               <p style={{ fontSize: 13.5, color: "#33405F", lineHeight: 1.6, margin: 0 }}>
-                {subiendoVideo ? "Se está subiendo la grabación. " : ""}
+                {subiendoVideo ? "Sus respuestas ya se guardaron. Se está subiendo la grabación. " : ""}
                 Esto puede tardar unos segundos. <strong>No cierre ni recargue la página</strong> y no vuelva a presionar
                 el botón. Espere hasta que aparezca el mensaje <strong>&quot;Prueba enviada&quot;</strong>.
               </p>
