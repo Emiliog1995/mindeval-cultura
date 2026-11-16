@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
-import { autorizarInstitucion } from "@/lib/mindeval-institucion";
+import { autorizarInstitucion, puedeVerHistorico } from "@/lib/mindeval-institucion";
 
 /**
  * Evaluaciones de la plataforma anterior de una institución (solo lectura).
@@ -14,6 +14,11 @@ export async function GET(req: NextRequest) {
   const empresaParam = req.nextUrl.searchParams.get("empresa_id");
   const aut = await autorizarInstitucion(req, { roles: ["super_admin", "administrador", "evaluador"], empresaId: empresaParam });
   if ("error" in aut) return aut.error;
+
+  // Quien fue evaluado en esa cohorte (u otro caso que se decida) no la ve.
+  if (!(await puedeVerHistorico(aut.ctx))) {
+    return NextResponse.json({ error: "Tu cuenta no tiene acceso a las evaluaciones anteriores." }, { status: 403 });
+  }
 
   const { permitido } = checkRateLimit(req, "mindeval-institucion-historico");
   if (!permitido) return rateLimitResponse();

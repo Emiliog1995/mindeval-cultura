@@ -40,7 +40,7 @@ function PanelSeleccionInner() {
   const [error, setError] = useState("");
   // Quién soy: null mientras carga. Un cliente externo (ej. USECIPOL) tiene
   // empresaId y NO debe ver el Portal ni el selector de empresas.
-  const [yo, setYo] = useState<{ rol: string | null; empresaId: string | null; empresaTipo?: string | null } | null>(null);
+  const [yo, setYo] = useState<{ rol: string | null; empresaId: string | null; empresaTipo?: string | null; verHistorico?: boolean } | null>(null);
 
   useEffect(() => {
     if (verificando) return;
@@ -127,7 +127,7 @@ function PanelSeleccionInner() {
             ← Portal
           </button>
         )}
-        {soloInstitucion && (
+        {soloInstitucion && yo?.verHistorico && (
           <button
             onClick={() => router.push(yo?.empresaTipo === "institucion" ? "/seleccion/historico" : `/seleccion/historico?empresa=${empresaId}`)}
             style={{ background: "rgba(255,255,255,0.08)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.2)", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, cursor: "pointer" }}

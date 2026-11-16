@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContextoUsuario } from "@/lib/require-auth";
+import { puedeVerHistorico } from "@/lib/mindeval-institucion";
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
       const { data: emp } = await supabaseAdmin.from("empresas_mdt").select("tipo").eq("id", ctx.empresaId).maybeSingle();
       empresaTipo = (emp?.tipo as string | undefined) ?? null;
     }
-    return NextResponse.json({ rol: ctx.rol, empresaId: ctx.empresaId, empresaTipo });
+    return NextResponse.json({ rol: ctx.rol, empresaId: ctx.empresaId, empresaTipo, verHistorico: await puedeVerHistorico(ctx) });
   }
 
   if (!puedeGestionar(ctx.rol)) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
