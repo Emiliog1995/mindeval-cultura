@@ -86,6 +86,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
       }
     }
+    // Invitación de institución reemplazada por un reenvío: el correo viejo
+    // (y su contraseña) ya no sirven, aunque esté dentro del horario.
+    if (sesion.clave_hash && sesion.estado === "expirada") {
+      return NextResponse.json({ error: "Este enlace fue reemplazado por una invitación más reciente. Use el ÚLTIMO correo que recibió, con su enlace y su contraseña." }, { status: 410 });
+    }
 
     // Invitaciones de institución llevan contraseña temporal (solo existe su
     // hash). Tras MAX_INTENTOS_CLAVE fallos se bloquea hasta reinvitar.

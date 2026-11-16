@@ -167,6 +167,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
   }
 
+    // Invitación de institución reemplazada por un reenvío: el correo viejo
+    // (y su contraseña) ya no sirven, aunque esté dentro del horario.
+    if (sesion.clave_hash && sesion.estado === "expirada") {
+      return NextResponse.json({ error: "Este enlace fue reemplazado por una invitación más reciente. Use el ÚLTIMO correo que recibió, con su enlace y su contraseña." }, { status: 410 });
+    }
+
   return NextResponse.json({
     tipo: sesion.tipo,
     candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
@@ -214,6 +220,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     }
     if (sesion.estado === "completada") {
       return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
+    }
+    // Invitación de institución reemplazada por un reenvío: el correo viejo
+    // (y su contraseña) ya no sirven, aunque esté dentro del horario.
+    if (sesion.clave_hash && sesion.estado === "expirada") {
+      return NextResponse.json({ error: "Este enlace fue reemplazado por una invitación más reciente. Use el ÚLTIMO correo que recibió, con su enlace y su contraseña." }, { status: 410 });
     }
     const { data: vacVentanaPost } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).maybeSingle();
     const ventanaPost = ventanaFija(sesion, (vacVentanaPost as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min);
