@@ -237,6 +237,8 @@ export default function PruebaTokenPage() {
 
   const [cedulaConfirmar, setCedulaConfirmar] = useState("");
   const [claveConfirmar, setClaveConfirmar] = useState("");
+  // Consentimiento LOPDP (Ecuador): obligatorio en pruebas institucionales.
+  const [aceptaDatos, setAceptaDatos] = useState(false);
   // Instituciones: cierre automático por exceder las salidas permitidas.
   const [cerradaPorSalidas, setCerradaPorSalidas] = useState(false);
   // Instituciones: cámara + audio grabados para revisión posterior.
@@ -310,7 +312,7 @@ export default function PruebaTokenPage() {
       const res = await fetch(`/api/mindeval-prueba/${token}/contenido`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cedula, clave }),
+        body: JSON.stringify({ cedula, clave, acepta_datos: aceptaDatos }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "No se pudo verificar tus datos.");
@@ -837,6 +839,25 @@ export default function PruebaTokenPage() {
               style={{ width: "100%", padding: "11px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box", marginBottom: 12, textAlign: "center", letterSpacing: 2 }}
             />
           )}
+          {info.requiere_clave && (
+            <label style={{ display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", background: "#F7F9FD", border: "1.5px solid #D5DCEB", borderRadius: 10, padding: "12px 14px", marginBottom: 12, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={aceptaDatos}
+                onChange={(e) => setAceptaDatos(e.target.checked)}
+                style={{ width: 20, height: 20, marginTop: 2, flexShrink: 0, accentColor: NAVY }}
+              />
+              <span style={{ fontSize: 12, color: "#33405F", lineHeight: 1.55 }}>
+                <strong>Acepto el tratamiento de mis datos personales.</strong> Conforme a la Ley Orgánica de Protección de
+                Datos Personales del Ecuador, autorizo el uso de mis datos de identificación, mis respuestas y la grabación
+                de cámara y micrófono únicamente para este proceso de evaluación psicométrica. Mis datos se tratan con
+                confidencialidad y puedo ejercer mis derechos de acceso, rectificación, eliminación y oposición según el{" "}
+                <a href="/privacidad" target="_blank" rel="noopener noreferrer" style={{ color: NAVY, fontWeight: 700, textDecoration: "underline" }}>
+                  Aviso de Privacidad
+                </a>.
+              </span>
+            </label>
+          )}
           {errorCedula && (
             <div style={{ background: "#FDEDEA", color: "#C4402F", padding: "8px 12px", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{errorCedula}</div>
           )}
@@ -849,7 +870,7 @@ export default function PruebaTokenPage() {
               if (info.requiere_grabacion) document.documentElement.requestFullscreen?.().catch(() => {});
               desbloquearContenido(cedulaConfirmar, claveConfirmar);
             }}
-            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && claveConfirmar.trim().length < 6)}
+            disabled={verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && (claveConfirmar.trim().length < 6 || !aceptaDatos))}
             style={{
               width: "100%",
               background: GOLD,
@@ -860,7 +881,7 @@ export default function PruebaTokenPage() {
               fontSize: 14,
               fontWeight: 800,
               cursor: verificandoCedula ? "not-allowed" : "pointer",
-              opacity: verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) ? 0.6 : 1,
+              opacity: verificandoCedula || !/^\d{10}$/.test(cedulaConfirmar) || (!!info.requiere_clave && !aceptaDatos) ? 0.6 : 1,
             }}
           >
             {verificandoCedula ? "Verificando…" : "Continuar"}
@@ -980,6 +1001,21 @@ export default function PruebaTokenPage() {
             Aviso de Privacidad
           </a>.
         </div>
+
+        {enviando && !cerradaPorSalidas && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(11,16,32,0.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ background: "#FFFFFF", borderRadius: 16, padding: "28px 26px", maxWidth: 420, textAlign: "center" }}>
+              <div style={{ width: 42, height: 42, margin: "0 auto 14px", border: "4px solid #E3E8F3", borderTopColor: GOLD, borderRadius: "50%", animation: "mdGiro 0.9s linear infinite" }} />
+              <style>{`@keyframes mdGiro{to{transform:rotate(360deg)}}`}</style>
+              <div style={{ fontSize: 18, fontWeight: 800, color: NAVY, marginBottom: 8 }}>Enviando sus respuestas…</div>
+              <p style={{ fontSize: 13.5, color: "#33405F", lineHeight: 1.6, margin: 0 }}>
+                {subiendoVideo ? "Se está subiendo la grabación. " : ""}
+                Esto puede tardar unos segundos. <strong>No cierre ni recargue la página</strong> y no vuelva a presionar
+                el botón. Espere hasta que aparezca el mensaje <strong>&quot;Prueba enviada&quot;</strong>.
+              </p>
+            </div>
+          </div>
+        )}
 
         {cerradaPorSalidas && !enviado && (
           <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(11,16,32,0.95)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>

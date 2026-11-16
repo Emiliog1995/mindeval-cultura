@@ -252,28 +252,53 @@ export default function ProcesoInstitucion() {
     }
   }
 
-  /** Abre el informe general en una ventana limpia lista para imprimir o guardar como PDF. */
-  function imprimirGrupal() {
-    if (!grupal) return;
+  /** HTML del informe general (mismo contenido para imprimir y para Word). */
+  function htmlGrupal(paraWord: boolean): string | null {
+    if (!grupal) return null;
     const esc = (t: string | null | undefined) => (t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
     const filas = grupal.filas
       .filter((f) => f.rindio)
       .map((f) => `<tr><td>${esc(f.nombre)}</td><td>${esc(f.cedula)}</td><td style="text-align:center;font-weight:700">${esc(f.codigo)}${f.incompleta ? " *" : ""}</td><td>${esc(f.observacion)}</td></tr>`)
       .join("");
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Informe general — ${esc(grupal.proceso)}</title>
+    const cabecera = paraWord
+      ? `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>@page Section1{size:841.9pt 595.3pt;mso-page-orientation:landscape;margin:2cm}div.Section1{page:Section1}</style>`
+      : `<!doctype html><html><head><meta charset="utf-8">`;
+    return `${cabecera}<title>Informe general — ${esc(grupal.proceso)}</title>
       <style>body{font-family:Arial,sans-serif;color:#1B2A5B;margin:32px}h1{font-size:18px;margin:0}h2{font-size:13px;font-weight:400;color:#41507A;margin:4px 0 18px}
       table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9AA6C2;padding:7px 9px;vertical-align:top}th{background:#E9EDF6;text-align:left}
-      .nota{font-size:10.5px;color:#41507A;margin-top:12px}</style></head><body>
+      .nota{font-size:10.5px;color:#41507A;margin-top:12px}</style></head><body>${paraWord ? '<div class="Section1">' : ""}
       <h1>Informe general — Test vocacional de Holland (RIASEC)</h1>
       <h2>Institución ${esc(grupal.institucion)} · ${esc(grupal.proceso)}</h2>
       <table><thead><tr><th>NOMBRE</th><th>CÉDULA</th><th>RESULTADO DEL TEST</th><th>OBSERVACIÓN</th></tr></thead><tbody>${filas}</tbody></table>
       <p class="nota">El resultado es el código formado por las tres áreas con más respuestas afirmativas.${grupal.filas.some((f) => f.incompleta) ? " * Test no respondido en su totalidad." : ""}</p>
-      </body></html>`);
+      ${paraWord ? "</div>" : ""}</body></html>`;
+  }
+
+  /** Abre el informe general en una ventana limpia lista para imprimir o guardar como PDF. */
+  function imprimirGrupal() {
+    const html = htmlGrupal(false);
+    if (!html) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
     w.document.close();
     w.focus();
     w.print();
+  }
+
+  /** Descarga el informe general como documento de Word (.doc). */
+  function descargarWordGrupal() {
+    const html = htmlGrupal(true);
+    if (!html || !grupal) return;
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Informe general - ${grupal.proceso}.doc`.replace(/[\\/:*?"<>|]/g, "-");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function copiarEvaluados() {
@@ -536,7 +561,8 @@ export default function ProcesoInstitucion() {
                       <div style={{ fontWeight: 800, color: NAVY, fontSize: 17 }}>Informe general — Test vocacional</div>
                       <div style={{ fontSize: 12, color: "#7C89A8" }}>Institución {grupal.institucion} · {grupal.proceso}</div>
                     </div>
-                    <button onClick={imprimirGrupal} style={{ marginLeft: "auto", ...boton(grupal.filas.some((f) => f.rindio)) }}>Imprimir / PDF</button>
+                    <button onClick={descargarWordGrupal} style={{ marginLeft: "auto", ...boton(grupal.filas.some((f) => f.rindio)) }}>Descargar Word</button>
+                    <button onClick={imprimirGrupal} style={{ ...boton(grupal.filas.some((f) => f.rindio)) }}>Imprimir / PDF</button>
                     <button onClick={() => setGrupal(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#7C89A8" }}>×</button>
                   </div>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>

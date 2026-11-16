@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params;
 
   try {
-    const { cedula, clave }: { cedula?: string; clave?: string } = await req.json().catch(() => ({}));
+    const { cedula, clave, acepta_datos }: { cedula?: string; clave?: string; acepta_datos?: boolean } = await req.json().catch(() => ({}));
 
     const { data: sesion, error } = await supabaseAdmin
       .from("mindeval_sesiones_prueba")
@@ -111,6 +111,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     const cedulaRegistrada: string | null = sesion.mindeval_candidatos?.cedula ?? null;
     if (cedulaRegistrada && cedulaRegistrada !== (cedula ?? "").trim()) {
       return NextResponse.json({ error: "La cédula no coincide con la registrada para este candidato." }, { status: 403 });
+    }
+
+    // Consentimiento LOPDP: obligatorio en pruebas institucionales (con
+    // contraseña temporal). Se guarda la fecha de la primera aceptación como
+    // constancia; si la columna aún no existe (mindeval-consentimiento-datos.sql)
+    // no se bloquea la prueba, solo no queda la marca.
+    if (sesion.clave_hash) {
+      if (acepta_datos !== true) {
+        return NextResponse.json(
+          { error: "Debe aceptar el tratamiento de sus datos personales para rendir la evaluación." },
+          { status: 400 }
+        );
+      }
+      const { error: consErr } = await supabaseAdmin
+        .from("mindeval_sesiones_prueba")
+        .update({ acepto_datos_en: new Date().toISOString() })
+        .eq("id", sesion.id)
+        .is("acepto_datos_en", null);
+      if (consErr) console.error("No se pudo registrar el consentimiento de datos", consErr.message);
     }
 
     const { data: vacante } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).single();
