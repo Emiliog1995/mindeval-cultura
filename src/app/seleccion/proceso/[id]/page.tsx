@@ -5,9 +5,18 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
+import PerfilBarras from "@/components/mindeval/PerfilBarras";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
+// Máximo de la escala que se grafica en cada prueba: decatipo 1-10 (16PF-5),
+// segmento 1-7 (DISC), conteo 0-9 (KOSTICK), puntaje estándar 0-100 (VALANTI).
+const MAX_GRAFICO: Record<string, { max: number; pie: string }> = {
+  "16pf5": { max: 10, pie: "Decatipo de 1 a 10 por factor." },
+  disc: { max: 7, pie: "Segmento de 1 a 7 por rasgo." },
+  kostick: { max: 9, pie: "Conteo de 0 a 9 por factor." },
+  valanti: { max: 100, pie: "Puntaje estándar (media 50) por escala." },
+};
 const NOMBRE_TEST: Record<string, string> = { "16pf5": "16PF-5", kostick: "KOSTICK", disc: "DISC", valanti: "VALANTI" };
 
 interface Proceso {
@@ -441,6 +450,21 @@ export default function ProcesoInstitucion() {
                         <div style={{ padding: "8px 14px", fontSize: 12, color: "#8A6400", background: "#FFFBEF" }}>
                           No respondió todos los ítems (por ejemplo, se acabó el tiempo): estos puntajes se calcularon sobre una prueba parcial y no son comparables con los de una prueba completa.
                         </div>
+                      )}
+                      {!p.completitud?.incompleta && MAX_GRAFICO[p.codigo] && (
+                        <PerfilBarras
+                          max={MAX_GRAFICO[p.codigo].max}
+                          pie={MAX_GRAFICO[p.codigo].pie}
+                          filas={p.escalas.map((e) => {
+                            const v = e.sten ?? e.puntaje_estandar;
+                            return {
+                              etiqueta: e.escala,
+                              valor: v,
+                              valorTexto: v === null ? "—" : e.sten !== null ? String(e.sten) : v.toFixed(1),
+                              detalle: e.percentil !== null ? `Percentil ${e.percentil}` : undefined,
+                            };
+                          })}
+                        />
                       )}
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>

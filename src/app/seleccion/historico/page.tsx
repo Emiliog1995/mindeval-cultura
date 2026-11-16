@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { authHeaders } from "@/lib/auth-headers";
+import PerfilBarras, { type FilaPerfil } from "@/components/mindeval/PerfilBarras";
 
 const NAVY = "#1B2A5B";
 const GOLD = "#F5B800";
@@ -39,6 +40,38 @@ interface Detalle {
   nombre: string;
   cedula: string | null;
   pruebas: Prueba[];
+}
+
+/**
+ * Qué se grafica de cada prueba de la plataforma anterior: el nivel (1-10, o
+ * 1-7 en DISC) cuando existe; si no, el puntaje bruto contra su máximo.
+ */
+function perfilDe(p: Prueba): { filas: FilaPerfil[]; max: number; pie: string } {
+  const conNivel = p.escalas.some((e) => e.sten_score !== null);
+  if (conNivel) {
+    const max = Math.max(...p.escalas.map((e) => e.sten_score ?? 0)) <= 7 && /disc/i.test(p.prueba) ? 7 : 10;
+    return {
+      max,
+      pie: `Nivel de 1 a ${max} por escala.`,
+      filas: p.escalas.map((e) => ({
+        etiqueta: e.name ?? e.code ?? "—",
+        valor: e.sten_score,
+        valorTexto: e.sten_score === null ? "—" : String(e.sten_score),
+        detalle: `Bruto ${e.raw_score ?? "—"}${e.max_score ? ` de ${e.max_score}` : ""}${e.category ? ` · ${e.category}` : ""}`,
+      })),
+    };
+  }
+  const max = Math.max(...p.escalas.map((e) => e.max_score ?? 0));
+  return {
+    max,
+    pie: `Puntaje bruto por escala, sobre ${max}.`,
+    filas: p.escalas.map((e) => ({
+      etiqueta: e.name ?? e.code ?? "—",
+      valor: e.raw_score,
+      valorTexto: e.raw_score === null ? "—" : `${e.raw_score} / ${e.max_score ?? max}`,
+      detalle: e.category ? `Categoría ${e.category}` : undefined,
+    })),
+  };
 }
 
 function minutos(seg: number | null): string {
@@ -191,10 +224,14 @@ function HistoricoInner() {
                   <span style={{ fontSize: 12, color: "#41507A" }}>Alertas: {p.alertas ?? "—"}</span>
                   {p.terminada_en && <span style={{ marginLeft: "auto", fontSize: 11.5, color: "#7C89A8" }}>{new Date(p.terminada_en).toLocaleString("es-EC")}</span>}
                 </div>
+                {(() => {
+                  const g = perfilDe(p);
+                  return <PerfilBarras filas={g.filas} max={g.max} pie={g.pie} />;
+                })()}
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      {["Escala", "Bruto", "STEN", "Percentil", "Categoría"].map((h) => (
+                      {["Escala", "Bruto", "Nivel", "Percentil", "Categoría"].map((h) => (
                         <th key={h} style={{ padding: "7px 14px", textAlign: "left", fontSize: 11, color: "#7C89A8" }}>{h}</th>
                       ))}
                     </tr>
@@ -216,7 +253,9 @@ function HistoricoInner() {
               </div>
             ))}
             <p style={{ fontSize: 11.5, color: "#7C89A8", marginTop: 4 }}>
-              Puntajes tal como los calculó la plataforma anterior. No incluye dictámenes automáticos: la valoración la hace quien revisa.
+              Puntajes tal como los calculó la plataforma anterior. En ella, el nivel y el percentil se obtuvieron como
+              proporción del puntaje máximo de cada escala, no con baremos poblacionales: sirven como referencia del
+              registro, no como puntuación normativa. No incluye dictámenes automáticos.
             </p>
           </div>
         </div>
