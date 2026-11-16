@@ -483,7 +483,10 @@ export async function enviarInvitacionInstitucion(params: {
   if ("error" in emisor) return { ok: false, error: emisor.error };
 
   const fecha = formatoEcuador(new Date(params.fechaProgramada));
-  const limite = formatoEcuador(limiteDeAcceso({ fecha_programada: params.fechaProgramada, estado: "programada" }));
+  // Hora fija: se cierra para todos a la hora agendada + tiempo límite.
+  const cierre = params.tiempoLimiteMin
+    ? formatoEcuador(new Date(new Date(params.fechaProgramada).getTime() + params.tiempoLimiteMin * 60_000))
+    : formatoEcuador(limiteDeAcceso({ fecha_programada: params.fechaProgramada, estado: "programada" }));
   const nombre = escapeHtml(params.nombreEvaluado);
   const proceso = escapeHtml(params.proceso);
   const institucion = escapeHtml(params.institucion);
@@ -498,9 +501,13 @@ export async function enviarInvitacionInstitucion(params: {
     </p>
     <p style="font-size: 14px; color: #33405F; line-height: 1.6;">
       <strong>Pruebas:</strong> ${pruebas}<br />
-      <strong>Puede empezar desde:</strong> ${fecha} (hora Ecuador)<br />
-      <strong>Plazo para entrar hasta:</strong> ${limite} (hora Ecuador)<br />
-      <strong>Tiempo para rendir:</strong> ${tiempo}, que empieza a correr cuando abra la prueba.
+      <strong>Inicio de la prueba:</strong> ${fecha} (hora Ecuador)<br />
+      <strong>Cierre de la prueba:</strong> ${cierre} (hora Ecuador)<br />
+      <strong>Duración:</strong> ${tiempo}
+    </p>
+    <p style="font-size: 13px; color: #33405F; line-height: 1.6; background: #F7F9FD; border-radius: 8px; padding: 10px 14px;">
+      La prueba tiene hora fija. No podrá ingresar antes de la hora de inicio, y a la hora de cierre se cierra para
+      todos y se envía lo que haya respondido. Si ingresa tarde, tendrá menos tiempo para responder.
     </p>
     <div style="background: #F7F9FD; border: 1px solid #E3E8F2; border-radius: 10px; padding: 16px 18px; margin: 20px 0;">
       <div style="font-size: 12px; color: #7C89A8; margin-bottom: 4px;">Su contraseña temporal</div>

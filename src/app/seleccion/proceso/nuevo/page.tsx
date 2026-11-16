@@ -15,6 +15,7 @@ const PRUEBAS = [
   { id: "kostick", nombre: "KOSTICK", desc: "Estilo de trabajo · 90 ítems" },
   { id: "disc", nombre: "DISC", desc: "Comportamiento" },
   { id: "valanti", nombre: "VALANTI", desc: "Valores" },
+  { id: "holland", nombre: "HOLLAND (RIASEC)", desc: "Test vocacional · 30 ítems Sí/No" },
 ];
 
 const campo = { width: "100%", padding: "10px 12px", border: "1.5px solid #D5DCEB", borderRadius: 8, fontSize: 14, boxSizing: "border-box" as const, color: NAVY };
@@ -26,7 +27,7 @@ export default function NuevoProceso() {
   const [instituciones, setInstituciones] = useState<{ id: string; nombre: string }[]>([]);
   const [empresaId, setEmpresaId] = useState("");
   const [titulo, setTitulo] = useState("");
-  const [tests, setTests] = useState<string[]>(["16pf5", "kostick", "disc", "valanti"]);
+  const [tests, setTests] = useState<string[]>(["holland"]);
   const [tiempo, setTiempo] = useState(120);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");

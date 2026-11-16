@@ -65,3 +65,39 @@ export function mensajeExpirada(sesion: SesionVentana): string {
 export function mensajeNoDisponible(sesion: SesionVentana): string {
   return `Esta prueba todavía no está disponible. Podrás entrar desde el ${formatoEcuador(sesion.fecha_programada)} (hora Ecuador) y tendrás ${VENTANA_HORAS} horas para rendirla.`;
 }
+
+/**
+ * Instituciones (USECIPOL): la prueba tiene HORA FIJA. Se entra desde la hora
+ * agendada (no antes) y se cierra para todos a la hora agendada + tiempo
+ * límite. Quien entra tarde tiene menos tiempo: a las 14:00 con 120 min,
+ * quien entra a las 15:00 tiene 60 min. Aplica a las invitaciones con
+ * contraseña temporal (clave_hash) de un proceso con tiempo límite.
+ */
+export interface VentanaFija {
+  inicio: Date;
+  cierre: Date;
+}
+
+export function ventanaFija(
+  sesion: { fecha_programada: string; clave_hash?: string | null },
+  tiempoLimiteMin: number | null | undefined
+): VentanaFija | null {
+  if (!sesion.clave_hash || !tiempoLimiteMin) return null;
+  const inicio = new Date(sesion.fecha_programada);
+  return { inicio, cierre: new Date(inicio.getTime() + tiempoLimiteMin * 60_000) };
+}
+
+/** Margen para recibir el envío automático que dispara el cierre. */
+export const MARGEN_ENVIO_MS = 5 * 60_000;
+
+export function horaEcuador(fecha: Date | string): string {
+  return new Date(fecha).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", timeZone: "America/Guayaquil" });
+}
+
+export function mensajeAntesDeInicio(v: VentanaFija): string {
+  return `Su prueba inicia el ${formatoEcuador(v.inicio)} (hora Ecuador). Ingrese a partir de esa hora con su cédula y su contraseña temporal.`;
+}
+
+export function mensajeCerrada(v: VentanaFija): string {
+  return `La prueba se cerró a las ${horaEcuador(v.cierre)} del ${new Date(v.cierre).toLocaleDateString("es-EC", { timeZone: "America/Guayaquil" })} (hora Ecuador). Comuníquese con el administrador de su institución.`;
+}

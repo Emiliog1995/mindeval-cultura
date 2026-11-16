@@ -8,8 +8,9 @@ import { ITEMS_16PF5 } from "@/lib/mindeval-16pf5";
 import { ITEMS_KOSTICK } from "@/lib/mindeval-kostick";
 import { ITEMS_DISC } from "@/lib/mindeval-disc";
 import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
+import { ITEMS_HOLLAND, calificarHolland } from "@/lib/mindeval-holland";
 import type { EjercicioBanco, SesionPrueba } from "@/lib/mindeval-types";
-import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible } from "@/lib/mindeval-ventana-prueba";
+import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible, ventanaFija, mensajeAntesDeInicio, mensajeCerrada, MARGEN_ENVIO_MS } from "@/lib/mindeval-ventana-prueba";
 import { enviarPruebaCompletada, enviarAvisoPruebaRendida } from "@/lib/mindeval-email";
 
 // La corrección con IA (caso técnico abierto, ejercicios de assessment) y el
@@ -107,6 +108,10 @@ async function composicion(sesion: { tipo: string; vacante_id: string }) {
     bloques.push({ nombre: "VALANTI — Valores", items: ITEMS_VALANTI.length, formato: "Reparte 3 puntos entre dos frases" });
     minutos += 15;
   }
+  if (activos.includes("holland")) {
+    bloques.push({ nombre: "Test vocacional de Holland", items: ITEMS_HOLLAND.length, formato: "Responde Sí o No a cada afirmación" });
+    minutos += 10;
+  }
   return { duracion_minutos: tiempoFijado ?? (minutos || 30), bloques };
 }
 
@@ -136,14 +141,30 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   if (sesion.estado === "completada") {
     return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
   }
-  if (sesionExpirada(sesion)) {
-    if (sesion.estado !== "expirada") {
-      await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
+
+  // Instituciones: hora fija (no se entra antes; se cierra para todos).
+  const { data: vacVentana } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).maybeSingle();
+  const ventana = ventanaFija(sesion, (vacVentana as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min);
+  if (ventana) {
+    if (Date.now() < ventana.inicio.getTime()) {
+      return NextResponse.json({ error: mensajeAntesDeInicio(ventana) }, { status: 403 });
     }
-    return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
-  }
-  if (todaviaNoDisponible(sesion)) {
-    return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
+    if (Date.now() > ventana.cierre.getTime()) {
+      if (sesion.estado !== "expirada") {
+        await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
+      }
+      return NextResponse.json({ error: mensajeCerrada(ventana) }, { status: 410 });
+    }
+  } else {
+    if (sesionExpirada(sesion)) {
+      if (sesion.estado !== "expirada") {
+        await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
+      }
+      return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
+    }
+    if (todaviaNoDisponible(sesion)) {
+      return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
+    }
   }
 
   return NextResponse.json({
@@ -194,7 +215,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (sesion.estado === "completada") {
       return NextResponse.json({ error: "Esta prueba ya fue completada" }, { status: 409 });
     }
-    if (sesionExpirada(sesion)) {
+    const { data: vacVentanaPost } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).maybeSingle();
+    const ventanaPost = ventanaFija(sesion, (vacVentanaPost as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min);
+    if (ventanaPost) {
+      // El envío automático del cierre puede llegar unos segundos tarde.
+      if (Date.now() > ventanaPost.cierre.getTime() + MARGEN_ENVIO_MS) {
+        return NextResponse.json({ error: mensajeCerrada(ventanaPost) }, { status: 410 });
+      }
+    } else if (sesionExpirada(sesion)) {
       if (sesion.estado !== "expirada") {
         await supabaseAdmin.from("mindeval_sesiones_prueba").update({ estado: "expirada" }).eq("id", sesion.id);
       }
@@ -303,12 +331,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       if (insErr) return errorGuardado();
     } else if ((vacanteCortes?.tests_psicometricos ?? []).length > 0) {
       const testsActivos: string[] = vacanteCortes!.tests_psicometricos;
-      const { sexo, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti }: {
+      const { sexo, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti, respuestasHolland }: {
         sexo?: "H" | "F";
         respuestas16pf5?: { num: number; letra: "a" | "b" | "c" }[];
         respuestasKostick?: { num: number; eleccion: "a" | "b" }[];
         respuestasDisc?: { num: number; mas: 1 | 2 | 3 | 4; menos: 1 | 2 | 3 | 4 }[];
         respuestasValanti?: { num: number; puntosFraseA: 0 | 1 | 2 | 3 }[];
+        respuestasHolland?: { num: number; si: boolean }[];
       } = body;
 
       // Cuántos ítems respondió de verdad el candidato frente a cuántos tenía
@@ -409,6 +438,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
             },
             items_respondidos: respuestasValanti.length,
             items_esperados: ITEMS_VALANTI.length,
+          });
+        }
+      }
+
+      if (testsActivos.includes("holland")) {
+        if (!respuestasHolland?.length) {
+          return NextResponse.json({ error: "Faltan las respuestas del test vocacional" }, { status: 400 });
+        }
+        const resultado = calificarHolland(respuestasHolland);
+        for (const p of resultado.puntajes) {
+          filas.push({
+            candidato_id: s.candidato_id,
+            bateria: `holland_${p.area}`,
+            sten: p.puntaje,
+            percentil: null,
+            respuestas: { nivel: p.nivel, patron: resultado.codigo, empate: resultado.empate, respuestas: respuestasHolland },
+            items_respondidos: respuestasHolland.length,
+            items_esperados: ITEMS_HOLLAND.length,
           });
         }
       }

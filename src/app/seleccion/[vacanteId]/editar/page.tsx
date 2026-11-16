@@ -104,7 +104,7 @@ export default function EditarVacantePage() {
   const [corteSten, setCorteSten] = useState(6);
   const [corteTecnica, setCorteTecnica] = useState(70);
   const [modoTecnica, setModoTecnica] = useState<"caso_abierto" | "banco">("caso_abierto");
-  const [tests, setTests] = useState<("16pf5" | "kostick" | "disc" | "valanti")[]>([]);
+  const [tests, setTests] = useState<Vacante["tests_psicometricos"]>([]);
   const [perfil, setPerfil] = useState<PerfilObjetivo16PF5>({});
   // Si la vacante nunca configuró el suyo, la interfaz arranca precargada con
   // la plantilla pero lo dice con todas sus letras — al guardar deja de ser

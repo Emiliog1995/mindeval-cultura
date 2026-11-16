@@ -52,11 +52,13 @@ interface DatosPsicometricaReal {
   candidato_nombre: string;
   iniciada_en: string;
   tiempo_limite_min?: number | null;
+  cierra_en?: string | null;
   tests: {
     "16pf5"?: { num: number; texto: string; opciones: { letra: "a" | "b" | "c"; texto: string }[] }[];
     kostick?: { num: number; a: string; b: string }[];
     disc?: { num: number; palabras: string[] }[];
     valanti?: { num: number; fraseA: string; fraseB: string }[];
+    holland?: { num: number; texto: string }[];
   };
 }
 type DatosPsicometrica = DatosPsicometricaPlaceholder | DatosPsicometricaReal;
@@ -67,13 +69,14 @@ type DatosPsicometrica = DatosPsicometricaPlaceholder | DatosPsicometricaReal;
 // paso, con un puente explícito entre una y otra). Mismos códigos que usa el
 // resto del proyecto para nombrar estos tests (ver mapa NOMBRES_BATERIA en
 // candidato/[id]/page.tsx).
-const SECCIONES_ORDEN = ["16pf5", "kostick", "disc", "valanti"] as const;
+const SECCIONES_ORDEN = ["16pf5", "kostick", "disc", "valanti", "holland"] as const;
 type SeccionPsico = (typeof SECCIONES_ORDEN)[number];
 const NOMBRE_SECCION: Record<SeccionPsico, string> = {
   "16pf5": "16PF-5",
   kostick: "KOSTICK",
   disc: "DISC",
   valanti: "VALANTI",
+  holland: "TEST VOCACIONAL",
 };
 
 /** Estado de respuestas relevante para saber si una sección ya se completó. */
@@ -83,6 +86,7 @@ interface EstadoRespuestasPsico {
   respuestasKostick: Record<number, "a" | "b">;
   respuestasDisc: Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>;
   respuestasValanti: Record<number, 0 | 1 | 2 | 3>;
+  respuestasHolland: Record<number, boolean>;
 }
 
 function seccionCompleta(seccion: SeccionPsico, datos: DatosPsicometricaReal, estado: EstadoRespuestasPsico): boolean {
@@ -99,6 +103,10 @@ function seccionCompleta(seccion: SeccionPsico, datos: DatosPsicometricaReal, es
   if (seccion === "disc") {
     const total = datos.tests.disc?.length ?? 0;
     return Object.values(estado.respuestasDisc).filter((r) => r.mas && r.menos).length >= total;
+  }
+  if (seccion === "holland") {
+    const total = datos.tests.holland?.length ?? 0;
+    return Object.keys(estado.respuestasHolland).length >= total;
   }
   const total = datos.tests.valanti?.length ?? 0;
   return Object.keys(estado.respuestasValanti).length >= total;
@@ -140,6 +148,7 @@ interface BorradorGuardado {
   respuestasKostick?: Record<number, "a" | "b">;
   respuestasDisc?: Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>;
   respuestasValanti?: Record<number, 0 | 1 | 2 | 3>;
+  respuestasHolland?: Record<number, boolean>;
 }
 
 function claveBorrador(token: string): string {
@@ -155,7 +164,8 @@ function duracionMinutos(datos: DatosTecnica | DatosPsicometrica | DatosAssessme
       const tieneKostick = !!datos.tests.kostick;
       const tieneDisc = !!datos.tests.disc;
       const tieneValanti = !!datos.tests.valanti;
-      const minutos = (tiene16pf5 ? 45 : 0) + (tieneKostick ? 15 : 0) + (tieneDisc ? 15 : 0) + (tieneValanti ? 15 : 0);
+      const tieneHolland = !!datos.tests.holland;
+      const minutos = (tiene16pf5 ? 45 : 0) + (tieneKostick ? 15 : 0) + (tieneDisc ? 15 : 0) + (tieneValanti ? 15 : 0) + (tieneHolland ? 10 : 0);
       return minutos || 30;
     }
     return 30;
@@ -248,6 +258,7 @@ export default function PruebaTokenPage() {
   const [respuestasKostick, setRespuestasKostick] = useState<Record<number, "a" | "b">>({});
   const [respuestasDisc, setRespuestasDisc] = useState<Record<number, { mas?: 1 | 2 | 3 | 4; menos?: 1 | 2 | 3 | 4 }>>({});
   const [respuestasValanti, setRespuestasValanti] = useState<Record<number, 0 | 1 | 2 | 3>>({});
+  const [respuestasHolland, setRespuestasHolland] = useState<Record<number, boolean>>({});
 
   // En qué instrumento de la batería psicométrica va el candidato ("16pf5",
   // "kostick"...) y si está viendo la pantalla puente entre uno y el
@@ -333,6 +344,7 @@ export default function PruebaTokenPage() {
           if (b.respuestasKostick && Object.keys(b.respuestasKostick).length) { setRespuestasKostick(b.respuestasKostick); huboRestauracion = true; }
           if (b.respuestasDisc && Object.keys(b.respuestasDisc).length) { setRespuestasDisc(b.respuestasDisc); huboRestauracion = true; }
           if (b.respuestasValanti && Object.keys(b.respuestasValanti).length) { setRespuestasValanti(b.respuestasValanti); huboRestauracion = true; }
+          if (b.respuestasHolland && Object.keys(b.respuestasHolland).length) { setRespuestasHolland(b.respuestasHolland); huboRestauracion = true; }
           if (b.respuestasPsico && Object.keys(b.respuestasPsico).length) { setRespuestasPsico(b.respuestasPsico); huboRestauracion = true; }
           if (huboRestauracion) setBorradorRestaurado(true);
         }
@@ -352,6 +364,7 @@ export default function PruebaTokenPage() {
           respuestasKostick: borrador?.respuestasKostick ?? {},
           respuestasDisc: borrador?.respuestasDisc ?? {},
           respuestasValanti: borrador?.respuestasValanti ?? {},
+          respuestasHolland: borrador?.respuestasHolland ?? {},
         };
         let idx = 0;
         while (idx < orden.length - 1 && seccionCompleta(orden[idx], d, estado)) idx++;
@@ -385,6 +398,7 @@ export default function PruebaTokenPage() {
         respuestasKostick,
         respuestasDisc,
         respuestasValanti,
+        respuestasHolland,
       };
       localStorage.setItem(claveBorrador(token), JSON.stringify(snapshot));
     } catch {
@@ -403,6 +417,7 @@ export default function PruebaTokenPage() {
     respuestasKostick,
     respuestasDisc,
     respuestasValanti,
+    respuestasHolland,
   ]);
 
   /**
@@ -463,6 +478,9 @@ export default function PruebaTokenPage() {
                   respuestasValanti: datos.tests.valanti
                     ? Object.entries(respuestasValanti).map(([num, puntosFraseA]) => ({ num: Number(num), puntosFraseA }))
                     : undefined,
+                  respuestasHolland: datos.tests.holland
+                    ? Object.entries(respuestasHolland).map(([num, si]) => ({ num: Number(num), si }))
+                    : undefined,
                 }
               : { respuestas: respuestasPsico };
       const res = await fetch(`/api/mindeval-prueba/${token}`, {
@@ -512,6 +530,9 @@ export default function PruebaTokenPage() {
     } else if (seccion === "disc") {
       const items = datos.tests.disc ?? [];
       idx = items.findIndex((it) => { const r = respuestasDisc[it.num]; return !(r?.mas && r?.menos); });
+    } else if (seccion === "holland") {
+      const items = datos.tests.holland ?? [];
+      idx = items.findIndex((it) => respuestasHolland[it.num] === undefined);
     } else {
       const items = datos.tests.valanti ?? [];
       idx = items.findIndex((it) => respuestasValanti[it.num] === undefined);
@@ -556,6 +577,7 @@ export default function PruebaTokenPage() {
         marcar(`item-disc-${it.num}`, !!r?.mas && !!r?.menos);
       });
       datos.tests.valanti?.forEach((it) => marcar(`item-valanti-${it.num}`, respuestasValanti[it.num] !== undefined));
+      datos.tests.holland?.forEach((it) => marcar(`item-holland-${it.num}`, respuestasHolland[it.num] !== undefined));
     } else {
       Object.entries(datos.items).forEach(([bateria, lista]) => {
         lista.forEach((_, i) => marcar(`item-${bateria}-${i}`, respuestasPsico[bateria]?.[i] !== undefined && respuestasPsico[bateria]?.[i] !== null));
@@ -563,7 +585,7 @@ export default function PruebaTokenPage() {
     }
 
     return { total, respondidos, primerPendiente: primerPendiente as string | null };
-  }, [datos, respuestasBanco, respuestaTecnica, respuestasAssessment, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti, respuestasPsico]);
+  }, [datos, respuestasBanco, respuestaTecnica, respuestasAssessment, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti, respuestasHolland, respuestasPsico]);
 
   function irAlPendiente() {
     if (!progreso?.primerPendiente) return;
@@ -650,7 +672,16 @@ export default function PruebaTokenPage() {
     );
   }
 
-  const duracionSegundos = (datos ? duracionMinutos(datos) : 30) * 60;
+  // Instituciones: hora fija de cierre. El total se recorta para que el
+  // tiempo restante sea el menor entre "duración - transcurrido" y "hasta el
+  // cierre" (quien entra tarde tiene menos tiempo).
+  const cierraEn = datos && datos.tipo === "psicometrica" && datos.modo === "real" ? datos.cierra_en ?? null : null;
+  const duracionSegundos = (() => {
+    const base = (datos ? duracionMinutos(datos) : 30) * 60;
+    if (!cierraEn || !datos?.iniciada_en) return base;
+    const hastaCierre = Math.floor((new Date(cierraEn).getTime() - new Date(datos.iniciada_en).getTime()) / 1000);
+    return Math.max(0, Math.min(base, hastaCierre));
+  })();
   // Se calcula una sola vez cuando llega `iniciada_en` (no en cada tick) --
   // es el ancla real contra la que se mide el tiempo restante.
   const segundosTranscurridos = useMemo(() => {
@@ -1416,9 +1447,56 @@ export default function PruebaTokenPage() {
                   </>
                 )}
 
+                {datos.tests.holland && seccionesActivas[seccionActual] === "holland" && (
+                  <>
+                    <div style={{ background: "#FFFBEF", border: "1px solid #F3E0AE", borderRadius: 10, padding: 12, fontSize: 12, color: "#8A6400" }}>
+                      Responde Sí o No según te identifiques con cada afirmación. No hay respuestas correctas ni incorrectas.
+                    </div>
+                    {(() => {
+                      const items = datos.tests.holland!;
+                      const idx = Math.min(itemActual, items.length - 1);
+                      const it = items[idx];
+                      return (
+                        <div key={it.num} id={`item-holland-${it.num}`} style={{ background: "#FFFFFF", border: "1px solid #E3E8F2", borderRadius: 14, padding: 20 }}>
+                          {cabeceraItem(idx, items.length)}
+                          <div style={{ fontSize: 15, color: NAVY, fontWeight: 700, margin: "12px 0 14px", lineHeight: 1.5 }}>{it.texto}</div>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            {([true, false] as const).map((si) => {
+                              const seleccionado = respuestasHolland[it.num] === si;
+                              return (
+                                <button
+                                  key={String(si)}
+                                  type="button"
+                                  onClick={() => {
+                                    setRespuestasHolland((prev) => ({ ...prev, [it.num]: si }));
+                                    avanzarTrasVerSeleccion(idx, items.length);
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    padding: "14px 10px",
+                                    borderRadius: 10,
+                                    fontSize: 15,
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                    border: seleccionado ? `2px solid ${AZUL_ELEGIDO}` : "1.5px solid #D5DCEB",
+                                    background: seleccionado ? AZUL_ELEGIDO_FONDO : "#FFFFFF",
+                                    color: NAVY,
+                                  }}
+                                >
+                                  {si ? "Sí" : "No"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+
                 {(() => {
                   const seccion = seccionesActivas[seccionActual];
-                  const estado: EstadoRespuestasPsico = { sexo16pf5, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti };
+                  const estado: EstadoRespuestasPsico = { sexo16pf5, respuestas16pf5, respuestasKostick, respuestasDisc, respuestasValanti, respuestasHolland };
                   const completa = seccion ? seccionCompleta(seccion, datos, estado) : false;
                   const esUltima = seccionActual >= seccionesActivas.length - 1;
 
@@ -1457,10 +1535,11 @@ export default function PruebaTokenPage() {
                   const faltaKostick = Object.keys(respuestasKostick).length < totalKostick;
                   const faltaDisc = Object.values(respuestasDisc).filter((r) => r.mas && r.menos).length < totalDisc;
                   const faltaValanti = Object.keys(respuestasValanti).length < totalValanti;
+                  const faltaHolland = Object.keys(respuestasHolland).length < (datos.tests.holland?.length ?? 0);
                   return (
                     <button
                       onClick={enviar}
-                      disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc || faltaValanti}
+                      disabled={enviando || faltaSexo || falta16pf5 || faltaKostick || faltaDisc || faltaValanti || faltaHolland}
                       style={{ background: GOLD, color: NAVY, border: "none", padding: "12px 22px", borderRadius: 8, fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: enviando ? 0.6 : 1 }}
                     >
                       {enviando ? "Enviando…" : "Enviar respuestas"}

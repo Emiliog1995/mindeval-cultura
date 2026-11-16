@@ -4,6 +4,7 @@ import { NOMBRES_ESCALA_16PF5 } from "@/lib/mindeval-16pf5";
 import { NOMBRES_FACTOR_KOSTICK } from "@/lib/mindeval-kostick";
 import { NOMBRES_RASGO_DISC } from "@/lib/mindeval-disc";
 import { NOMBRES_ESCALA_VALANTI } from "@/lib/mindeval-valanti";
+import { NOMBRES_AREA_HOLLAND } from "@/lib/mindeval-holland";
 import { psicometricaIncompleta } from "@/lib/mindeval-scoring";
 
 /**
@@ -12,7 +13,7 @@ import { psicometricaIncompleta } from "@/lib/mindeval-scoring";
  * navegador tal cual se registraron. Ningún veredicto automático.
  */
 
-const NOMBRE_BATERIA: Record<string, string> = { "16pf5": "16PF-5", kostick: "KOSTICK", disc: "DISC", valanti: "VALANTI" };
+const NOMBRE_BATERIA: Record<string, string> = { "16pf5": "16PF-5", kostick: "KOSTICK", disc: "DISC", valanti: "VALANTI", holland: "Test vocacional de Holland (RIASEC)" };
 
 function nombreEscala(bateria: string, clave: string): string {
   const mapas: Record<string, Record<string, string>> = {
@@ -20,6 +21,7 @@ function nombreEscala(bateria: string, clave: string): string {
     kostick: NOMBRES_FACTOR_KOSTICK as Record<string, string>,
     disc: NOMBRES_RASGO_DISC as Record<string, string>,
     valanti: NOMBRES_ESCALA_VALANTI as Record<string, string>,
+    holland: NOMBRES_AREA_HOLLAND as Record<string, string>,
   };
   return mapas[bateria]?.[clave] ?? clave;
 }
@@ -71,7 +73,7 @@ export async function cargarResultadosEvaluado(vacanteId: string, candidatoId: s
 
   const grupos = new Map<string, { escala: string; sten: number | null; puntaje_estandar: number | null; percentil: number | null }[]>();
   const completitud = new Map<string, { respondidos: number | null; esperados: number | null; incompleta: boolean }>();
-  let patronDisc: string | null = null;
+  const patrones: Record<string, string> = {};
 
   for (const f of filas ?? []) {
     const i = f.bateria.indexOf("_");
@@ -86,7 +88,7 @@ export async function cargarResultadosEvaluado(vacanteId: string, candidatoId: s
     });
     completitud.set(prueba, { respondidos: f.items_respondidos, esperados: f.items_esperados, incompleta: psicometricaIncompleta(f) });
     const patron = (f.respuestas as { patron?: string } | null)?.patron;
-    if (prueba === "disc" && patron) patronDisc = patron;
+    if (patron) patrones[prueba] = patron;
   }
 
   const perfil = sesion?.perfil_evaluado === "estudiante" || sesion?.perfil_evaluado === "docente" ? sesion.perfil_evaluado : null;
@@ -100,7 +102,7 @@ export async function cargarResultadosEvaluado(vacanteId: string, candidatoId: s
       codigo: p,
       escalas,
       completitud: completitud.get(p),
-      patron: p === "disc" ? patronDisc : null,
+      patron: patrones[p] ?? null,
     })),
     alertas: alertas ?? [],
   };

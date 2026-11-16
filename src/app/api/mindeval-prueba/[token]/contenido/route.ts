@@ -8,8 +8,9 @@ import { ITEMS_16PF5 } from "@/lib/mindeval-16pf5";
 import { ITEMS_KOSTICK } from "@/lib/mindeval-kostick";
 import { ITEMS_DISC } from "@/lib/mindeval-disc";
 import { ITEMS_VALANTI } from "@/lib/mindeval-valanti";
+import { ITEMS_HOLLAND } from "@/lib/mindeval-holland";
 import type { EjercicioBanco, PreguntaBanco, Vacante } from "@/lib/mindeval-types";
-import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible } from "@/lib/mindeval-ventana-prueba";
+import { sesionExpirada, todaviaNoDisponible, mensajeExpirada, mensajeNoDisponible, ventanaFija, mensajeAntesDeInicio, mensajeCerrada } from "@/lib/mindeval-ventana-prueba";
 import { MAX_INTENTOS_CLAVE, verificarClave } from "@/lib/mindeval-clave";
 
 // generarCasoTecnico (caso técnico abierto) llama a Claude y puede superar
@@ -68,11 +69,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     // Misma regla que GET /api/mindeval-prueba/[token], importada del mismo
     // módulo -- este endpoint es el que de verdad entrega el contenido, así
     // que vuelve a validarla en vez de confiar en que el GET ya lo hizo.
-    if (sesionExpirada(sesion)) {
-      return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
-    }
-    if (todaviaNoDisponible(sesion)) {
-      return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
+    const { data: vacVentana } = await supabaseAdmin.from("mindeval_vacantes").select("*").eq("id", sesion.vacante_id).maybeSingle();
+    const ventana = ventanaFija(sesion, (vacVentana as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min);
+    if (ventana) {
+      if (Date.now() < ventana.inicio.getTime()) {
+        return NextResponse.json({ error: mensajeAntesDeInicio(ventana) }, { status: 403 });
+      }
+      if (Date.now() > ventana.cierre.getTime()) {
+        return NextResponse.json({ error: mensajeCerrada(ventana) }, { status: 410 });
+      }
+    } else {
+      if (sesionExpirada(sesion)) {
+        return NextResponse.json({ error: mensajeExpirada(sesion) }, { status: 410 });
+      }
+      if (todaviaNoDisponible(sesion)) {
+        return NextResponse.json({ error: mensajeNoDisponible(sesion) }, { status: 403 });
+      }
     }
 
     // Invitaciones de institución llevan contraseña temporal (solo existe su
@@ -282,6 +294,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       if (testsActivos.includes("valanti")) {
         tests["valanti"] = ITEMS_VALANTI.map((it) => ({ num: it.num, fraseA: it.fraseA, fraseB: it.fraseB }));
       }
+      if (testsActivos.includes("holland")) {
+        tests["holland"] = ITEMS_HOLLAND.map((it) => ({ num: it.num, texto: it.texto }));
+      }
 
       return NextResponse.json({
         tipo: "psicometrica",
@@ -290,6 +305,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         candidato_nombre: sesion.mindeval_candidatos?.nombre_completo,
         iniciada_en: iniciadaEn,
         tiempo_limite_min: (vacante as { tiempo_limite_min?: number | null } | null)?.tiempo_limite_min ?? null,
+        // Hora fija de cierre (instituciones): el cronómetro no pasa de aquí.
+        cierra_en: ventana ? ventana.cierre.toISOString() : null,
         tests,
       });
     }

@@ -78,7 +78,7 @@ export interface Vacante {
   corte_sten: number;
   corte_tecnica: number;
   modo_tecnica: "caso_abierto" | "banco";
-  tests_psicometricos: ("16pf5" | "kostick" | "disc" | "valanti")[];
+  tests_psicometricos: ("16pf5" | "kostick" | "disc" | "valanti" | "holland")[];
   // Perfil objetivo del 16PF-5 con el que se rankea ESTA vacante: qué
   // factores importan y en qué dirección. NULL = sin configurar, el código
   // cae a la plantilla sugerida y la interfaz lo advierte (ver

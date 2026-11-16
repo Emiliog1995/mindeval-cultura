@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { getContextoUsuario, type ContextoUsuario } from "@/lib/require-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-export type TestPsico = "16pf5" | "kostick" | "disc" | "valanti";
-export const TESTS_VALIDOS: TestPsico[] = ["16pf5", "kostick", "disc", "valanti"];
+export type TestPsico = "16pf5" | "kostick" | "disc" | "valanti" | "holland";
+export const TESTS_VALIDOS: TestPsico[] = ["16pf5", "kostick", "disc", "valanti", "holland"];
 /**
  * ¿Esta cuenta puede ver "Evaluaciones anteriores"? El super_admin siempre.
  * El resto según usuarios_autorizados.ver_historico. Falla cerrado: si la
@@ -26,6 +26,7 @@ export const NOMBRE_TEST: Record<TestPsico, string> = {
   kostick: "KOSTICK",
   disc: "DISC",
   valanti: "VALANTI",
+  holland: "Test vocacional de Holland",
 };
 
 /**

@@ -17,11 +17,13 @@ const MAX_GRAFICO: Record<string, { max: number; pie: string }> = {
   disc: { max: 7, pie: "Segmento de 1 a 7 por rasgo." },
   kostick: { max: 9, pie: "Conteo de 0 a 9 por factor." },
   valanti: { max: 100, pie: "Puntaje estándar (media 50) por escala." },
+  holland: { max: 5, pie: "Respuestas afirmativas por área, de 0 a 5. 4-5 alto · 2-3 moderado · 0-1 bajo." },
 };
-const NOMBRE_TEST: Record<string, string> = { "16pf5": "16PF-5", kostick: "KOSTICK", disc: "DISC", valanti: "VALANTI" };
+const NOMBRE_TEST: Record<string, string> = { "16pf5": "16PF-5", kostick: "KOSTICK", disc: "DISC", valanti: "VALANTI", holland: "HOLLAND" };
 
 interface Proceso {
   id: string;
+  empresa_id: string | null;
   titulo: string;
   empresa: string;
   estado: "abierta" | "pausada" | "cerrada";
@@ -57,6 +59,16 @@ interface ResultadoEvaluado {
     patron: string | null;
   }[];
   alertas: { tipo_alerta: string; severidad: string; detalle: string | null; creado_en: string }[];
+}
+interface FilaGrupal {
+  nombre: string;
+  cedula: string | null;
+  perfil: string | null;
+  rindio: boolean;
+  codigo: string | null;
+  incompleta: boolean;
+  observacion: string | null;
+  puntajes: Record<string, number | null> | null;
 }
 interface ResultadoInvitar {
   candidato_id: string;
@@ -96,15 +108,29 @@ export default function ProcesoInstitucion() {
   const [resultado, setResultado] = useState<ResultadoEvaluado | null>(null);
   const [cargandoResultado, setCargandoResultado] = useState(false);
   const [generandoInforme, setGenerandoInforme] = useState(false);
+  const [grupal, setGrupal] = useState<{ institucion: string; proceso: string; filas: FilaGrupal[] } | null>(null);
+  const [cargandoGrupal, setCargandoGrupal] = useState(false);
+  const [otrosProcesos, setOtrosProcesos] = useState<{ id: string; titulo: string }[]>([]);
+  const [origenCopia, setOrigenCopia] = useState("");
+  const [copiando, setCopiando] = useState(false);
   const [candidatoResultado, setCandidatoResultado] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
-      supabase.from("mindeval_vacantes").select("id, titulo, empresa, estado, tests_psicometricos, tiempo_limite_min").eq("id", id).maybeSingle(),
+      supabase.from("mindeval_vacantes").select("id, empresa_id, titulo, empresa, estado, tests_psicometricos, tiempo_limite_min").eq("id", id).maybeSingle(),
       supabase.from("mindeval_candidatos").select("id, nombre_completo, cedula, email, perfil_evaluado").eq("vacante_id", id).order("nombre_completo"),
       supabase.from("mindeval_sesiones_prueba").select("id, perfil_evaluado, grabacion_path, candidato_id, estado, fecha_programada, created_at").eq("vacante_id", id).eq("tipo", "psicometrica").order("created_at", { ascending: false }),
     ]);
     if (!p) setError("No se encontró el proceso.");
+    if (p?.empresa_id) {
+      const { data: otros } = await supabase
+        .from("mindeval_vacantes")
+        .select("id, titulo")
+        .eq("empresa_id", p.empresa_id)
+        .neq("id", id)
+        .order("created_at", { ascending: false });
+      setOtrosProcesos((otros ?? []) as { id: string; titulo: string }[]);
+    }
     setProceso(p as Proceso | null);
     setEvaluados((c ?? []) as Evaluado[]);
     setSesiones((s ?? []) as Sesion[]);
@@ -211,6 +237,68 @@ export default function ProcesoInstitucion() {
     }
   }
 
+  async function verInformeGrupal() {
+    setError("");
+    setCargandoGrupal(true);
+    try {
+      const res = await fetch(`/api/mindeval-institucion-informe-grupal?vacante_id=${id}`, { headers: await authHeaders() });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "No se pudo cargar el informe");
+      setGrupal(d);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cargar el informe");
+    } finally {
+      setCargandoGrupal(false);
+    }
+  }
+
+  /** Abre el informe general en una ventana limpia lista para imprimir o guardar como PDF. */
+  function imprimirGrupal() {
+    if (!grupal) return;
+    const esc = (t: string | null | undefined) => (t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+    const filas = grupal.filas
+      .filter((f) => f.rindio)
+      .map((f) => `<tr><td>${esc(f.nombre)}</td><td>${esc(f.cedula)}</td><td style="text-align:center;font-weight:700">${esc(f.codigo)}${f.incompleta ? " *" : ""}</td><td>${esc(f.observacion)}</td></tr>`)
+      .join("");
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Informe general — ${esc(grupal.proceso)}</title>
+      <style>body{font-family:Arial,sans-serif;color:#1B2A5B;margin:32px}h1{font-size:18px;margin:0}h2{font-size:13px;font-weight:400;color:#41507A;margin:4px 0 18px}
+      table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9AA6C2;padding:7px 9px;vertical-align:top}th{background:#E9EDF6;text-align:left}
+      .nota{font-size:10.5px;color:#41507A;margin-top:12px}</style></head><body>
+      <h1>Informe general — Test vocacional de Holland (RIASEC)</h1>
+      <h2>Institución ${esc(grupal.institucion)} · ${esc(grupal.proceso)}</h2>
+      <table><thead><tr><th>NOMBRE</th><th>CÉDULA</th><th>RESULTADO DEL TEST</th><th>OBSERVACIÓN</th></tr></thead><tbody>${filas}</tbody></table>
+      <p class="nota">El resultado es el código formado por las tres áreas con más respuestas afirmativas.${grupal.filas.some((f) => f.incompleta) ? " * Test no respondido en su totalidad." : ""}</p>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
+  async function copiarEvaluados() {
+    if (!origenCopia) return;
+    setError("");
+    setAviso("");
+    setCopiando(true);
+    try {
+      const res = await fetch("/api/mindeval-institucion-copiar", {
+        method: "POST",
+        headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({ origen_id: origenCopia, destino_id: id }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "No se pudieron copiar los evaluados");
+      setAviso(`Se copiaron ${d.copiados} evaluado(s).${d.omitidos ? ` ${d.omitidos} ya estaban en este proceso.` : ""}`);
+      setOrigenCopia("");
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron copiar los evaluados");
+    } finally {
+      setCopiando(false);
+    }
+  }
+
   async function generarInforme() {
     if (!candidatoResultado) return;
     setError("");
@@ -290,6 +378,15 @@ export default function ProcesoInstitucion() {
                 <span style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 20, background: cerrado ? "#F1F3F9" : "#E8F6EF", color: cerrado ? "#5A6785" : "#12805C" }}>
                   {cerrado ? "Cerrado" : "Abierto"}
                 </span>
+                {proceso.tests_psicometricos.includes("holland") && (
+                  <button
+                    onClick={verInformeGrupal}
+                    disabled={cargandoGrupal}
+                    style={{ background: GOLD, color: NAVY, border: "none", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    {cargandoGrupal ? "Cargando…" : "Informe general"}
+                  </button>
+                )}
                 <button
                   onClick={() => router.push(`/seleccion/${id}/monitoreo?inst=1`)}
                   style={{ background: NAVY, color: "#FFFFFF", border: "none", padding: "8px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
@@ -341,6 +438,20 @@ export default function ProcesoInstitucion() {
                   ))}
                   {!perfilNuevo && <span style={{ fontSize: 12, color: "#A9B6D8" }}>Elige uno para poder agregar</span>}
                 </div>
+                {puedeCerrar && otrosProcesos.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, paddingTop: 14, borderTop: "1px solid #EEF1F7", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>O copia la lista de otro proceso:</span>
+                    <select value={origenCopia} onChange={(e) => setOrigenCopia(e.target.value)} style={{ ...campo, width: 280, background: "#FFFFFF" }}>
+                      <option value="">Elige un proceso…</option>
+                      {otrosProcesos.map((o) => (
+                        <option key={o.id} value={o.id}>{o.titulo}</option>
+                      ))}
+                    </select>
+                    <button onClick={copiarEvaluados} disabled={!origenCopia || copiando} style={boton(!!origenCopia && !copiando)}>
+                      {copiando ? "Copiando…" : "Copiar evaluados"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -417,6 +528,51 @@ export default function ProcesoInstitucion() {
               </table>
             </div>
 
+            {grupal && (
+              <div onClick={() => setGrupal(null)} style={{ position: "fixed", inset: 0, background: "rgba(11,16,32,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ background: "#FFFFFF", borderRadius: 14, padding: 24, maxWidth: 1000, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontWeight: 800, color: NAVY, fontSize: 17 }}>Informe general — Test vocacional</div>
+                      <div style={{ fontSize: 12, color: "#7C89A8" }}>Institución {grupal.institucion} · {grupal.proceso}</div>
+                    </div>
+                    <button onClick={imprimirGrupal} style={{ marginLeft: "auto", ...boton(grupal.filas.some((f) => f.rindio)) }}>Imprimir / PDF</button>
+                    <button onClick={() => setGrupal(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#7C89A8" }}>×</button>
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#F7F9FD" }}>
+                        {["Nombre", "Cédula", "Resultado", "R", "I", "A", "S", "E", "C", "Observación"].map((h) => (
+                          <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#7C89A8" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grupal.filas.map((f, i) => (
+                        <tr key={i} style={{ borderTop: "1px solid #EEF1F7" }}>
+                          <td style={{ padding: "8px 10px", fontSize: 12.5, fontWeight: 700, color: NAVY }}>{f.nombre}</td>
+                          <td style={{ padding: "8px 10px", fontSize: 12, color: "#41507A" }}>{f.cedula ?? "—"}</td>
+                          <td style={{ padding: "8px 10px", fontSize: 13, fontWeight: 800, color: NAVY }}>
+                            {f.rindio ? `${f.codigo ?? "—"}${f.incompleta ? " *" : ""}` : <span style={{ fontSize: 11.5, fontWeight: 600, color: "#A9B6D8" }}>Sin rendir</span>}
+                          </td>
+                          {["Realista", "Investigadora", "Artística", "Social", "Emprendedora", "Convencional"].map((a) => (
+                            <td key={a} style={{ padding: "8px 6px", fontSize: 12, color: "#41507A", textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{f.puntajes?.[a] ?? "—"}</td>
+                          ))}
+                          <td style={{ padding: "8px 10px", fontSize: 12, color: "#33405F" }}>{f.observacion ?? "—"}</td>
+                        </tr>
+                      ))}
+                      {grupal.filas.length === 0 && (
+                        <tr><td colSpan={10} style={{ padding: "1.5rem", textAlign: "center", color: "#7C89A8", fontSize: 13 }}>Aún no hay evaluados en este proceso.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  <p style={{ fontSize: 11.5, color: "#7C89A8", marginTop: 12 }}>
+                    Resultado = las tres áreas con más respuestas afirmativas (0 a 5 por área). Si hay empate en el tercer lugar se desempata en el orden R-I-A-S-E-C. * Test no respondido en su totalidad.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {resultado && (
               <div
                 onClick={() => setResultado(null)}
@@ -441,7 +597,7 @@ export default function ProcesoInstitucion() {
                     <div key={p.codigo} style={{ border: "1px solid #E3E8F2", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
                       <div style={{ background: "#F7F9FD", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                         <strong style={{ color: NAVY, fontSize: 13.5 }}>{p.prueba}</strong>
-                        {p.patron && <span style={{ fontSize: 12, color: "#41507A" }}>Patrón {p.patron}</span>}
+                        {p.patron && <span style={{ fontSize: 12, color: "#41507A" }}>{p.codigo === "holland" ? "Código" : "Patrón"} {p.patron}</span>}
                         {p.completitud && p.completitud.respondidos !== null && (
                           <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: p.completitud.incompleta ? "#FFF6DE" : "#E8F6EF", color: p.completitud.incompleta ? "#8A6400" : "#12805C" }}>
                             {p.completitud.respondidos}/{p.completitud.esperados} ítems{p.completitud.incompleta ? " · incompleta" : ""}
