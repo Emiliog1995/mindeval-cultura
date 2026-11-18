@@ -110,14 +110,12 @@ export default function ProcesoInstitucion() {
   const [cargandoVideo, setCargandoVideo] = useState(false);
   const [resultado, setResultado] = useState<ResultadoEvaluado | null>(null);
   const [cargandoResultado, setCargandoResultado] = useState(false);
-  const [generandoInforme, setGenerandoInforme] = useState(false);
   const [generandoPdf, setGenerandoPdf] = useState(false);
   const [grupal, setGrupal] = useState<{ institucion: string; proceso: string; filas: FilaGrupal[] } | null>(null);
   const [cargandoGrupal, setCargandoGrupal] = useState(false);
   const [otrosProcesos, setOtrosProcesos] = useState<{ id: string; titulo: string }[]>([]);
   const [origenCopia, setOrigenCopia] = useState("");
   const [copiando, setCopiando] = useState(false);
-  const [candidatoResultado, setCandidatoResultado] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
@@ -245,7 +243,6 @@ export default function ProcesoInstitucion() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? "No se pudieron cargar los resultados");
       setResultado(d);
-      setCandidatoResultado(candidatoId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudieron cargar los resultados");
     } finally {
@@ -382,26 +379,6 @@ export default function ProcesoInstitucion() {
       setError(e instanceof Error ? e.message : "No se pudieron copiar los evaluados");
     } finally {
       setCopiando(false);
-    }
-  }
-
-  async function generarInforme() {
-    if (!candidatoResultado) return;
-    setError("");
-    setGenerandoInforme(true);
-    try {
-      const res = await fetch("/api/mindeval-institucion-informe", {
-        method: "POST",
-        headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-        body: JSON.stringify({ vacante_id: id, candidato_id: candidatoResultado }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error ?? "No se pudo generar el informe");
-      setResultado((r) => (r ? { ...r, informe: d.informe } : r));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo generar el informe");
-    } finally {
-      setGenerandoInforme(false);
     }
   }
 
@@ -763,28 +740,6 @@ export default function ProcesoInstitucion() {
                           {new Date(a.creado_en).toLocaleTimeString("es-EC")} · {a.tipo_alerta} <span style={{ color: "#7C89A8" }}>({a.severidad})</span>
                         </div>
                       ))
-                    )}
-                  </div>
-                  <div style={{ border: "1px solid #E3E8F2", borderRadius: 12, padding: "12px 14px", marginTop: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                      <div style={{ fontWeight: 800, color: NAVY, fontSize: 13 }}>Informe con IA</div>
-                      <button
-                        onClick={generarInforme}
-                        disabled={generandoInforme || resultado.pruebas.length === 0}
-                        style={{ marginLeft: "auto", background: NAVY, color: "#FFFFFF", border: "none", padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: generandoInforme ? "not-allowed" : "pointer", opacity: generandoInforme ? 0.6 : 1 }}
-                      >
-                        {generandoInforme ? "Generando…" : resultado.informe ? "Volver a generar" : "Generar informe"}
-                      </button>
-                    </div>
-                    {resultado.informe ? (
-                      <>
-                        <div style={{ whiteSpace: "pre-wrap", fontSize: 12.5, color: "#33405F", lineHeight: 1.65 }}>{resultado.informe.contenido}</div>
-                        <div style={{ fontSize: 11, color: "#7C89A8", marginTop: 8 }}>Generado el {new Date(resultado.informe.generado_en).toLocaleString("es-EC")}</div>
-                      </>
-                    ) : (
-                      <div style={{ fontSize: 12.5, color: "#7C89A8" }}>
-                        Redacta un resumen descriptivo a partir de los puntajes. No decide aptitud ni validez, y no recibe el nombre ni la cédula del evaluado.
-                      </div>
                     )}
                   </div>
                   <p style={{ fontSize: 11.5, color: "#7C89A8", marginTop: 12 }}>

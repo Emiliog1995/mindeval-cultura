@@ -13,6 +13,12 @@ export const maxDuration = 60;
  * reglas en generarInformePsicometricoInstitucion.
  */
 export async function POST(req: NextRequest) {
+  // Desactivado a pedido de la institución (2026-11-18): los informes que
+  // se entregan son solo los calculados (individual y general), sin IA.
+  if (process.env.MINDEVAL_INFORME_IA_INSTITUCION !== "1") {
+    return NextResponse.json({ error: "El informe con IA no está disponible." }, { status: 410 });
+  }
+
   const body = await req.json().catch(() => null);
   const vacanteId = body?.vacante_id as string | undefined;
   const candidatoId = body?.candidato_id as string | undefined;
