@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       nombre: r.evaluado.nombre,
       cedula: r.evaluado.cedula,
       perfil: r.perfil,
+      fecha: r.sesion?.completada_en ?? null,
       rindio: !!h,
       codigo: h?.patron ?? null,
       incompleta: !!h?.completitud?.incompleta,

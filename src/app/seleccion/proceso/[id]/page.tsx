@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuthGuard } from "@/lib/useAuthGuard";
+import { observacionHolland } from "@/lib/mindeval-holland";
+import { descargarInformesIndividualesPdf } from "@/lib/mindeval-informe-individual-pdf";
 import BotonCerrarSesion from "@/components/mindeval/BotonCerrarSesion";
 import { authHeaders } from "@/lib/auth-headers";
 import PerfilBarras from "@/components/mindeval/PerfilBarras";
@@ -64,6 +66,7 @@ interface FilaGrupal {
   nombre: string;
   cedula: string | null;
   perfil: string | null;
+  fecha: string | null;
   rindio: boolean;
   codigo: string | null;
   incompleta: boolean;
@@ -108,6 +111,7 @@ export default function ProcesoInstitucion() {
   const [resultado, setResultado] = useState<ResultadoEvaluado | null>(null);
   const [cargandoResultado, setCargandoResultado] = useState(false);
   const [generandoInforme, setGenerandoInforme] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
   const [grupal, setGrupal] = useState<{ institucion: string; proceso: string; filas: FilaGrupal[] } | null>(null);
   const [cargandoGrupal, setCargandoGrupal] = useState(false);
   const [otrosProcesos, setOtrosProcesos] = useState<{ id: string; titulo: string }[]>([]);
@@ -311,6 +315,51 @@ export default function ProcesoInstitucion() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  /** PDF del informe individual (Holland) del evaluado abierto en Resultados. */
+  async function descargarPdfIndividual() {
+    if (!resultado || !proceso) return;
+    const h = resultado.pruebas.find((p) => p.codigo === "holland");
+    if (!h?.patron) return;
+    setGenerandoPdf(true);
+    try {
+      await descargarInformesIndividualesPdf(
+        [
+          {
+            nombre: resultado.evaluado.nombre,
+            cedula: resultado.evaluado.cedula,
+            perfil: resultado.perfil,
+            fecha: resultado.sesion?.completada_en ?? null,
+            codigo: h.patron,
+            incompleta: !!h.completitud?.incompleta,
+            observacion: observacionHolland(h.patron, resultado.perfil),
+            puntajes: Object.fromEntries(h.escalas.map((e) => [e.escala, e.sten])),
+          },
+        ],
+        { institucion: grupal?.institucion ?? proceso.empresa, proceso: proceso.titulo }
+      );
+    } catch {
+      setError("No se pudo generar el PDF");
+    } finally {
+      setGenerandoPdf(false);
+    }
+  }
+
+  /** Un solo PDF con una página por evaluado que rindió. */
+  async function descargarPdfTodos() {
+    if (!grupal) return;
+    setGenerandoPdf(true);
+    try {
+      await descargarInformesIndividualesPdf(
+        grupal.filas.filter((f) => f.rindio).map((f) => ({ ...f })),
+        { institucion: grupal.institucion, proceso: grupal.proceso }
+      );
+    } catch {
+      setError("No se pudo generar el PDF");
+    } finally {
+      setGenerandoPdf(false);
+    }
   }
 
   async function copiarEvaluados() {
@@ -587,6 +636,9 @@ export default function ProcesoInstitucion() {
                       <div style={{ fontSize: 12, color: "#7C89A8" }}>Institución {grupal.institucion} · {grupal.proceso}</div>
                     </div>
                     <button onClick={descargarWordGrupal} style={{ marginLeft: "auto", ...boton(grupal.filas.some((f) => f.rindio)) }}>Descargar Word</button>
+                    <button onClick={descargarPdfTodos} disabled={generandoPdf} style={{ ...boton(grupal.filas.some((f) => f.rindio) && !generandoPdf) }}>
+                      {generandoPdf ? "Generando…" : "Descargar todos los individuales (PDF)"}
+                    </button>
                     <button onClick={imprimirGrupal} style={{ ...boton(grupal.filas.some((f) => f.rindio)) }}>Imprimir / PDF</button>
                     <button onClick={() => setGrupal(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#7C89A8" }}>×</button>
                   </div>
@@ -639,7 +691,12 @@ export default function ProcesoInstitucion() {
                         {resultado.sesion?.completada_en ? ` · Terminó ${new Date(resultado.sesion.completada_en).toLocaleString("es-EC")}` : ""}
                       </div>
                     </div>
-                    <button onClick={() => setResultado(null)} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#7C89A8" }}>×</button>
+                    {resultado.pruebas.some((p) => p.codigo === "holland" && p.patron) && (
+                      <button onClick={descargarPdfIndividual} disabled={generandoPdf} style={{ marginLeft: "auto", ...boton(!generandoPdf) }}>
+                        {generandoPdf ? "Generando…" : "Descargar PDF"}
+                      </button>
+                    )}
+                    <button onClick={() => setResultado(null)} style={{ marginLeft: resultado.pruebas.some((p) => p.codigo === "holland" && p.patron) ? 8 : "auto", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#7C89A8" }}>×</button>
                   </div>
 
                   {resultado.pruebas.length === 0 && <div style={{ fontSize: 13, color: "#7C89A8" }}>Aún no hay resultados guardados para este evaluado.</div>}
